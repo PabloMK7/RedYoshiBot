@@ -127,6 +127,27 @@ class ServerDatabase:
 	async def mute_remove(self, memberid):
 		c = self.conn.cursor()
 		c.execute('DELETE FROM usr_mute WHERE userid = ?', (int(memberid),))
+	async def bug_add(self, authorid, explain, botmessage):
+		c = self.conn.cursor()
+		c.execute('INSERT INTO bugs VALUES (?,?,?,?)', (int(authorid), explain, int(botmessage.id), 1))
+	async def bug_close(self, botmessageid):
+		c = self.conn.cursor()
+		rows = c.execute("SELECT * FROM bugs WHERE botmsgid = ?", (int(botmessageid),))
+		for row in rows:
+			if(row[3] == 1):
+				c.execute("UPDATE bugs SET state = ? WHERE botmsgid = ?", (0, int(botmessageid)))
+				return row
+			else:
+				return []
+		return []
+	async def bug_count(self):
+		c  =self.conn.cursor()
+		cursor = c.execute("SELECT COUNT(*) FROM bugs")
+		(tot_t,)=cursor.fetchone()
+		cursor = c.execute("SELECT COUNT(*) FROM bugs WHERE state = 0")
+		(clo_t,)=cursor.fetchone()
+		ope_t = tot_t - clo_t
+		return [ope_t, clo_t]
 	# Based on kurisu from homebrew discord server https://github.com/ihaveamac/Kurisu
 	async def fcregister(self, message, fc, notify):
 		"""Add your friend code."""
@@ -367,7 +388,9 @@ def help_array():
 		"delfact": ">@RedYoshiBot delfact\nRemoves your own fact.",
 		"listfact": ">@RedYoshiBot listfact\nDisplays all facts.",
 		"communities": ">@RedYoshiBot communities\nShows the main CTGP-7 communities.",
-		"game": ">@RedYoshiBot game (gamemode) (options)\nPlays a game."
+		"game": ">@RedYoshiBot game (gamemode) (options)\nPlays a game.",
+		"report": "!report (Explanation)\nReports a bug with the given explanation. Can only be used in #bugs_discussion.",
+		"bugcount": ">@RedYoshiBot bugcount\nShows the amount of open and closed bugs."
 	}
 def staff_help_array():
 	return {
@@ -383,7 +406,8 @@ def staff_help_array():
 		"getwarn": ">@RedYoshiBot getwarn\nGets all the warned users.",
 		"getmute": ">@RedYoshiBot getmute\nGets all the muted users.",
 		"delfact": ">@RedYoshiBot delfact (id)\nDeletes specified fact.",
-		"change_game": ">@RedYoshiBot change_game\nChanges the current playing game to a new random one."
+		"change_game": ">@RedYoshiBot change_game\nChanges the current playing game to a new random one.",
+		"closebug": ">@RedYoshiBot closebug (bugID) [Reason]\nCloses the specified bug with the specified reason."
 	}
 def game_help_array():
 	return {
@@ -405,7 +429,9 @@ def ch_list():
 		"STAFF": "382885324575211523",
 		"FRIEND": "163333095725072384",
 		"DOORSTEP": "339476078244397056",
-		"BOTCHAT": "324672297812099093"
+		"BOTCHAT": "324672297812099093",
+		"BUGS": "315921603756163082",
+		"BUG_REPORTS": "426318663327547392"
 	}
 
 def NUMBER_EMOJI():
@@ -719,6 +745,42 @@ async def on_message(message):
 							await client.send_message(message.author, "**CTGP-7 server:** You are not muted.")
 						except:
 							pass
+				elif bot_cmd == 'closebug':
+					if is_channel(message, ch_list()["STAFF"]):
+						tag = message.content.split(None, 3)
+						if not (len(tag) == 4 or len(tag) == 3):
+							await client.send_message(message.channel, "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["closebug"] + "```")
+							return
+						try:
+							bug_entry = await db_mng.bug_close(tag[2])
+						except:
+							bug_entry = []
+						if (len(bug_entry) == 0):
+							await client.send_message(message.channel, "{}, invalid ID specified or bug is already closed.".format(message.author.name))
+							return
+						bug_reports = SELF_BOT_SERVER.get_channel(ch_list()["BUG_REPORTS"])
+						bugs = SELF_BOT_SERVER.get_channel(ch_list()["BUGS"])
+						bot_msg = await client.get_message(bug_reports, tag[2])
+						if (len(tag) == 4):
+							try:
+								await client.edit_message(bot_msg, "```State: Closed\nReason: {}\n------------------\nReported by: {}\nExplanation: {}\nID: {}```".format(tag[3], get_from_mention(str(bug_entry[0])).name, bug_entry[1], bot_msg.id))
+							except:
+								pass
+							await client.send_message(bugs, "{}, your bug with ID: `{}` has been closed. Reason: ```{}```".format(get_from_mention(str(bug_entry[0])).mention, bot_msg.id, tag[3]))
+						else:
+							try:
+								await client.edit_message(bot_msg, "```State: Closed\nReason: No reason given.\n------------------\nReported by: {}\nExplanation: {}\nID: {}```".format( get_from_mention(str(bug_entry[0])).name, bug_entry[1], bot_msg.id))
+							except:
+								pass
+							await client.send_message(bugs, "{}, your bug with ID: `{}` has been closed. Reason: ```No reason given.```".format(get_from_mention(str(bug_entry[0])).mention, bot_msg.id))
+						await client.send_message(message.channel, "{}, closed successfully.".format(message.author.name))
+				elif bot_cmd == "bugcount":
+					tag = message.content.split()
+					if (len(tag) != 2):
+						await client.send_message(message.channel, "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + help_array()["bugcount"] + "```")
+						return
+					count_bug = await db_mng.bug_count()
+					await client.send_message(message.channel, "**Bug stats:**```Open: {}\nClosed: {}\n\nTotal: {}```".format(count_bug[0], count_bug[1], count_bug[0] + count_bug[1]))	
 				elif bot_cmd == 'communities' or bot_cmd == 'community':
 					tag = message.content.split(None)
 					if (len(tag) != 2):
@@ -1218,6 +1280,24 @@ async def on_message(message):
 		elif (message.channel.is_private and not message.author == client.user):
 			staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["STAFF"])
 			await client.send_message(staff_chan, "{} sent me the following in a DM:\n```{}```".format(message.author.mention, message.content))
+		elif (is_channel(message, ch_list()["BUGS"]) and (message.author != client.user) and bot_mtn == "!report"):
+			tag = message.content.split(None, 1)
+			if (len(tag) > 1):
+				notif_msg = await client.send_message(message.channel, "{}, adding your bug report: ```{}```".format(message.author.name, tag[1]))
+				bug_reports = SELF_BOT_SERVER.get_channel(ch_list()["BUG_REPORTS"])
+				bot_msg = await client.send_message(bug_reports, "Processing...")
+				await client.edit_message(bot_msg, "```State: Open\n------------------\nReported by: {}\nExplanation: {}\nID: {}```".format(message.author.name, tag[1], bot_msg.id))
+				if (bot_msg != None):
+					await db_mng.bug_add(message.author.id, tag[1], bot_msg)
+					await client.edit_message(notif_msg, "{}, adding your bug report: ```{}```**Success**".format(message.author.name, tag[1]))
+				else:
+					await client.edit_message(notif_msg, "{}, adding your bug report: ```{}```**Fail**".format(message.author.name, tag[1]))
+			else:
+				await client.send_message(message.channel, "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + help_array()["report"] + "```")
+
+							
+
+
 	except:
 		if(debug_mode):
 			raise
