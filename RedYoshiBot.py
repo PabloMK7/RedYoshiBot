@@ -113,6 +113,24 @@ class ServerDatabase:
 		c = self.conn.cursor()
 		rows = c.execute("SELECT * FROM usr_warns")
 		return rows
+	async def schedule_add(self, messageid, dest_id, amountmin, text):
+		c = self.conn.cursor()
+		c.execute('INSERT INTO sched_msg VALUES (?,?,?,?,?)', (int(messageid), int(dest_id), current_time_min(), amountmin, text))
+	async def schedule_get(self):
+		c = self.conn.cursor()
+		rows = c.execute("SELECT * FROM sched_msg")
+		return rows
+	async def schedule_del(self, messageid):
+		c = self.conn.cursor()
+		c.execute("DELETE FROM sched_msg WHERE botmsgid = ?", (int(messageid),))
+	async def schedule_del_confirm(self, messageid):
+		c = self.conn.cursor()
+		rows = c.execute("SELECT * FROM sched_msg WHERE botmsgid = ?", (int(messageid),))
+		return_code = -1
+		for row in rows:
+			return_code = 1
+		c.execute("DELETE FROM sched_msg WHERE botmsgid = ?", (int(messageid),))
+		return return_code
 	async def mute_apply(self, memberid, amountmin):
 		c = self.conn.cursor()
 		rows = c.execute("SELECT * FROM usr_mute WHERE userid = ?", (int(memberid),))
@@ -407,7 +425,9 @@ def staff_help_array():
 		"getmute": ">@RedYoshiBot getmute\nGets all the muted users.",
 		"delfact": ">@RedYoshiBot delfact (id)\nDeletes specified fact.",
 		"change_game": ">@RedYoshiBot change_game\nChanges the current playing game to a new random one.",
-		"closebug": ">@RedYoshiBot closebug (bugID) [Reason]\nCloses the specified bug with the specified reason."
+		"closebug": ">@RedYoshiBot closebug (bugID) [Reason]\nCloses the specified bug with the specified reason.",
+		"schedule": ">@RedYoshiBot schedule (channel/user) (time_amount) (text)\nSchedules a message to be sent in/to the channel/user specified after time_amount has passed. (Works the same way as mute time amount).",
+		"cancel_schedule": ">@RedYoshiBot cancel_schedule (scheduleid)\nCancels the specified scheduled message. The schedule id can be obtained from the id of the message sent by the bot."
 	}
 def game_help_array():
 	return {
@@ -549,6 +569,29 @@ async def unmute_user(memberid):
 	except:
 		pass
 	await client.remove_roles(muted_user, mute_role)
+def checkdestvalid(dest_id):
+	channel_id = re.sub("\D", "", dest_id)
+	channel_obj = client.get_channel(channel_id)
+	if (channel_obj != None):
+		return channel_obj
+	else:
+		return get_from_mention(dest_id)
+async def sayfunc(dest_id, text, channel):
+	channel_id = re.sub("\D", "", dest_id)
+	channel_obj = client.get_channel(channel_id)
+	if (channel_obj != None):
+		await client.send_message(channel_obj, text)
+		await client.send_message(channel, "Message successfully sent in {}.".format(channel_obj.name))
+	else:
+		member_obj = get_from_mention(dest_id)
+		if (member_obj != None):
+			try:
+				await client.send_message(member_obj, text)
+				await client.send_message(channel, "Message successfully sent to {}.".format(member_obj.name))
+			except:
+				await client.send_message(channel, "Can't send message to member (not in the server or blocked the bot).")
+		else:
+			await client.send_message(channel, "Invalid channel or member specified.")
 
 async def parse_fact(s1):
 	global SELF_BOT_SERVER
@@ -601,6 +644,17 @@ async def muted_task():
 			timeleft = (row[1] + row[2]) - current_time_min()
 			if(timeleft <= 0):
 				await unmute_user(str(row[0]))
+		tobedeleted = []
+		rows = await db_mng.schedule_get()
+		for row in rows:
+			timeleft = (row[2] + row[3]) - current_time_min()
+			if(timeleft <= 0):
+				tobedeleted.append(row[0])
+				staffchan = client.get_channel(ch_list()["STAFF"])
+				await sayfunc(str(row[1]), row[4], staffchan)
+		for delitm in tobedeleted:
+			await db_mng.schedule_del(delitm)
+
 
 async def perform_game_change():
 	names = PLAYING_GAME()
@@ -883,27 +937,47 @@ async def on_message(message):
 									await client.send_message(ch, "@everyone\r\n" + json_data["name"] +" (" + json_data["tag_name"] + ") has been released! Here is the changelog:\r\n```" + json_data["body"] + "```")
 							except IndexError:
 								await client.send_message(ch, json_data["name"] +" (" + json_data["tag_name"] + ") has been released! Here is the changelog:\r\n```" + json_data["body"] + "```")
+				elif bot_cmd == 'cancel_schedule':
+					if is_channel(message, ch_list()["STAFF"]):
+						tag = message.content.split()
+						if (len(tag) != 3):
+							await client.send_message(message.channel, "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["cancel_schedule"] + "```")
+							return
+						try:
+							retcode = await db_mng.schedule_del_confirm(int(tag[2]))
+							if (retcode == -1):
+								await client.send_message(message.channel, "{}, invalid schedule id specified.".format(message.author.name))
+								return
+							else:
+								await client.send_message(message.channel, "{}, the schedule was cancelled successfully.".format(message.author.name))
+								return
+						except:
+							await client.send_message(message.channel, "{}, invalid schedule id specified.".format(message.author.name))
+							return
+
+				elif bot_cmd == 'schedule':
+					if is_channel(message, ch_list()["STAFF"]):
+						tag = message.content.split(None, 4)
+						if (len(tag) != 5):
+							await client.send_message(message.channel, "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["schedule"] + "```")
+							return
+						timeamount = await parsetime(tag[3])
+						if (timeamount[0] == -1):
+							await client.send_message(message.channel, "{}, invalid time specified.".format(message.author.name))
+							return
+						messagedest = checkdestvalid(tag[2]) 
+						if (messagedest == None):
+							await client.send_message(message.channel, "{}, invalid user or channel specified.".format(message.author.name))
+							return
+						messagesent = await client.send_message(message.channel, "{}, the message will be sent in {} {} to {}".format(message.author.name, timeamount[1], timeamount[2], messagedest.name))
+						await db_mng.schedule_add(messagesent.id, messagedest.id, timeamount[0], tag[4])
 				elif bot_cmd == 'say':
 					if is_channel(message, ch_list()["STAFF"]):
 						tag = message.content.split(None, 3)
-						channel_id = tag[2][2:-1]
-						channel_obj = client.get_channel(channel_id)
-						try:
-							if (channel_obj != None):
-								await client.send_message(channel_obj, tag[3])
-								await client.send_message(message.channel, "Message successfully sent in {}.".format(channel_obj.name))
-							else:
-								member_obj = get_from_mention(tag[2])
-								if (member_obj != None):
-									try:
-										await client.send_message(member_obj, tag[3])
-										await client.send_message(message.channel, "Message successfully sent to {}.".format(member_obj.name))
-									except:
-										await client.send_message(message.channel, "Can't send message to member (not in the server or blocked the bot).")
-								else:
-									await client.send_message(message.channel, "Invalid channel or member specified.")
-						except IndexError:
-							await client.send_message(message.channel, "Nothing to say.")
+						if (len(tag) != 4):
+							await client.send_message(message.channel, "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["schedule"] + "```")
+							return
+						await sayfunc(tag[2], tag[3], message.channel)
 				elif bot_cmd == 'edit':
 					if is_channel(message, ch_list()["STAFF"]):
 						tag = message.content.split(None, 3)
