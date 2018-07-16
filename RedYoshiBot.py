@@ -306,6 +306,12 @@ def get_from_mention(mention):
 	memberid = re.sub("\D", "", mention)
 	return client.get_server(SERVER_ID()).get_member(memberid)
 
+def itercount(iterable, count):
+	checkcnt = 0
+	for element in iterable:
+		if element:
+			checkcnt = checkcnt + 1
+	return checkcnt >= count
 def int_to_emoji(num):
 	num = int(num)
 	eml = NUMBER_EMOJI();
@@ -718,6 +724,19 @@ async def on_member_remove(member):
 	await db_mng.fcdelete(member)
 	
 @client.event
+async def on_message_delete(message):
+	staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["STAFF"])
+	if (message.channel != staff_chan):
+		await client.send_message(staff_chan, "{} deleted the following in {} at `{} CEST`:\n\n------------------------\n{}\n------------------------".format(message.author.mention, message.channel.mention, str(datetime.datetime.now()), message.content))
+
+@client.event
+async def on_message_edit(before, after):
+	if len(before.mentions) > 0 or len(before.role_mentions) > 0:
+		staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["STAFF"])
+		if (before.channel != staff_chan):
+			await client.send_message(staff_chan, "{} edited the following in {} at `{} CEST`:\n\n------------------------\n{}\n------------------------".format(before.author.mention, before.channel.mention, str(datetime.datetime.now()), before.content))
+
+@client.event
 async def on_message(message):
 	global db_mng
 	global SELF_BOT_SERVER
@@ -1097,7 +1116,8 @@ async def on_message(message):
 							print("Error parsing: " + fact_id)
 							raise
 							return
-					await client.send_message(message.channel, "```" + final_text + "```")
+					if (len(final_text) < 1994):
+						await client.send_message(message.channel, "```" + final_text + "```")
 				elif bot_cmd == 'listfact':
 					tag = message.content.split()
 					if (len(tag) != 2):
@@ -1107,19 +1127,35 @@ async def on_message(message):
 					retstr = "```\n----------\n"
 					if is_channel(message, ch_list()["STAFF"]):
 						for row in fact_text:
-							retstr += str(row[0]) + " - " + get_from_mention(str(row[1])).name + " - " + row[2] + "\n----------\n"
+							newpart = str(row[0]) + " - " + get_from_mention(str(row[1])).name + " - " + row[2] + "\n----------\n"
+							if (len(newpart) >= 1950):
+								newpart = str(row[0]) + " - " + get_from_mention(str(row[1])).name + " - " + "too large to show" + "\n----------\n"
+							if ((len(retstr) + len(newpart)) > 1950):
+								retstr += "```"
+								await client.send_message(message.channel, retstr)
+								await asyncio.sleep(0.1)
+								retstr = "```\n----------\n"
+							retstr += newpart
 						retstr += "```"
 						await client.send_message(message.channel, retstr)
 					else:
+						await client.send_message(message.channel, "{}, I sent you all the facts in a DM.".format(message.author.name))
 						for row in fact_text:
 							try:
 								final_text = await parse_fact(row[2])
 								text_isdyn = "(dynamic)" if await isfact_dynamic(row[2]) else "(static)"
-								retstr += str(row[0]) + " - " + text_isdyn +  " - " + final_text + "\n----------\n"
 							except:
 								print("Error parsing: " + fact_id)
+							newpart = str(row[0]) + " - " + text_isdyn +  " - " + final_text + "\n----------\n"
+							if (len(newpart) >= 1950):
+								newpart = str(row[0]) + " - " + text_isdyn +  " - " + "too large to show" + "\n----------\n"
+							if ((len(retstr) + len(newpart)) > 1950):
+								retstr += "```"
+								await client.send_message(message.author, retstr)
+								await asyncio.sleep(0.1)
+								retstr = "```\n----------\n"
+							retstr += newpart
 						retstr += "```"
-						await client.send_message(message.channel, "{}, I sent you all the facts in a DM.".format(message.author.name))
 						await client.send_message(message.author, retstr)
 				elif bot_cmd == 'delfact':
 					if is_channel(message, ch_list()["STAFF"]):
@@ -1149,6 +1185,8 @@ async def on_message(message):
 					if (len(tag) != 3):
 						await client.send_message(message.channel, "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + help_array()["addfact"] + "```")
 						return
+					tag[2] = tag[2].replace("@", "(at)")
+					tag[2] = tag[2].replace("`", "")
 					try:
 						dummy = await parse_fact(tag[2])
 					except:
@@ -1367,11 +1405,9 @@ async def on_message(message):
 				else:
 					await client.edit_message(notif_msg, "{}, adding your bug report: ```{}```**Fail**".format(message.author.name, tag[1]))
 			else:
-				await client.send_message(message.channel, "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + help_array()["report"] + "```")
-
-							
-
-
+				await client.send_message(message.channel, "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + help_array()["report"] + "```")			
+		elif all(x in message.content.lower() for x in ["when"]) and itercount((x in message.content.lower() for x in ["update", "version", "next", "release", "new", "coming"]), 2) and message.author != client.user:
+			await client.send_message(message.channel, "{}, if you have asked when the next update will be released, it will as soon as the CTGP-7 devs think everything is ready. This can take hours, days, weeks or months, nobody can tell.".format(message.author.name))
 	except:
 		if(debug_mode):
 			raise
