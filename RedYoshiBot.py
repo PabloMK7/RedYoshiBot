@@ -798,7 +798,13 @@ async def on_message(message):
 						rows = await db_mng.mute_get()
 						retstr = "--------------------- \n"
 						for row in rows:
-							retstr += "{}: {}m\n".format(get_from_mention(str(row[0])).name, (row[1] + row[2]) - current_time_min())
+							member = get_from_mention(str(row[0]))
+							membname = ""
+							if (member == None):
+								membname = str(row[0])
+							else:
+								membname = member.name
+							retstr += "{}: {}m\n".format(membname, (row[1] + row[2]) - current_time_min())
 						retstr += "---------------------"
 						await client.send_message(message.channel, "Muted users:\n```{}```".format(retstr))
 					else:
@@ -839,7 +845,13 @@ async def on_message(message):
 								await client.edit_message(bot_msg, "```State: Closed\nReason: {}\n------------------\nReported by: {}\nExplanation: {}\nID: {}```".format(tag[3], get_from_mention(str(bug_entry[0])).name, bug_entry[1], bot_msg.id))
 							except:
 								pass
-							await client.send_message(bugs, "{}, your bug with ID: `{}` has been closed. Reason: ```{}```".format(get_from_mention(str(bug_entry[0])).mention, bot_msg.id, tag[3]))
+							member = get_from_mention(str(bug_entry[0]))
+							membname = ""
+							if (member == None):
+								membname = "Unknown user"
+							else:
+								membname = member.mention
+							await client.send_message(bugs, "{}, your bug with ID: `{}` has been closed. Reason: ```{}```".format(membname, bot_msg.id, tag[3]))
 						else:
 							try:
 								await client.edit_message(bot_msg, "```State: Closed\nReason: No reason given.\n------------------\nReported by: {}\nExplanation: {}\nID: {}```".format( get_from_mention(str(bug_entry[0])).name, bug_entry[1], bot_msg.id))
@@ -928,7 +940,13 @@ async def on_message(message):
 						rows = await db_mng.warn_get_all()
 						retstr = "--------------------- \n"
 						for row in rows:
-							retstr += "{}: {}\n".format(get_from_mention(str(row[0])).name, row[1])
+							member = get_from_mention(str(row[0]))
+							membname = ""
+							if (member == None):
+								membname = str(row[0])
+							else:
+								membname = member.name
+							retstr += "{}: {}\n".format(membname, row[1])
 						retstr += "---------------------"
 						await client.send_message(message.channel, "Users with warnings:\n```{}```".format(retstr))
 					else:
@@ -1127,9 +1145,15 @@ async def on_message(message):
 					retstr = "```\n----------\n"
 					if is_channel(message, ch_list()["STAFF"]):
 						for row in fact_text:
-							newpart = str(row[0]) + " - " + get_from_mention(str(row[1])).name + " - " + row[2] + "\n----------\n"
+							member = get_from_mention(str(row[1]))
+							membname = ""
+							if (member == None):
+								membname = str(row[1])
+							else:
+								membname = member.name
+							newpart = str(row[0]) + " - " + membname + " - " + row[2] + "\n----------\n"
 							if (len(newpart) >= 1950):
-								newpart = str(row[0]) + " - " + get_from_mention(str(row[1])).name + " - " + "too large to show" + "\n----------\n"
+								newpart = str(row[0]) + " - " + membname + " - " + "too large to show" + "\n----------\n"
 							if ((len(retstr) + len(newpart)) > 1950):
 								retstr += "```"
 								await client.send_message(message.channel, retstr)
