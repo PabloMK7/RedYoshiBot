@@ -457,7 +457,8 @@ def ch_list():
 		"DOORSTEP": "339476078244397056",
 		"BOTCHAT": "324672297812099093",
 		"BUGS": "315921603756163082",
-		"BUG_REPORTS": "426318663327547392"
+		"BUG_OPEN": "426318663327547392",
+		"BUG_CLOSE": "492231060919287834"
 	}
 
 def NUMBER_EMOJI():
@@ -568,13 +569,13 @@ async def unmute_user(memberid):
 	global client
 	global SELF_BOT_SERVER
 	muted_user = get_from_mention(memberid)
-	await db_mng.mute_remove(muted_user.id)
+	await db_mng.mute_remove(memberid)
 	mute_role = get_role(MUTEROLE_ID())
 	try:
 		await client.send_message(muted_user, "**CTGP-7 server:** You have been unmuted.")
+		await client.remove_roles(muted_user, mute_role)
 	except:
 		pass
-	await client.remove_roles(muted_user, mute_role)
 def checkdestvalid(dest_id):
 	channel_id = re.sub("\D", "", dest_id)
 	channel_obj = client.get_channel(channel_id)
@@ -837,12 +838,14 @@ async def on_message(message):
 						if (len(bug_entry) == 0):
 							await client.send_message(message.channel, "{}, invalid ID specified or bug is already closed.".format(message.author.name))
 							return
-						bug_reports = SELF_BOT_SERVER.get_channel(ch_list()["BUG_REPORTS"])
+						bug_reports = SELF_BOT_SERVER.get_channel(ch_list()["BUG_OPEN"])
+						bug_closed = SELF_BOT_SERVER.get_channel(ch_list()["BUG_CLOSE"])
 						bugs = SELF_BOT_SERVER.get_channel(ch_list()["BUGS"])
 						bot_msg = await client.get_message(bug_reports, tag[2])
 						if (len(tag) == 4):
 							try:
-								await client.edit_message(bot_msg, "```State: Closed\nReason: {}\n------------------\nReported by: {}\nExplanation: {}\nID: {}```".format(tag[3], get_from_mention(str(bug_entry[0])).name, bug_entry[1], bot_msg.id))
+								await client.send_message(bug_closed, "```State: Closed\nReason: {}\n------------------\nReported by: {}\nExplanation: {}```".format(tag[3], get_from_mention(str(bug_entry[0])).name, bug_entry[1]))
+								await client.delete_message(bot_msg)
 							except:
 								pass
 							member = get_from_mention(str(bug_entry[0]))
@@ -854,7 +857,8 @@ async def on_message(message):
 							await client.send_message(bugs, "{}, your bug with ID: `{}` has been closed. Reason: ```{}```".format(membname, bot_msg.id, tag[3]))
 						else:
 							try:
-								await client.edit_message(bot_msg, "```State: Closed\nReason: No reason given.\n------------------\nReported by: {}\nExplanation: {}\nID: {}```".format( get_from_mention(str(bug_entry[0])).name, bug_entry[1], bot_msg.id))
+								await client.send_message(bug_closed, "```State: Closed\nReason: No reason given.\n------------------\nReported by: {}\nExplanation: {}```".format( get_from_mention(str(bug_entry[0])).name, bug_entry[1]))
+								await client.delete_message(bot_msg)
 							except:
 								pass
 							await client.send_message(bugs, "{}, your bug with ID: `{}` has been closed. Reason: ```No reason given.```".format(get_from_mention(str(bug_entry[0])).mention, bot_msg.id))
@@ -1420,7 +1424,7 @@ async def on_message(message):
 			tag = message.content.split(None, 1)
 			if (len(tag) > 1):
 				notif_msg = await client.send_message(message.channel, "{}, adding your bug report: ```{}```".format(message.author.name, tag[1]))
-				bug_reports = SELF_BOT_SERVER.get_channel(ch_list()["BUG_REPORTS"])
+				bug_reports = SELF_BOT_SERVER.get_channel(ch_list()["BUG_OPEN"])
 				bot_msg = await client.send_message(bug_reports, "Processing...")
 				await client.edit_message(bot_msg, "```State: Open\n------------------\nReported by: {}\nExplanation: {}\nID: {}```".format(message.author.name, tag[1], bot_msg.id))
 				if (bot_msg != None):
