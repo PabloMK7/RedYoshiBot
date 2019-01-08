@@ -7,6 +7,7 @@ import sys
 import time
 import asyncio
 import json
+from NumericStringParser import NumericStringParser
 import hashlib
 import sqlite3
 import struct
@@ -18,6 +19,7 @@ SELF_BOT_MEMBER = None
 SELF_BOT_SERVER = None
 db_mng = None
 client = discord.Client()
+nsp = NumericStringParser()
 shutdown_watch_running = False
 running_State = True
 debug_mode = False
@@ -413,6 +415,7 @@ def help_array():
 		"listfact": ">@RedYoshiBot listfact\nDisplays all facts.",
 		"communities": ">@RedYoshiBot communities\nShows the main CTGP-7 communities.",
 		"game": ">@RedYoshiBot game (gamemode) (options)\nPlays a game.",
+		"math": ">@RedYoshiBot math (expression)\nEvaluates the expression.",
 		"report": "!report (Explanation)\nReports a bug with the given explanation. Can only be used in #bugs_discussion.",
 		"bugcount": ">@RedYoshiBot bugcount\nShows the amount of open and closed bugs."
 	}
@@ -884,6 +887,16 @@ async def on_message(message):
 							return
 						retgame = await perform_game_change()
 						await client.send_message(message.channel, "{}, changed current playing game to: `{}`".format(message.author.name, retgame))
+				elif bot_cmd == 'math':
+					tag = message.content.split(None, 2)
+					if (len(tag) < 3):
+						await client.send_message(message.channel, "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + help_array()["math"] + "```")
+						return
+					try:
+						await client.send_message(message.channel, "{}, the solution is: ```{}```".format(message.author.name, nsp.eval(tag[2])))
+					except:
+						await client.send_message(message.channel, "{}, looks like I cannot calculate that.".format(message.author.name))
+						pass
 				elif bot_cmd == 'warn':
 					if is_channel(message, ch_list()["STAFF"]):
 						tag = message.content.split(None, 3)
@@ -1436,6 +1449,8 @@ async def on_message(message):
 				await client.send_message(message.channel, "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + help_array()["report"] + "```")			
 		elif all(x in message.content.lower() for x in ["when"]) and itercount((x in message.content.lower() for x in ["update", "version", "next", "release", "new", "coming"]), 2) and message.author != client.user:
 			await client.send_message(message.channel, "{}, if you have asked when the next update will be released, it will as soon as the CTGP-7 devs think everything is ready. This can take hours, days, weeks or months, nobody can tell.".format(message.author.name))
+		elif (all(x in message.content.lower() for x in ["miku"]) or all(x in message.content.lower() for x in ["mbs"])) and itercount((x in message.content.lower() for x in ["remove", "replace", "delete"]), 1) and message.author != client.user:
+			await client.send_message(message.channel, "{}, Miku's Birthday Spectacular **WILL NOT** be removed.".format(message.author.name))	
 	except:
 		if(debug_mode):
 			raise
