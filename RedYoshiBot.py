@@ -23,6 +23,7 @@ nsp = NumericStringParser()
 shutdown_watch_running = False
 running_State = True
 debug_mode = False
+current_talk_id = ''
 
 class ServerDatabase:
 	global debug_mode
@@ -410,7 +411,7 @@ def help_array():
 		"getwarn": ">@RedYoshiBot getwarn\nSends your warning amount in a DM.",
 		"getmute": ">@RedYoshiBot getmute\nSends your muted time in a DM.",
 		"fact": ">@RedYoshiBot fact (factID)\nDisplays a random fact. If factID is specified, the fact with that id will be displayed. (Use listfact to get all fact IDs.)",
-		"addfact": ">@RedYoshiBot addfact (fact)\nAdds a fact (only one per user). The format is the following: base;opt1, opt2, etc; opt1, opt2, etc; etc... any instance of {} will be replaced by a random choice. You must have the same amount of {} as ; otherwise it won't work properly.\n\nExamples:\n{} is number {}; Mario, Luigi, Yoshi; NUMBER:1:3\nI {} {} {}; hate, love; cheese, apples, USER; :wink:, :weary:\n\nNUMBER:X:Y -> Random number between X and Y\nUSER -> Random server member.",
+		"addfact": ">@RedYoshiBot addfact (fact)\nAdds a fact (only one per user). Use lists between brackets {item1, item2, ...} to replace that part with a random choice from the list. List items may also have more nested lists.\n\nExamples:\n{Mario, Luigi, Yoshi} is number {NUMBER:1:3} -> Luigi is number 2\nI {hate, love} {{blue, yellow} cheese, apples, USER} {:wink:, :weary:} -> I love blue cheese :wink:\n\nNUMBER:X:Y -> Random number between X and Y\nUSER -> Random server member.",
 		"delfact": ">@RedYoshiBot delfact\nRemoves your own fact.",
 		"listfact": ">@RedYoshiBot listfact\nDisplays all facts.",
 		"communities": ">@RedYoshiBot communities\nShows the main CTGP-7 communities.",
@@ -436,7 +437,9 @@ def staff_help_array():
 		"change_game": ">@RedYoshiBot change_game\nChanges the current playing game to a new random one.",
 		"closebug": ">@RedYoshiBot closebug (bugID) [Reason]\nCloses the specified bug with the specified reason.",
 		"schedule": ">@RedYoshiBot schedule (channel/user) (time_amount) (text)\nSchedules a message to be sent in/to the channel/user specified after time_amount has passed. (Works the same way as mute time amount).",
-		"cancel_schedule": ">@RedYoshiBot cancel_schedule (scheduleid)\nCancels the specified scheduled message. The schedule id can be obtained from the id of the message sent by the bot."
+		"cancel_schedule": ">@RedYoshiBot cancel_schedule (scheduleid)\nCancels the specified scheduled message. The schedule id can be obtained from the id of the message sent by the bot.",
+		"emergency": "!emergency (off)\nEnables or disables emergency mode. (Mutes all channels).",
+		"talk": ">@RedYoshiBot talk (channel/user)\nSets the chat destination ID (don't specify an ID to clear the current one). Use `+` before a message to talk with the specified ID and `++` to talk and clear the destination ID afterwards."
 	}
 def game_help_array():
 	return {
@@ -475,6 +478,9 @@ def MUTEROLE_ID():
 
 def SERVER_ID():
 	return "163070769067327488"
+
+def MUTABLE_CHANNELS():
+	return ["163070769067327488", "336915016387395584", "337396714967400449", "325752333185056769", "315921603756163082", "163072964353458177", "163073383888715776", "329983699804487681", "163074261903343616", "163333095725072384", "324672297812099093"]
 
 COMMUNITIES_TEXT = "```Here are the main CTGP-7 communities:\n\nCustom Tracks: 29-1800-5228-2361\nCustom Tracks, 200cc: 52-3127-4613-8641\nNormal Tracks: 02-5770-2485-4638\nNormal Tracks, 200cc: 54-0178-4815-8814\n\nMake sure you are in 0.17.1 or greater to play in those communities.```"
 
@@ -587,15 +593,22 @@ def checkdestvalid(dest_id):
 	else:
 		return get_from_mention(dest_id)
 async def sayfunc(dest_id, text, channel):
+	if (text == ''):
+		await client.send_message(channel, "Cannot send empty message.")
+		return
 	channel_id = re.sub("\D", "", dest_id)
 	channel_obj = client.get_channel(channel_id)
 	if (channel_obj != None):
+		await client.send_typing(channel_obj)
+		await asyncio.sleep(random.randint(1,5))
 		await client.send_message(channel_obj, text)
 		await client.send_message(channel, "Message successfully sent in {}.".format(channel_obj.name))
 	else:
 		member_obj = get_from_mention(dest_id)
 		if (member_obj != None):
 			try:
+				await client.send_typing(member_obj)
+				await asyncio.sleep(random.randint(1,5))
 				await client.send_message(member_obj, text)
 				await client.send_message(channel, "Message successfully sent to {}.".format(member_obj.name))
 			except:
@@ -603,47 +616,74 @@ async def sayfunc(dest_id, text, channel):
 		else:
 			await client.send_message(channel, "Invalid channel or member specified.")
 
-async def parse_fact(s1):
-	global SELF_BOT_SERVER
-	s2 = re.split("[;]", s1)
-	base = s2[0]
-	del s2[0]
-	final = []
-	for rep in s2:
-		final.append(re.split("[,]", rep))
-	for f in final:
-		id = random.randint(0, len(f) - 1)
-		f[id] = f[id].strip()
-		f[id] = f[id].replace("==", " ")
-		foundNum = 0
-		foundUsr = 0
-		while (foundNum != -1 or foundUsr != -1):
-			foundNum = f[id].find("NUMBER")
-			foundUsr = f[id].find("USER")
-			random.seed()
-			if (foundNum != -1):
-				special = f[id][foundNum:]
-				special = special.split()[0]
-				special = re.split("[:]", special)
-				try:
-					replacement = str(random.randint(int(special[1]),int(special[2])))
-				except:
-					replacement = ""
-				f[id] = f[id].replace(special[0]+":"+ special[1]+":"+special[2], replacement, 1)
-			elif (foundUsr != -1):
-				memberlist = list(SELF_BOT_SERVER.members)
-				replacement = memberlist[random.randint(0,len(memberlist) - 1)].name
-				replacement.replace("USER", "user")
-				f[id] = f[id].replace("USER", replacement, 1)
-		base = base.replace("{}", f[id], 1)
-	return base
+async def fact_get_top_level_brakcets(s1):
+	depth = 0
+	index = 0
+	startindex = -1
+	for c in s1:
+		if c == '{':
+			if (depth == 0):
+				startindex = index
+			depth += 1
+		elif c == '}':
+			depth -= 1
+			if (depth == 0):
+				return [startindex, index]
+			elif (depth < 0):
+				break
+		index += 1
+	if (depth != 0):
+		raise ValueError("Invalid fact format")
+	
+	return [-1, -1]
+
+async def fact_get_top_level_split(s):
+	balance = 0
+	parts = []
+	part = ''
+
+	for c in s:
+		part += c
+		if c == '{':
+			balance += 1
+		elif c == '}':
+			balance -= 1
+			if (balance < 0):
+				break
+		elif c == ',' and balance == 0:
+			parts.append(part[:-1].strip())
+			part = ''
+	
+	if (balance != 0):
+		raise ValueError("Invalid fact format: " + s)
+	
+	if len(part):
+		parts.append(part.strip())
+
+	return parts
+
+async def fact_parse(s1):
+	brackets = await fact_get_top_level_brakcets(s1)
+	iterations = 0
+	while (brackets[0] != -1 and iterations < 20):
+		choicelist = await fact_get_top_level_split(s1[brackets[0] + 1:brackets[1]])
+		choice = choicelist[random.randint(0, len(choicelist) - 1)]
+		choice = choice.replace("==", " ")
+		if (choice.startswith("NUMBER")):
+			numbers = re.split("[:]", choice)
+			choice = str(random.randint(int(numbers[1]),int(numbers[2])))
+		elif (choice == "USER"):
+			memberlist = list(SELF_BOT_SERVER.members)
+			choice = memberlist[random.randint(0,len(memberlist) - 1)].name
+		s1 = s1[0:brackets[0]] + choice + s1[brackets[1] + 1:]
+		brackets = await fact_get_top_level_brakcets(s1)
+		iterations += 1
+	return s1
 
 async def isfact_dynamic(s1):
-	s2 = re.split("[;]", s1)
-	if (len(s2) == 1):
-		return False
-	else:
-		return True
+	brackets = await fact_get_top_level_brakcets(s1)
+	return brackets[0] != -1
+
 async def muted_task():
 	global db_mng
 	global current_time_min
@@ -677,6 +717,25 @@ async def change_game():
 		await perform_game_change()
 		await asyncio.sleep(600)
 
+async def enableEmergency():
+	overwrite = discord.PermissionOverwrite()
+	overwrite.send_messages = False
+	for ch in SELF_BOT_SERVER.channels:
+		if ch.id in MUTABLE_CHANNELS():
+			await client.edit_channel_permissions(ch, SELF_BOT_SERVER.default_role, overwrite)
+		if ch.id == ch_list()["STAFF"]:
+			await client.send_message(ch, "@here, emergency mode has been enabled.")
+
+async def disableEmergency():
+	overwrite = discord.PermissionOverwrite()
+	overwrite.send_messages = True
+	for ch in SELF_BOT_SERVER.channels:
+		if ch.id in MUTABLE_CHANNELS():
+			await client.edit_channel_permissions(ch, SELF_BOT_SERVER.default_role, overwrite)
+		if ch.id == ch_list()["STAFF"]:
+			await client.send_message(ch, "Emergency mode has been disabled.")
+
+
 @client.event
 async def on_ready():
 	print("\n-------------------------\n")
@@ -700,7 +759,7 @@ async def on_ready():
 
 @client.event
 async def wait_until_login():
-    await client.change_presence(game=discord.Game(name='something goes here'))
+	await client.change_presence(game=discord.Game(name='something goes here'))
 
 
 @client.event
@@ -731,14 +790,16 @@ async def on_member_remove(member):
 async def on_message_delete(message):
 	staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["STAFF"])
 	if (message.channel != staff_chan):
-		await client.send_message(staff_chan, "{} deleted the following in {} at `{} CEST`:\n\n------------------------\n{}\n------------------------".format(message.author.mention, message.channel.mention, str(datetime.datetime.now()), message.content))
+		parsedcontent = message.content.replace("@", "(at)")
+		await client.send_message(staff_chan, "Message by {} ({}) was deleted in {} at:\n`{} {}`\n\n------------------------\n{}\n------------------------".format(message.author.name, message.author.id, message.channel.mention, str(datetime.datetime.now()), time.tzname[time.localtime().tm_isdst], parsedcontent))
 
 @client.event
 async def on_message_edit(before, after):
 	if len(before.mentions) > 0 or len(before.role_mentions) > 0:
 		staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["STAFF"])
 		if (before.channel != staff_chan):
-			await client.send_message(staff_chan, "{} edited the following in {} at `{} CEST`:\n\n------------------------\n{}\n------------------------".format(before.author.mention, before.channel.mention, str(datetime.datetime.now()), before.content))
+			parsedcontent = before.content.replace("@", "(at)")
+			await client.send_message(staff_chan, "Message by {} ({}) was edited in {} at:\n`{} {}`\n\n------------------------\n{}\n------------------------".format(before.author.name, before.author.id, before.channel.mention, str(datetime.datetime.now()), time.tzname[time.localtime().tm_isdst], parsedcontent))
 
 @client.event
 async def on_message(message):
@@ -750,6 +811,7 @@ async def on_message(message):
 	global running_State
 	global debug_mode
 	global current_time_min
+	global current_talk_id
 	if (client.user == None) or (SELF_BOT_SERVER == None) or (SELF_BOT_MEMBER == None):
 		print("Error, some variable is None")
 		return None
@@ -828,6 +890,21 @@ async def on_message(message):
 							await client.send_message(message.author, "**CTGP-7 server:** You are not muted.")
 						except:
 							pass
+				elif bot_cmd == 'talk':
+					if is_channel(message, ch_list()["STAFF"]):
+						tag = message.content.split(None)
+						if not (len(tag) == 3 or len(tag) == 2):
+							await client.send_message(message.channel, "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["talk"] + "```")
+							return
+						if (len(tag) == 2):
+							current_talk_id = ''
+							await client.send_message(message.channel, "Cleared chat destination.")
+						else:
+							if (checkdestvalid(tag[2]) != None):
+								current_talk_id = re.sub("\D", "", tag[2])
+								await client.send_message(message.channel, "{}, set chat destination to: {}".format(message.author.name, current_talk_id))
+							else:
+								await client.send_message(message.channel, "{}, Invalid user or channel specified.".format(message.author.name))
 				elif bot_cmd == 'closebug':
 					if is_channel(message, ch_list()["STAFF"]):
 						tag = message.content.split(None, 3)
@@ -1133,7 +1210,7 @@ async def on_message(message):
 						fact_text = await db_mng.fact_get(False)
 						fact_id = fact_text[random.randint(0, len(fact_text) - 1)][1]
 						try:
-							final_text = await parse_fact(fact_id)
+							final_text = await fact_parse(fact_id)
 						except:
 							print("Error parsing: " + fact_id)
 							raise
@@ -1146,7 +1223,7 @@ async def on_message(message):
 							await client.send_message(message.channel, "Invalid id specified.")
 							return
 						try:
-							final_text = await parse_fact(fact_id)
+							final_text = await fact_parse(fact_id)
 						except:
 							print("Error parsing: " + fact_id)
 							raise
@@ -1183,7 +1260,7 @@ async def on_message(message):
 						await client.send_message(message.channel, "{}, I sent you all the facts in a DM.".format(message.author.name))
 						for row in fact_text:
 							try:
-								final_text = await parse_fact(row[2])
+								final_text = await fact_parse(row[2])
 								text_isdyn = "(dynamic)" if await isfact_dynamic(row[2]) else "(static)"
 							except:
 								print("Error parsing: " + fact_id)
@@ -1229,12 +1306,12 @@ async def on_message(message):
 					tag[2] = tag[2].replace("@", "(at)")
 					tag[2] = tag[2].replace("`", "")
 					try:
-						dummy = await parse_fact(tag[2])
+						dummy = await fact_parse(tag[2])
 					except:
 						await client.send_message(message.channel, "{}, error parsing fact, correct usage:\r\n```".format(message.author.name) + help_array()["addfact"] + "```")
 						return
 					await db_mng.fact_add(int(message.author.id), tag[2])
-					await client.send_message(message.channel, "Fact added: \n```{}```".format(await parse_fact(tag[2])))						
+					await client.send_message(message.channel, "Fact added: \n```{}```".format(dummy))						
 				elif bot_cmd == 'help':
 					if is_channel(message, ch_list()["BOTCHAT"]) or is_channel(message, ch_list()["STAFF"]) or message.channel.is_private:
 						tag = message.content.split()
@@ -1447,6 +1524,27 @@ async def on_message(message):
 					await client.edit_message(notif_msg, "{}, adding your bug report: ```{}```**Fail**".format(message.author.name, tag[1]))
 			else:
 				await client.send_message(message.channel, "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + help_array()["report"] + "```")			
+		elif (is_channel(message, ch_list()["STAFF"]) and (message.author != client.user) and bot_mtn == "!emergency"):
+			tag = message.content.split(None, 1)
+			if (len(tag) > 1):
+				if (tag[1] == "off"):
+					await disableEmergency()
+				else:
+					await enableEmergency()
+			else:
+				await enableEmergency()
+		elif (is_channel(message, ch_list()["STAFF"]) and (message.author != client.user) and message.content[0] == '+' and len(message.content) > 2):
+			if (message.content[1] == '+'):
+				subsindex = 2
+			else:
+				subsindex = 1
+			if (current_talk_id == ''):
+				await client.send_message(message.channel, "{}, no chat destination set, please use `@RedYoshiBot talk` to set the chat destination ID".format(message.author.name))
+				return
+			await sayfunc(current_talk_id, message.content[subsindex:].strip(), message.channel)
+			if (subsindex == 2):
+				current_talk_id = ''
+				await client.send_message(message.channel, "Cleared chat destination.")
 		elif all(x in message.content.lower() for x in ["when"]) and itercount((x in message.content.lower() for x in ["update", "version", "next", "release", "new", "coming"]), 2) and message.author != client.user:
 			await client.send_message(message.channel, "{}, if you have asked when the next update will be released, it will as soon as the CTGP-7 devs think everything is ready. This can take hours, days, weeks or months, nobody can tell.".format(message.author.name))
 		elif (all(x in message.content.lower() for x in ["miku"]) or all(x in message.content.lower() for x in ["mbs"])) and itercount((x in message.content.lower() for x in ["remove", "replace", "delete"]), 1) and message.author != client.user:
