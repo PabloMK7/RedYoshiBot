@@ -22,7 +22,9 @@ current_time_min = lambda: int(round(time.time() / 60))
 SELF_BOT_MEMBER = None
 SELF_BOT_SERVER = None
 db_mng = None
-client = discord.Client()
+intents = discord.Intents.default()
+intents.members = True
+client = discord.Client(intents=intents)
 nsp = NumericStringParser()
 shutdown_watch_running = False
 running_State = True
