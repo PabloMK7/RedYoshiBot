@@ -280,8 +280,36 @@ class ServerDatabase:
         c = self.conn.cursor()
         c.execute('DELETE FROM cookies WHERE userid = ?', (int(user),))
         return
+    async def get_MikuTimes(self):
+        c = self.conn.cursor()
+        rows = c.execute("SELECT * FROM miku_remove WHERE dummyid = ?", (0,))
+        for row in rows:
+            return int(row[1])
+        return 0
+    async def set_MikuTimes(self, value):
+        c = self.conn.cursor()
+        rows = c.execute("SELECT * FROM miku_remove WHERE dummyid = ?", (0,))
+        for row in rows:
+            c.execute("UPDATE miku_remove SET valuetimes = ? WHERE dummyid = ?", (int(value), 0))
+            return
+        c.execute('INSERT INTO miku_remove VALUES (?,?)', (0, int(value)))
+    
 
-            
+class FakeMember:
+    def __init__(self, memberID):
+        self.id = int(memberID)
+        self.name = "(ID: {})".format(self.id)
+        self.mention = self.name
+    def send(self, message):
+        pass
+
+def CreateFakeMember(memberID):
+    ret = None
+    try:
+        ret = FakeMember(int(memberID))
+    except:
+        pass
+    return ret
 
 def get_retry_times ():
     try:
@@ -313,9 +341,21 @@ def get_role(roleid):
 def get_from_mention(mention):
     global SELF_BOT_SERVER
     global SELF_BOT_MEMBER
-    memberid = re.sub("\D", "", mention)
-    if memberid == "": return None
-    return client.get_guild(SERVER_ID()).get_member(int(memberid))
+    
+    mID = 0
+    if (type(mention) is str):
+        memberID = re.sub("\D", "", mention)
+        try:
+            mID = int(memberID)
+        except:
+            return None
+    elif (type(mention) is int):
+        mID = mention
+    
+    try:
+        return client.get_guild(SERVER_ID()).get_member(mID)
+    except:
+        return None
 
 def itercount(iterable, count):
     checkcnt = 0
@@ -439,6 +479,8 @@ def staff_help_array():
         "mute": ">@RedYoshiBot mute (user) (amount)\r\nMutes an user for a certain amount. The amount can be m (minutes), h (hours), d (days) and y (years). For example: 2h, 12m, 7d, etc",
         "unmute": ">@RedYoshiBot unmute (user)\r\nUnmutes a muted user.",
         "warn": ">@RedYoshiBot warn (user) [Reason]\nGives a warning to an user. Reason is optional.",
+        "ban": ">@RedYoshiBot ban (user) [Reason]\nSets warnings to 4 and bans the user.",
+        "kick": ">@RedYoshiBot warn (user) [Reason]\nSets warnings to 3 and kicks the user",
         "setwarn": ">@RedYoshiBot setwarn (user) (amount) [Reason]\nSets the warning amount of an user. Reason is optional.",
         "getwarn": ">@RedYoshiBot getwarn\nGets all the warned users.",
         "getmute": ">@RedYoshiBot getmute\nGets all the muted users.",
@@ -450,6 +492,37 @@ def staff_help_array():
         "emergency": "!emergency (off)\nEnables or disables emergency mode. (Mutes all channels).",
         "talk": ">@RedYoshiBot talk (channel/user)\nSets the chat destination ID (don't specify an ID to clear the current one). Use `+` before a message to talk with the specified ID and `++` to talk and clear the destination ID afterwards."
     }
+    
+def staff_command_level():
+    return {
+        "say": 0,
+        "edit": 0,
+        "release": 0,
+        "restart": 0,
+        "stop": 0,
+        "mute": 1,
+        "unmute": 1,
+        "warn": 1,
+        "setwarn": 1,
+        "ban": 1,
+        "kick": 1,
+        "getwarn": 1,
+        "getmute": 1,
+        "delfact": 1,
+        "change_game": 1,
+        "closebug": 1,
+        "schedule": 0,
+        "cancel_schedule": 0,
+        "emergency": 1,
+        "talk": 0,
+        "help": 1,
+        "showcookie": 1,
+        "setcookie": 1,
+        "listfact": 1,
+        "addfact": 1,
+        "game": 1
+    }
+    
 def game_help_array():
     return {
         "guessanumber": ">@RedYoshiBot game guessanumber (easy/normal/hard) (number)\nGuess a number game.\n\neasy: Guess a number between 0 and 10 (Win: +10 yoshi cookies).\nnormal: Guess a number between 0 and 50 (Win: +50 yoshi cookies).\nhard: Guess a number between 0 and 99 (Win: +100 yoshi cookies).\nLose: -1 yoshi cookies.",
@@ -486,12 +559,18 @@ def PLAYING_GAME():
 
 def MUTEROLE_ID():
     return 385544890030751754
+    
+def ADMINROLE_ID():
+    return 222417567036342272
+
+def MODERATORROLE_ID():
+    return 315474999001612288
 
 def SERVER_ID():
     return 163070769067327488
 
 def MUTABLE_CHANNELS():
-    return [163070769067327488, 336915016387395584, 337396714967400449, 325752333185056769, 315921603756163082, 163072964353458177, 163073383888715776, 329983699804487681, 163074261903343616, 163333095725072384, 324672297812099093]
+    return [163070769067327488, 336915016387395584, 337396714967400449, 325752333185056769, 315921603756163082, 163072964353458177, 163073383888715776, 329983699804487681, 163074261903343616, 163333095725072384, 324672297812099093, 704127200961626122]
 
 def MIKU_EMOJI_ID():
     return 749336816745709648
@@ -544,7 +623,7 @@ async def shutdown_watch():
             print("Manually stopping by terminal.")
             del db_mng
             await client.close()
-            await client.clear()
+            client = None
             with open("data/stopped.flag", "w") as f:
                 f.write("dummy")
             try:
@@ -569,55 +648,88 @@ async def parsetime(timestr):
     else:
         return [-1, -1, " "]
 
-async def punish(member, amount):
+async def staff_can_execute(message, command, silent=False):
+    retVal = False
+    if (is_channel(message, ch_list()["STAFF"])):
+        moderatorRole = get_role(MODERATORROLE_ID())
+        adminRole = get_role(ADMINROLE_ID())
+        hasMod = moderatorRole in message.author.roles
+        hasAdmin = (adminRole in message.author.roles) or message.author.id == SELF_BOT_SERVER.owner.id
+        privilegeLevel = 0 if hasAdmin else (1 if hasMod else 2)
+        try:
+            retVal = staff_command_level()[command] >= privilegeLevel
+        except:
+            retVal = False
+    if (not retVal and not silent):
+        await message.channel.send("{}, you don't have permission to do that!".format(message.author.name))
+    return retVal
+
+async def punish(member, amount, onRejoin=False):
     global client
-    if(amount == 2):
-        try:
-            await member.send("**CTGP-7 server:** You have been muted for 2 hours.")
-        except:
-            pass
-        await mute_user(member.id, 120)
-    elif(amount == 3):
-        try:
-            await member.send("**CTGP-7 server:** You have been kicked and muted 7 days, you may join again.")
-        except:
-            pass
-        await mute_user(member.id, 7*24*60)
-        try:
-            await member.kick()
-        except:
-            pass
-    elif(amount >= 4):
-        try:
-            await member.send("**CTGP-7 server:** You have been banned.")
-        except:
-            pass
-        try:
-            await member.ban(delete_message_days=7)
-        except:
-            pass
+    if (onRejoin):
+        if(amount >= 4):
+            try:
+                await member.send("**CTGP-7 server:** You have been banned.")
+            except:
+                pass
+            try:
+                if (type(member) is not FakeMember):
+                    await member.ban(delete_message_days=7)
+            except:
+                pass
+    else:
+        if(amount == 2):
+            try:
+                await member.send("**CTGP-7 server:** You have been muted for 2 hours.")
+            except:
+                pass
+            await mute_user(member.id, 120)
+        elif(amount == 3):
+            try:
+                await member.send("**CTGP-7 server:** You have been kicked and muted 7 days, you may join again.")
+            except:
+                pass
+            await mute_user(member.id, 7*24*60)
+            try:
+                if (type(member) is not FakeMember):
+                    await member.kick()
+            except:
+                pass
+        elif(amount >= 4):
+            try:
+                await member.send("**CTGP-7 server:** You have been banned.")
+            except:
+                pass
+            try:
+                if (type(member) is not FakeMember):
+                    await member.ban(delete_message_days=7)
+            except:
+                pass
 
 async def mute_user(memberid, amount):
     global db_mng
     global client
     global SELF_BOT_SERVER
-    muted_user = get_from_mention(str(memberid))
-    await db_mng.mute_apply(muted_user.id, amount)
-    mute_role = get_role(MUTEROLE_ID())
-    await muted_user.add_roles(mute_role)
+    await db_mng.mute_apply(memberid, amount)
+    muted_user = get_from_mention(memberid)
+    if (muted_user is not None):
+        mute_role = get_role(MUTEROLE_ID())
+        await muted_user.add_roles(mute_role)
 
 async def unmute_user(memberid):
     global db_mng
     global client
     global SELF_BOT_SERVER
-    muted_user = get_from_mention(str(memberid))
     await db_mng.mute_remove(memberid)
-    mute_role = get_role(MUTEROLE_ID())
-    try:
-        await muted_user.send("**CTGP-7 server:** You have been unmuted.")
-        await muted_user.remove_roles(mute_role)
-    except:
-        pass
+    muted_user = get_from_mention(memberid)
+    if (muted_user is not None):
+        mute_role = get_role(MUTEROLE_ID())
+        try:
+            await muted_user.send("**CTGP-7 server:** You have been unmuted.")
+            await muted_user.remove_roles(mute_role)
+        except:
+            pass
+
 def checkdestvalid(dest_id):
     channel_id = int(re.sub("\D", "", dest_id))
     channel_obj = client.get_channel(channel_id)
@@ -726,7 +838,7 @@ async def muted_task():
         for row in rows:
             timeleft = (row[1] + row[2]) - current_time_min()
             if(timeleft <= 0):
-                await unmute_user(str(row[0]))
+                await unmute_user(row[0])
         tobedeleted = []
         rows = await db_mng.schedule_get()
         for row in rows:
@@ -769,8 +881,12 @@ async def disableEmergency():
             await ch.send("Emergency mode has been disabled.")
 
 async def sendMikuMessage(message):
+    global db_mng
     mikuem = client.get_emoji(MIKU_EMOJI_ID())
-    emb = discord.Embed(description="Miku's Birthday Spectacular\n**WILL NOT** be removed!!!!", colour=discord.Colour(0x00FFFF))
+    ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4])
+    numbTimes = await db_mng.get_MikuTimes()
+    await db_mng.set_MikuTimes(numbTimes + 1)
+    emb = discord.Embed(description="For the {} time,\nMiku's Birthday Spectacular\n**WILL NOT** be removed!!!!".format(ordinal(numbTimes)), colour=discord.Colour(0x00FFFF))
     emb.set_thumbnail(url=mikuem.url)
     await message.channel.send(embed=emb)
 
@@ -813,6 +929,7 @@ async def on_member_join(member):
             timeleft = (row[1] + row[2]) - current_time_min()
             if (timeleft > 0):
                 await mute_user(member.id, timeleft)
+    await punish(member, await db_mng.warn_get(member.id), onRejoin=True)
 
 @client.event
 async def on_member_remove(member):
@@ -860,18 +977,20 @@ async def on_message(message):
             try:
                 bot_cmd = message.content.split()[1]
                 if bot_cmd == 'mute':
-                    if is_channel(message, ch_list()["STAFF"]):
+                    if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split()
                         if (len(tag) != 4):
                             await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["mute"] + "```")
                             return
                         muted_member = get_from_mention(tag[2])
+                        if (muted_member is None):
+                            muted_member = CreateFakeMember(tag[2])
                         if(muted_member != None):
                             mutemin = await parsetime(tag[3])
                             if (mutemin[0] == -1):
                                 await message.channel.send( "{}, invalid time amount.".format(message.author.name))
                                 return
-                            await mute_user(tag[2], mutemin[0])
+                            await mute_user(muted_member.id, mutemin[0])
                             await message.channel.send( "{} was muted for {} {}.".format(muted_member.name, mutemin[1], mutemin[2]))
                             try:
                                 await muted_member.send("**CTGP-7 server:** You have been muted for {} {}.".format(mutemin[1], mutemin[2]))
@@ -882,20 +1001,22 @@ async def on_message(message):
                             await message.channel.send( "{}, invalid member.".format(message.author.name))
                             return
                 elif bot_cmd == 'unmute':
-                    if is_channel(message, ch_list()["STAFF"]):
+                    if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split()
                         if (len(tag) != 3):
                             await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["unmute"] + "```")
                             return
                         muted_member = get_from_mention(tag[2])
+                        if (muted_member is None):
+                            muted_member = CreateFakeMember(tag[2])
                         if(muted_member != None):
-                            await unmute_user(tag[2])
+                            await unmute_user(muted_member.id)
                             await message.channel.send( "{} was unmuted.".format(muted_member.name))
                         else:
                             await message.channel.send( "{}, invalid member.".format(message.author.name))
                 elif bot_cmd == 'getmute':
                     tag = message.content.split()
-                    if is_channel(message, ch_list()["STAFF"]):
+                    if await staff_can_execute(message, bot_cmd):
                         if (len(tag) != 2):
                             await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["getmute"] + "```")
                             return
@@ -903,11 +1024,9 @@ async def on_message(message):
                         retstr = "--------------------- \n"
                         for row in rows:
                             member = get_from_mention(str(row[0]))
-                            membname = ""
-                            if (member == None):
-                                membname = str(row[0])
-                            else:
-                                membname = member.name
+                            if (member is None):
+                                member = CreateFakeMember(row[0])
+                            membname = member.name
                             retstr += "{}: {}m\n".format(membname, (row[1] + row[2]) - current_time_min())
                         retstr += "---------------------"
                         await message.channel.send( "Muted users:\n```{}```".format(retstr))
@@ -944,7 +1063,7 @@ async def on_message(message):
                         except Exception as e:
                             await message.channel.send( "An exception occured with your request: ```{}```".format(str(e)))
                 elif bot_cmd == 'talk':
-                    if is_channel(message, ch_list()["STAFF"]):
+                    if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split(None)
                         if not (len(tag) == 3 or len(tag) == 2):
                             await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["talk"] + "```")
@@ -959,7 +1078,7 @@ async def on_message(message):
                             else:
                                 await message.channel.send( "{}, Invalid user or channel specified.".format(message.author.name))
                 elif bot_cmd == 'closebug':
-                    if is_channel(message, ch_list()["STAFF"]):
+                    if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split(None, 3)
                         if not (len(tag) == 4 or len(tag) == 3):
                             await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["closebug"] + "```")
@@ -982,11 +1101,9 @@ async def on_message(message):
                             except:
                                 pass
                             member = get_from_mention(str(bug_entry[0]))
-                            membname = ""
-                            if (member == None):
-                                membname = "Unknown user"
-                            else:
-                                membname = member.mention
+                            if (member is None):
+                                member = FakeMember(str(bug_entry[0]))                
+                            membname = member.mention
                             await bugs.send("{}, your bug with ID: `{}` has been closed. Reason: ```{}```".format(membname, bot_msg.id, tag[3]))
                         else:
                             try:
@@ -1010,7 +1127,7 @@ async def on_message(message):
                         return
                     await message.channel.send( COMMUNITIES_TEXT)
                 elif bot_cmd == 'change_game':
-                    if is_channel(message, ch_list()["STAFF"]):
+                    if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split(None)
                         if (len(tag) != 2):
                             await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["change_game"] + "```")
@@ -1028,12 +1145,14 @@ async def on_message(message):
                         await message.channel.send( "{}, looks like I cannot calculate that.".format(message.author.name))
                         pass
                 elif bot_cmd == 'warn':
-                    if is_channel(message, ch_list()["STAFF"]):
+                    if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split(None, 3)
                         if (len(tag) < 3):
                             await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["warn"] + "```")
                             return
                         warn_member = get_from_mention(tag[2])
+                        if (warn_member is None):
+                            warn_member = CreateFakeMember(tag[2])
                         warnreason = ""
                         if(len(tag) == 3):
                             warnreason = "No reason given."
@@ -1051,23 +1170,42 @@ async def on_message(message):
                             await punish(warn_member, warncount)
                         else:
                             await message.channel.send( "{}, invalid member.".format(message.author.name))
-                elif bot_cmd == 'setwarn':
-                    if is_channel(message, ch_list()["STAFF"]):
+                elif bot_cmd == 'setwarn' or bot_cmd == "ban" or bot_cmd == "kick":
+                    if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split(None, 4)
-                        if (len(tag) < 4):
-                            await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["setwarn"] + "```")
-                            return
-                        warn_member = get_from_mention(tag[2])
-                        warnreason = ""
-                        try:
-                            warncount = int(tag[3])
-                        except:
-                            await message.channel.send( "{}, invalid amount.".format(message.author.name))
-                            return
-                        if(len(tag) == 4):
-                            warnreason = "No reason given."
+                        if (bot_cmd == "setwarn"):
+                            if (len(tag) < 4):
+                                await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()[bot_cmd] + "```")
+                                return
                         else:
-                            warnreason = tag[4]
+                            if (len(tag) < 3):
+                                await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()[bot_cmd] + "```")
+                                return
+                        warn_member = get_from_mention(tag[2])
+                        if (warn_member is None):
+                            warn_member = CreateFakeMember(tag[2])
+                        warnreason = ""
+                        warncount = 0
+                        if (bot_cmd == "ban"):
+                            warncount = 4
+                        elif (bot_cmd == "kick"):
+                            warncount = 3
+                        else:
+                            try:
+                                warncount = int(tag[3])
+                            except:
+                                await message.channel.send( "{}, invalid amount.".format(message.author.name))
+                                return
+                        if (bot_cmd == "setwarn"):
+                            if(len(tag) == 4):
+                                warnreason = "No reason given."
+                            else:
+                                warnreason = tag[4]
+                        else:
+                            if(len(tag) == 3):
+                                warnreason = "No reason given."
+                            else:
+                                warnreason = tag[3]
                         if(warn_member != None):
                             await db_mng.warn_set(warn_member.id, warncount)
                             await message.channel.send( "Set {} warnings to {}.".format(warn_member.name, warncount))
@@ -1080,7 +1218,7 @@ async def on_message(message):
                             await message.channel.send( "{}, invalid member.".format(message.author.name))
                 elif bot_cmd == 'getwarn':
                     tag = message.content.split()
-                    if is_channel(message, ch_list()["STAFF"]):
+                    if await staff_can_execute(message, bot_cmd):
                         if (len(tag) != 2):
                             await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["getwarn"] + "```")
                             return
@@ -1088,11 +1226,9 @@ async def on_message(message):
                         retstr = "--------------------- \n"
                         for row in rows:
                             member = get_from_mention(str(row[0]))
-                            membname = ""
-                            if (member == None):
-                                membname = str(row[0])
-                            else:
-                                membname = member.name
+                            if (member is None):
+                                member = CreateFakeMember(str(row[0]))
+                            membname = member.name
                             retstr += "{}: {}\n".format(membname, row[1])
                         retstr += "---------------------"
                         await message.channel.send( "Users with warnings:\n```{}```".format(retstr))
@@ -1107,7 +1243,7 @@ async def on_message(message):
                         except:
                             pass
                 elif bot_cmd == 'release':
-                    if is_channel(message, ch_list()["STAFF"]): 
+                    if await staff_can_execute(message, bot_cmd): 
                         tag = message.content.split()
                         try:
                             d = urlopen("https://api.github.com/repos/mariohackandglitch/CTGP-7updates/releases/tags/" + tag[2])
@@ -1122,7 +1258,7 @@ async def on_message(message):
                             except IndexError:
                                 await ch.send(json_data["name"] +" (" + json_data["tag_name"] + ") has been released! Here is the changelog:\r\n```" + json_data["body"] + "```")
                 elif bot_cmd == 'cancel_schedule':
-                    if is_channel(message, ch_list()["STAFF"]):
+                    if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split()
                         if (len(tag) != 3):
                             await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["cancel_schedule"] + "```")
@@ -1140,7 +1276,7 @@ async def on_message(message):
                             return
 
                 elif bot_cmd == 'schedule':
-                    if is_channel(message, ch_list()["STAFF"]):
+                    if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split(None, 4)
                         if (len(tag) != 5):
                             await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["schedule"] + "```")
@@ -1156,14 +1292,14 @@ async def on_message(message):
                         messagesent = await message.channel.send( "{}, the message will be sent in {} {} to {}".format(message.author.name, timeamount[1], timeamount[2], messagedest.name))
                         await db_mng.schedule_add(messagesent.id, messagedest.id, timeamount[0], tag[4])
                 elif bot_cmd == 'say':
-                    if is_channel(message, ch_list()["STAFF"]):
+                    if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split(None, 3)
                         if (len(tag) != 4):
                             await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["schedule"] + "```")
                             return
                         await sayfunc(tag[2], tag[3], message.channel)
                 elif bot_cmd == 'edit':
-                    if is_channel(message, ch_list()["STAFF"]):
+                    if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split(None, 3)
                         if (len(tag) != 4):
                             await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["edit"] + "```")
@@ -1188,22 +1324,22 @@ async def on_message(message):
                         await message.channel.send( "**Couldn't edit message:** Message not found (may be too old).")
                         return
                 elif bot_cmd == 'restart':
-                    if is_channel(message, ch_list()["STAFF"]):
+                    if await staff_can_execute(message, bot_cmd):
                         await message.channel.send( "The bot is now restarting.")
                         print("Manually restarting by {} ({})".format(message.author.id, message.author.name))
                         running_State = False
                         del db_mng
                         await client.close()
-                        await client.clear()
+                        client = None
                         os.execv(sys.executable, ['python3'] + sys.argv)
                 elif bot_cmd == 'stop':
-                    if is_channel(message, ch_list()["STAFF"]):
+                    if await staff_can_execute(message, bot_cmd):
                         await message.channel.send( "The bot is now stopping, see ya.")
                         print("Manually stopping by {} ({})".format(message.author.id, message.author.name))
                         running_State = False
                         del db_mng
                         await client.close()
-                        await client.clear()
+                        client = None
                         try:
                             sys.exit(0)
                         except:
@@ -1289,14 +1425,12 @@ async def on_message(message):
                         return
                     fact_text = await db_mng.fact_get(True)
                     retstr = "```\n----------\n"
-                    if is_channel(message, ch_list()["STAFF"]):
+                    if await staff_can_execute(message, bot_cmd, silent=True):
                         for row in fact_text:
                             member = get_from_mention(str(row[1]))
-                            membname = ""
-                            if (member == None):
-                                membname = str(row[1])
-                            else:
-                                membname = member.name
+                            if (member is None):
+                                member = CreateFakeMember(str(row[1]))
+                            membname = member.name
                             newpart = str(row[0]) + " - " + membname + " - " + row[2] + "\n----------\n"
                             if (len(newpart) >= 1950):
                                 newpart = str(row[0]) + " - " + membname + " - " + "too large to show" + "\n----------\n"
@@ -1328,7 +1462,7 @@ async def on_message(message):
                         retstr += "```"
                         await message.author.send(retstr)
                 elif bot_cmd == 'delfact':
-                    if is_channel(message, ch_list()["STAFF"]):
+                    if await staff_can_execute(message, bot_cmd, silent=True):
                         tag = message.content.split()
                         if (len(tag) != 3):
                             await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["delfact"] + "```")
@@ -1347,7 +1481,7 @@ async def on_message(message):
                         await db_mng.fact_deleteuser(message.author.id)
                         await message.channel.send( "{}, your fact has been removed.".format(message.author.name))
                 elif bot_cmd == 'addfact':
-                    if not is_channel(message, ch_list()["STAFF"]):
+                    if not await staff_can_execute(message, bot_cmd, silent=True):
                         if(await db_mng.fact_userreg(message.author.id)):
                             await message.channel.send( "{}, you can only have one fact registered. Use `@RedYoshiBot delfact` to delete the existing one.".format(message.author.name))
                             return
@@ -1380,7 +1514,7 @@ async def on_message(message):
                         return
                     await message.channel.send( "Parsed QR data:\n```{}```".format(qrtext))
                 elif bot_cmd == 'help':
-                    if is_channel(message, ch_list()["BOTCHAT"]) or is_channel(message, ch_list()["STAFF"]) or is_channel_private(message.channel):
+                    if is_channel(message, ch_list()["BOTCHAT"]) or await staff_can_execute(message, bot_cmd, silent=True) or is_channel_private(message.channel):
                         tag = message.content.split()
                         if (len(tag) > 2):
                             if tag[2] == "game":
@@ -1392,7 +1526,7 @@ async def on_message(message):
                                     help_str = help_str[:-2]
                                     help_str += "\n\nUse `@RedYoshiBot help game (gamemode)` to get help of a specific command."
                                     await message.channel.send( help_str)
-                                    if is_channel(message, ch_list()["STAFF"]):
+                                    if await staff_can_execute(message, bot_cmd, silent=True):
                                         help_str = "\nHere is a list of all the available game staff commands:\n\n"
                                         for index, content in staff_game_help_array().items():
                                             help_str += "`" + index + "`, "
@@ -1401,7 +1535,7 @@ async def on_message(message):
                                         await message.channel.send( help_str)
                                     return
                                 else:
-                                    if is_channel(message, ch_list()["STAFF"]):
+                                    if await staff_can_execute(message, bot_cmd, silent=True):
                                         if tag[3] in staff_game_help_array():
                                             await message.channel.send( "Here is the help for the specified game mode:\r\n```" + staff_game_help_array()[tag[3]] + "```")
                                             return
@@ -1410,7 +1544,7 @@ async def on_message(message):
                                     else:
                                         await message.channel.send( "Unknown game mode, use `@RedYoshiBot help game` to get a list of all the available game modes.")
                                     return
-                            if is_channel(message, ch_list()["STAFF"]):
+                            if await staff_can_execute(message, bot_cmd, silent=True):
                                 if tag[2] in staff_help_array():
                                     await message.channel.send( "Here is the help for the specified command:\r\n```" + staff_help_array()[tag[2]] + "```")
                                     return
@@ -1425,7 +1559,7 @@ async def on_message(message):
                             help_str = help_str[:-2]
                             help_str += "\n\nUse `@RedYoshiBot help (command)` to get help of a specific command."
                             await message.channel.send( help_str)
-                            if is_channel(message, ch_list()["STAFF"]):
+                            if await staff_can_execute(message, bot_cmd, silent=True):
                                 help_str = "\nHere is a list of all the available staff commands:\n\n"
                                 for index, content in staff_help_array().items():
                                     help_str += "`" + index + "`, "
@@ -1436,7 +1570,7 @@ async def on_message(message):
                         await message.channel.send( "`@RedYoshiBot help` can only be used in <#324672297812099093> or DM.")
                         return
                 elif bot_cmd == "game":
-                    if (is_channel(message, ch_list()["BOTCHAT"]) or is_channel(message, ch_list()["STAFF"])):
+                    if (is_channel(message, ch_list()["BOTCHAT"]) or await staff_can_execute(message, bot_cmd, silent=True)):
                         tag = message.content.split()
                         if (len(tag) < 3):
                             await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + help_array()["game"] + "```")
@@ -1514,11 +1648,13 @@ async def on_message(message):
                             await game_coin(bot_ch, usr_ch, message)
                             return
                         elif (tag[2] == "showcookie"):
-                            if is_channel(message, ch_list()["STAFF"]):
+                            if await staff_can_execute(message, bot_cmd, silent=True):
                                 if (len(tag) != 4):
                                     await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_game_help_array()["showcookie"] + "```")
                                     return
                                 cookie_member = get_from_mention(tag[3])
+                                if (cookie_member is None):
+                                    cookie_member = CreateFakeMember(tag[3])
                                 if (cookie_member != None):
                                     cookie_amount = await db_mng.get_cookie(cookie_member.id)
                                     await message.channel.send( "{} has {} <:yoshicookie:416533826869657600> .".format(cookie_member.name, cookie_amount))
@@ -1546,11 +1682,13 @@ async def on_message(message):
                                     await db_mng.delete_cookie(row[0])
                             await message.channel.send( "{}".format(retstr))
                         elif (tag[2] == "setcookie"):
-                            if is_channel(message, ch_list()["STAFF"]):
+                            if await staff_can_execute(message, bot_cmd):
                                 if (len(tag) != 5):
                                     await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_game_help_array()["setcookie"] + "```")
                                     return
                                 cookie_member = get_from_mention(tag[3])
+                                if (cookie_member is None):
+                                    cookie_member = CreateFakeMember(tag[3])
                                 try:
                                     amount = int(tag[4])
                                 except:
@@ -1591,7 +1729,7 @@ async def on_message(message):
                     await notif_msg.edit(content="{}, adding your bug report: ```{}```**Fail**".format(message.author.name, tag[1]))
             else:
                 await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + help_array()["report"] + "```")            
-        elif (is_channel(message, ch_list()["STAFF"]) and (message.author != client.user) and bot_mtn == "!emergency"):
+        elif (await staff_can_execute(message, "emergency", silent=True) and (message.author != client.user) and bot_mtn == "!emergency"):
             tag = message.content.split(None, 1)
             if (len(tag) > 1):
                 if (tag[1] == "off"):
@@ -1600,7 +1738,7 @@ async def on_message(message):
                     await enableEmergency()
             else:
                 await enableEmergency()
-        elif (is_channel(message, ch_list()["STAFF"]) and (message.author != client.user) and message.content[0] == '+' and len(message.content) > 2):
+        elif (await staff_can_execute(message, "talk", silent=True) and (message.author != client.user) and message.content[0] == '+' and len(message.content) > 2):
             if (message.content[1] == '+'):
                 subsindex = 2
             else:
