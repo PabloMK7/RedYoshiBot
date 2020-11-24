@@ -1,10 +1,13 @@
 from PIL import Image
+import cv2
+import numpy as np
 import requests
 from io import BytesIO
 from pyzbar import pyzbar
 import base64
 import struct
 from CTGP7Defines import CTGP7Defines
+from FunctionSearch import MK7FunctionSearch
 
 class QRCrashDecode:
 
@@ -25,7 +28,11 @@ class QRCrashDecode:
             except:
                 raise Exception("Couldn't download image!")
             try:
-                img = Image.open(BytesIO(response.content))
+                file_bytes = np.asarray(bytearray(response.content), dtype=np.uint8)
+                img = cv2.imdecode(file_bytes, cv2.IMREAD_GRAYSCALE)
+                # preprocessing using opencv
+                blur = cv2.GaussianBlur(img, (5, 5), 0)
+                ret, img = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
             except:
                 raise Exception("Invalid image provided!")
             try:
@@ -61,23 +68,32 @@ class QRCrashDecode:
     @staticmethod
     def __printDataVer0(data):
         try:
+            region = (data[13] >> 4) & 0xF
+            version = data[13] & 0xF
+            fs = MK7FunctionSearch(region, version)
             ret = ""
             major = data[0] >> 24
             minor = (data[0] >> 16) & 0xFF
             micro = (data[0] >> 8) & 0xFF
             ctgpver = "{}.{}.{}".format(major, minor, micro)
-            ret += "CTGP-7 version: {}\n".format(ctgpver)
-            ret += "MK7 version: {} {}\n".format(QRCrashDecode.gameRegion[(data[13] >> 4) & 0xF], QRCrashDecode.gameRevision[data[13] & 0xF])
+            ret += "CTGP-7: v{}\n".format(ctgpver)
+            ret += "MK7: {} {}\n".format(QRCrashDecode.gameRegion[region], QRCrashDecode.gameRevision[version])
             ret += QRCrashDecode.SEPARATOR
-            ret += "Exception type: {}\n".format(QRCrashDecode.exceptionType[data[14]])
+            ret += "Exception: {}\n".format(QRCrashDecode.exceptionType[data[14]])
             ret += "Registers:\n"
-            ret += "    SP: 0x{:08X}  PC: 0x{:08X}\n".format(data[1], data[2])
-            ret += "   FAR: 0x{:08X}  LR: 0x{:08X}\n".format(data[4], data[3])
+            ret += "- SP: 0x{:08X}\n".format(data[1])
+            ret += "- FAR: 0x{:08X}\n".format(data[4])
             ret += "Call Stack:\n"
-            ret += "     1: 0x{:08X}   2: 0x{:08X}   3: 0x{:08X}\n".format(data[5], data[6], data[7])
-            ret += "     4: 0x{:08X}   5: 0x{:08X}   6: 0x{:08X}\n".format(data[8], data[9], data[10])
+            ret += "- PC: 0x{:08X} ({})\n".format(data[2], fs.functionNameForAddr(data[2]))
+            ret += "- LR: 0x{:08X} ({})\n".format(data[3], fs.functionNameForAddr(data[3]))
+            ret += "- 1: 0x{:08X} ({})\n".format(data[5], fs.functionNameForAddr(data[5]))
+            ret += "- 2: 0x{:08X} ({})\n".format(data[6], fs.functionNameForAddr(data[6]))
+            ret += "- 3: 0x{:08X} ({})\n".format(data[7], fs.functionNameForAddr(data[7]))
+            ret += "- 4: 0x{:08X} ({})\n".format(data[8], fs.functionNameForAddr(data[8]))
+            ret += "- 5: 0x{:08X} ({})\n".format(data[9], fs.functionNameForAddr(data[9]))
+            ret += "- 6: 0x{:08X} ({})\n".format(data[10], fs.functionNameForAddr(data[10]))
             ret += QRCrashDecode.SEPARATOR
-            ret += "Game state: {}".format(QRCrashDecode.gameState[data[11]].format(CTGP7Defines.getMenuString(data[12]) if data[11] == 3 else (CTGP7Defines.getTrackString(data[0], data[12]) if data[11] == 4 else "")))
+            ret += "State: {}".format(QRCrashDecode.gameState[data[11]].format(CTGP7Defines.getMenuString(data[12]) if data[11] == 3 else (CTGP7Defines.getTrackString(data[0], data[12]) if data[11] == 4 else "")))
             return ret
         except:
             raise Exception("QR Code parameters invalid!")

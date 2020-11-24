@@ -10,6 +10,7 @@ import asyncio
 import json
 from NumericStringParser import NumericStringParser
 from QRCrashDecode import QRCrashDecode
+from FunctionSearch import MK7FunctionSearch
 import MKTranslationDownload
 import hashlib
 import sqlite3
@@ -469,7 +470,8 @@ def help_array():
         "report": "!report (Explanation)\nReports a bug with the given explanation. Can only be used in #bugs_discussion.",
         "bugcount": ">@RedYoshiBot bugcount\nShows the amount of open and closed bugs.",
         "getlang": ">@RedYoshiBot getlang (Language)\nGets the language file from the MK Translation Project spreadsheet. Can only be used by translators.",
-        "parseqr": ">@RedYoshiBot parseqr (url)\nParses the CTGP-7 QR crash data from the image url."
+        "parseqr": ">@RedYoshiBot parseqr (url)\nParses the CTGP-7 QR crash data from the image url.",
+        "funcname": ">@RedYoshiBot funcname (address) (region) (version)\nFinds the Mario Kart 7 function name for a given address, region and version combination.\n- address: Address to find in hex.\n- region: Region of the game (1 - EUR, 2 - USA, 3 - JAP).\n- version: Version of the game (1 - rev0 v1.1, 2 - rev1)."
     }
 def staff_help_array():
     return {
@@ -1506,6 +1508,7 @@ async def on_message(message):
                         await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + help_array()["parseqr"] + "```")
                         return
                     try:
+                        await message.channel.trigger_typing()
                         if (tag[2].startswith("data:")):
                             qr = QRCrashDecode(data=tag[2][5:])
                         else:
@@ -1513,8 +1516,38 @@ async def on_message(message):
                         qrtext = qr.printData()
                     except Exception as e:
                         await message.channel.send( "Failed to parse QR data:\n```{}```".format(str(e)))
+                        raise e
                         return
                     await message.channel.send( "Parsed QR data:\n```{}```".format(qrtext))
+                elif bot_cmd == "funcname":
+                    tag = message.content.split(None)
+                    if (len(tag) != 5):
+                        await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + help_array()["funcname"] + "```")
+                        return
+                    try:
+                        hexval = tag[2].lstrip("0x")
+                        try:
+                            hexval = int(hexval, 16)
+                            if (hexval % 4 != 0):
+                                raise ValueError("Address not aligned.")
+                        except:
+                            await message.channel.send("`Invalid address.`\nCorrect usage:\r\n```" + help_array()["funcname"] + "```")
+                            return
+                        try:
+                            region = int(tag[3])
+                            version = int(tag[4])
+                            if (region < 1 or region > 3 or version < 1 or version > 2):
+                                raise ValueError("Invalid region or version value.")
+                        except:
+                            await message.channel.send("`Invalid region or version.`\nCorrect usage:\r\n```" + help_array()["funcname"] + "```")
+                            return
+                        await message.channel.trigger_typing()
+                        fs = MK7FunctionSearch(region, version)
+                        name = fs.functionNameForAddr(hexval)
+                        await message.channel.send("```0x{:08X}: ({})```".format(hexval, name))
+                    except Exception as e:
+                        await message.channel.send("Failed to get function name.")
+                        raise e
                 elif bot_cmd == 'help':
                     if is_channel(message, ch_list()["BOTCHAT"]) or await staff_can_execute(message, bot_cmd, silent=True) or is_channel_private(message.channel):
                         tag = message.content.split()
