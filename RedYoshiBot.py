@@ -684,10 +684,10 @@ async def punish(member, amount, onRejoin=False):
     else:
         if(amount == 2):
             try:
-                await member.send("**CTGP-7 server:** You have been muted for 2 hours.")
+                await member.send("**CTGP-7 server:** You have been muted for 1 day.")
             except:
                 pass
-            await mute_user(member.id, 120)
+            await mute_user(member.id, 1*24*60)
         elif(amount == 3):
             try:
                 await member.send("**CTGP-7 server:** You have been kicked and muted 7 days, you may join again.")
@@ -741,6 +741,7 @@ def checkdestvalid(dest_id):
         return channel_obj
     else:
         return get_from_mention(dest_id)
+
 async def sayfunc(dest_id, text, channel):
     if (text == ''):
         await channel.send("Cannot send empty message.")
@@ -894,6 +895,36 @@ async def sendMikuMessage(message):
     emb.set_thumbnail(url=mikuem.url)
     await message.channel.send(embed=emb)
 
+async def sendMultiMessage(channel, message, startStr, endStr):
+    
+    def splitStrByLimit(string, size):
+        return [string[i:i+size] for i in range(0, len(string), size)]
+    def splitListByLimit(stringList, size):
+        curr = ""
+        ret = []
+        for m in message:
+            if (len(m) > size):
+                ret = ret + splitStrByLimit(m, size)
+            elif (len(curr) + len(m) > size):
+                ret.append(curr)
+                curr = ""
+            else:
+                curr += m
+        ret.append(curr)
+        return ret
+    
+    messageList = []
+    f = None
+    if (type(message) == type([])):
+        f = splitListByLimit
+    elif (type(message) == type("")):
+        f = splitStrByLimit
+                
+    messageList = f(message, 2000 - (len(startStr) + len(endStr)))
+    
+    for m in messageList:
+        await channel.send(startStr + m + endStr)
+
 @client.event
 async def on_ready():
     print("\n-------------------------\n")
@@ -1025,15 +1056,14 @@ async def on_message(message):
                             await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["getmute"] + "```")
                             return
                         rows = await db_mng.mute_get()
-                        retstr = "--------------------- \n"
+                        nameList = []
                         for row in rows:
                             member = get_from_mention(str(row[0]))
                             if (member is None):
                                 member = CreateFakeMember(row[0])
                             membname = member.name
-                            retstr += "{}: {}m\n".format(membname, (row[1] + row[2]) - current_time_min())
-                        retstr += "---------------------"
-                        await message.channel.send( "Muted users:\n```{}```".format(retstr))
+                            nameList.append("{}: {}m\n".format(membname, (row[1] + row[2]) - current_time_min()))
+                        await sendMultiMessage(message.channel, nameList, "```", "```")
                     else:
                         if (len(tag) != 2):
                             await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + help_array()["getmute"] + "```")
@@ -1227,15 +1257,14 @@ async def on_message(message):
                             await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["getwarn"] + "```")
                             return
                         rows = await db_mng.warn_get_all()
-                        retstr = "--------------------- \n"
+                        nameList = []
                         for row in rows:
                             member = get_from_mention(str(row[0]))
                             if (member is None):
                                 member = CreateFakeMember(str(row[0]))
                             membname = member.name
-                            retstr += "{}: {}\n".format(membname, row[1])
-                        retstr += "---------------------"
-                        await message.channel.send( "Users with warnings:\n```{}```".format(retstr))
+                            nameList.append("{}: {}\n".format(membname, row[1]))
+                        await sendMultiMessage(message.channel, nameList, "```", "```")
                     else:
                         if (len(tag) != 2):
                             await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + help_array()["getwarn"] + "```")
@@ -1428,43 +1457,25 @@ async def on_message(message):
                         await message.channel.send( "{}, invalid syntax, correct usage:\r\n```".format(message.author.name) + staff_help_array()["listfact"] + "```")
                         return
                     fact_text = await db_mng.fact_get(True)
-                    retstr = "```\n----------\n"
+                    factSend = []
                     if await staff_can_execute(message, bot_cmd, silent=True):
                         for row in fact_text:
                             member = get_from_mention(str(row[1]))
                             if (member is None):
                                 member = CreateFakeMember(str(row[1]))
                             membname = member.name
-                            newpart = str(row[0]) + " - " + membname + " - " + row[2] + "\n----------\n"
-                            if (len(newpart) >= 1950):
-                                newpart = str(row[0]) + " - " + membname + " - " + "too large to show" + "\n----------\n"
-                            if ((len(retstr) + len(newpart)) > 1950):
-                                retstr += "```"
-                                await message.channel.send( retstr)
-                                await asyncio.sleep(0.1)
-                                retstr = "```\n----------\n"
-                            retstr += newpart
-                        retstr += "```"
-                        await message.channel.send( retstr)
+                            factSend.append(str(row[0]) + " - " + membname + " - " + row[2] + "\n----------\n")
                     else:
-                        await message.channel.send( "{}, I sent you all the facts in a DM.".format(message.author.name))
+                        await message.channel.send( "{}, I've sent you all the facts in a DM.".format(message.author.name))
                         for row in fact_text:
                             try:
                                 final_text = await fact_parse(row[2])
                                 text_isdyn = "(dynamic)" if await isfact_dynamic(row[2]) else "(static)"
                             except:
                                 print("Error parsing: " + fact_id)
-                            newpart = str(row[0]) + " - " + text_isdyn +  " - " + final_text + "\n----------\n"
-                            if (len(newpart) >= 1950):
-                                newpart = str(row[0]) + " - " + text_isdyn +  " - " + "too large to show" + "\n----------\n"
-                            if ((len(retstr) + len(newpart)) > 1950):
-                                retstr += "```"
-                                await message.author.send(retstr)
-                                await asyncio.sleep(0.1)
-                                retstr = "```\n----------\n"
-                            retstr += newpart
-                        retstr += "```"
-                        await message.author.send(retstr)
+                                continue
+                            factSend.append(str(row[0]) + " - " + text_isdyn +  " - " + final_text + "\n----------\n")
+                    await sendMultiMessage(message.channel, factSend, "```\n----------\n", "```")
                 elif bot_cmd == 'delfact':
                     if await staff_can_execute(message, bot_cmd, silent=True):
                         tag = message.content.split()
@@ -1788,11 +1799,7 @@ async def on_message(message):
         elif all(x in message.content.lower() for x in ["when"]) and itercount((x in message.content.lower() for x in ["update", "version", "next", "release", "new", "coming"]), 2) and message.author != client.user:
             await message.channel.send( "{}, if you have asked when the next update will be released, it will as soon as the CTGP-7 devs think everything is ready. This can take hours, days, weeks or months, nobody can tell.".format(message.author.name))
         elif (all(x in message.content.lower() for x in ["miku"]) or all(x in message.content.lower() for x in ["mbs"])) and itercount((x in message.content.lower() for x in ["remove", "replace", "delete"]), 1) and message.author != client.user:
-            await sendMikuMessage(message)    
-        elif (is_channel(message, ch_list()["GENERAL_OFFTOPIC"]) and len(message.content) < 35 and (message.author != client.user)):
-            find = message.content.lower().rfind("i\'m")
-            if not (find == -1):
-                await message.channel.send( "Hello {}, I\'m RedYoshiBot :3".format(message.content[find + 3:].strip().replace("@", "(at)")))
+            await sendMikuMessage(message)
     except:
         if(debug_mode):
             raise
