@@ -3,8 +3,8 @@ import struct
 class MK7FunctionSearch:
 
     codeSectionFiles = [["", "", ""], ["", "eur_rev0_v11_code.bin", "eur_rev1_code.bin"], ["", "usa_rev0_v11_code.bin", "usa_rev1_code.bin"], ["", "jap_rev0_v11.bin", "jap_rev1_code.bin"]]
-    downloadPlayCode = "code_sections/dlp_code.bin"
-    xmapFile = "code_sections/CTRDash.xmap"
+    downloadPlayCode = "RedYoshiBot/code_sections/dlp_code.bin"
+    xmapFile = "RedYoshiBot/code_sections/CTRDash.xmap"
 
     def __init__(self, region, version):
         self.fileData = b""
@@ -15,7 +15,7 @@ class MK7FunctionSearch:
         try:
             codefile = self.codeSectionFiles[region][version]
             if not (codefile == ""):
-                with open("code_sections/" + codefile, "rb") as f:
+                with open("RedYoshiBot/code_sections/" + codefile, "rb") as f:
                     self.fileData = f.read()
             with open(self.downloadPlayCode, "rb") as f:
                 self.dlpData = f.read()

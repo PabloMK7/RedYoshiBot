@@ -1,3 +1,5 @@
-__pycache__
-code_sections
-server
+**/.vscode
+**/__pycache__
+RedYoshiBot/code_sections/
+RedYoshiBot/script/
+MKTranslationDownload.py
