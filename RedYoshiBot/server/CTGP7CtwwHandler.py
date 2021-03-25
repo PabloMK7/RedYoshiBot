@@ -54,12 +54,13 @@ class OnlineUserName:
                 return self.name.replace("`", "'")
 
 class OnlineUser:
-    def __init__(self, name: OnlineUserName, consoleID: int):
+    def __init__(self, name: OnlineUserName, consoleID: int, isVerified: bool):
         self.lastActivity = datetime.datetime.utcnow()
         self.name = name
         self.cID = consoleID
         self.state = UserState.IDLE.value
         self.token = uuid.uuid1().int>>64
+        self.isVerified = isVerified
 
     def setState(self, state: int):
         self.state = state
@@ -90,6 +91,9 @@ class OnlineUser:
 
     def getName(self):
         return str(self.name)
+    
+    def verified(self):
+        return self.isVerified
 
     def __hash__(self):
         return hash(self.cID)
@@ -297,7 +301,7 @@ class CTGP7CtwwHandler:
             if (nameMode == PlayerNameMode.CUSTOM.value and nameValue is None):
                 return (-1, {})
             
-            user = OnlineUser(OnlineUserName(nameMode, nameValue, miiName), cID)
+            user = OnlineUser(OnlineUserName(nameMode, nameValue, miiName), cID, self.database.get_console_is_verified(cID))
 
             consoleMsg = None
             if (not isRelogin):
@@ -555,6 +559,7 @@ class CTGP7CtwwHandler:
                     userInfo["miiName"] = user.getMiiName()
                     userInfo["state"] = user.getStateName()
                     userInfo["cID"] = u
+                    userInfo["verified"] = user.verified()
                     roomInfo["players"].append(userInfo)
                 ret["rooms"].append(roomInfo)
                 room.resetUpdate()

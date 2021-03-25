@@ -33,7 +33,8 @@ def staff_server_help_array():
         "sban": ">@RedYoshiBot server sban (consoleID) (message)\nPermanently silently bans the console (hex format, 0 for everyone) with the specified message (Use kick for temporary bans). Takes effect after the next race.",
         "message": ">@RedYoshiBot server message (consoleID) (time) (message)\nShows a message to the console (hex format, 0 for everyone) upon login for the specified time (for example: 2h, 12m, 7d, etc, or 0m for a single time).",
         "clear": ">@RedYoshiBot server clear (consoleID)\nClears all the messages/kicks/bans associated with the console (hex format, 0 for everyone).",
-        "disband": ">@RedYoshiBot server disband (roomID)\nDisbands the specified room ID, kicking all players."
+        "disband": ">@RedYoshiBot server disband (roomID)\nDisbands the specified room ID, kicking all players.",
+        "console_verify": ">@RedYoshiBot server console_verify (get/set/clear) (consoleID)\nSets or clears the verification mark for the specified console."
     }
     
 def staff_server_command_level():
@@ -48,7 +49,8 @@ def staff_server_command_level():
         "message": 1,
         "clear": 1,
         "disband" : 1,
-        "stats": 1
+        "stats": 1,
+        "console_verify": 1
     }
 
 async def staff_server_can_execute(message, command, silent=False):
@@ -280,7 +282,7 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isFirst: boo
             embed=discord.Embed(title="Room 0x{:08X}".format(room["gID"]), description="Game Mode: {}\nState: {}".format(room["gameMode"], room["state"]), color=0xff0000, timestamp=datetime.datetime.utcnow())
             playerString = "```\n"
             for player in room["players"]:
-                playerString += "- {} {}\n".format(player["name"], player["state"])
+                playerString += "- {}{} {}\n".format(player["name"], " \u2705" if player["verified"] else "", player["state"])
             playerString += "```"
             if (playerString == "```\n```"):
                 playerString = "```\n- (None)\n```"
@@ -551,6 +553,34 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             else:
                 await message.reply( "The specified room is not active.")
             return
+    elif bot_cmd == "console_verify":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content, 3)
+            if (len(tag) != 4):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            mode = tag[2]
+            consoleID = tag[3]
+            if (consoleID.startswith("0x")):
+                consoleID = consoleID[2:]
+            try:
+                consoleID = int(consoleID, 16)
+                if (consoleID == 0):
+                    raise ValueError()
+            except ValueError:
+                await message.reply( "Invalid console ID.")
+                return
+            if mode not in ["get", "set", "clear"]:
+                await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()[bot_cmd] + "```")
+                return
+            if (mode == "get"):
+                if (ctgp7_server.database.get_console_is_verified(consoleID)):
+                    await message.reply("The specified console ID is verified.")
+                else:
+                    await message.reply("The specified console ID is not verified.")
+            else:
+                ctgp7_server.database.set_console_is_verified(consoleID, mode == "set")
+                await message.reply( "Operation succeeded.")
     elif bot_cmd == "stats":
         tag = get_server_bot_args(message.content)
         if (len(tag) != 3):

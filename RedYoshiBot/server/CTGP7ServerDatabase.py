@@ -183,3 +183,22 @@ class CTGP7ServerDatabase:
             ret = self.get_console_message(0)
         
         return ret
+
+    def set_console_is_verified(self, cID, isVerified):
+        wasVerified = self.get_console_is_verified(cID)
+        if (wasVerified == isVerified):
+            return
+        with self.lock:
+            c = self.conn.cursor()
+            if (isVerified):
+                c.execute('INSERT INTO verified_consoles VALUES (?)', (int(cID),))
+            else:
+                c.execute("DELETE FROM verified_consoles WHERE cID = ?", (int(cID),))
+
+
+    def get_console_is_verified(self, cID):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM verified_consoles WHERE cID = ?", (int(cID),))
+            for row in rows:
+                return row[0]
