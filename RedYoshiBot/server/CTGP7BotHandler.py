@@ -328,19 +328,22 @@ async def server_bot_loop(ctgp7_server: CTGP7ServerHandler):
     global stats_curr_online_stuff_changed
     global server_bot_loop_dbcommit_cnt
     while (True):
-        await update_online_room_info(ctgp7_server, firstLoop)
-        if (firstLoop or ctgp7_server.database.get_stats_dirty() or stats_curr_online_stuff_changed):
-            await update_stats_message(ctgp7_server)
-            ctgp7_server.database.set_stats_dirty(False)
-        await kick_message_logger(ctgp7_server)
-        await server_message_logger(ctgp7_server)
-        await asyncio.sleep(10)
-        server_bot_loop_dbcommit_cnt += 1
-        if (server_bot_loop_dbcommit_cnt >= 6 * 5): # Commit every 5 minutes
-            ctgp7_server.database.commit()
-            server_bot_loop_dbcommit_cnt = 0
-        firstLoop = False
-    pass
+        try:
+            await update_online_room_info(ctgp7_server, firstLoop)
+            if (firstLoop or ctgp7_server.database.get_stats_dirty() or stats_curr_online_stuff_changed):
+                await update_stats_message(ctgp7_server)
+                ctgp7_server.database.set_stats_dirty(False)
+            await kick_message_logger(ctgp7_server)
+            await server_message_logger(ctgp7_server)
+            await asyncio.sleep(10)
+            server_bot_loop_dbcommit_cnt += 1
+            if (server_bot_loop_dbcommit_cnt >= 6 * 5): # Commit every 5 minutes
+                ctgp7_server.database.commit()
+                server_bot_loop_dbcommit_cnt = 0
+            firstLoop = False
+        except:
+            traceback.print_exc()
+            pass
 stats_command_last_exec = datetime.datetime.utcnow()
 async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: discord.Message):
     global stats_command_last_exec
