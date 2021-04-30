@@ -34,7 +34,8 @@ def staff_server_help_array():
         "message": ">@RedYoshiBot server message (consoleID) (time) (message)\nShows a message to the console (hex format, 0 for everyone) upon login for the specified time (for example: 2h, 12m, 7d, etc, or 0m for a single time).",
         "clear": ">@RedYoshiBot server clear (consoleID)\nClears all the messages/kicks/bans associated with the console (hex format, 0 for everyone).",
         "disband": ">@RedYoshiBot server disband (roomID)\nDisbands the specified room ID, kicking all players.",
-        "console_verify": ">@RedYoshiBot server console_verify (get/set/clear) (consoleID)\nSets or clears the verification mark for the specified console."
+        "console_verify": ">@RedYoshiBot server console_verify (get/set/clear) (consoleID)\nSets or clears the verification mark for the specified console.",
+        "console_admin": ">@RedYoshiBot server console_admin (get/set/clear) (consoleID)\nSets or clears the admin status for the specified console."
     }
     
 def staff_server_command_level():
@@ -50,7 +51,8 @@ def staff_server_command_level():
         "clear": 1,
         "disband" : 1,
         "stats": 1,
-        "console_verify": 1
+        "console_verify": 1,
+        "console_admin": 0
     }
 
 async def staff_server_can_execute(message, command, silent=False):
@@ -279,10 +281,10 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isFirst: boo
                 msg = await ctwwChan.send("Room is being created...")
                 msgID = msg.id
                 ctgp7_server.ctwwHandler.update_room_messageID(room["gID"], msgID)
-            embed=discord.Embed(title="Room 0x{:08X}".format(room["gID"]), description="Game Mode: {}\nState: {}".format(room["gameMode"], room["state"]), color=0xff0000, timestamp=datetime.datetime.utcnow())
+            embed=discord.Embed(title="{} Room".format(room["gameMode"]), description="State: {}\nID: 0x{:08X}".format(room["state"], room["fakeID"]), color=0xff0000, timestamp=datetime.datetime.utcnow())
             playerString = "```\n"
             for player in room["players"]:
-                playerString += "- {}{} {}\n".format(player["name"], " \u2705" if player["verified"] else "", player["state"])
+                playerString += "- {}{} {}\n".format(player["name"].replace("\u2705", ""), " \u2705" if player["verified"] else "", player["state"])
             playerString += "```"
             if (playerString == "```\n```"):
                 playerString = "```\n- (None)\n```"
@@ -308,6 +310,7 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isFirst: boo
                 playerString += "```"
                 if (playerString == "```\n```"):
                     playerString = "```\n- (None)\n```"
+                embed.add_field(name="Room ID", value="0x{:08X}".format(room["gID"]))
                 embed.add_field(name="Players IDs", value=playerString, inline=False)
                 chPrivate = SELF_BOT_SERVER.get_channel(ch_list()["ONLINELOGS"])
                 await chPrivate.send(embed=embed)
@@ -335,7 +338,6 @@ async def server_bot_loop(ctgp7_server: CTGP7ServerHandler):
                 ctgp7_server.database.set_stats_dirty(False)
             await kick_message_logger(ctgp7_server)
             await server_message_logger(ctgp7_server)
-            await asyncio.sleep(10)
             server_bot_loop_dbcommit_cnt += 1
             if (server_bot_loop_dbcommit_cnt >= 6 * 5): # Commit every 5 minutes
                 ctgp7_server.database.commit()
@@ -344,6 +346,7 @@ async def server_bot_loop(ctgp7_server: CTGP7ServerHandler):
         except:
             traceback.print_exc()
             pass
+        await asyncio.sleep(10)
 stats_command_last_exec = datetime.datetime.utcnow()
 async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: discord.Message):
     global stats_command_last_exec
@@ -583,6 +586,34 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     await message.reply("The specified console ID is not verified.")
             else:
                 ctgp7_server.database.set_console_is_verified(consoleID, mode == "set")
+                await message.reply( "Operation succeeded.")
+    elif bot_cmd == "console_admin":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content, 3)
+            if (len(tag) != 4):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            mode = tag[2]
+            consoleID = tag[3]
+            if (consoleID.startswith("0x")):
+                consoleID = consoleID[2:]
+            try:
+                consoleID = int(consoleID, 16)
+                if (consoleID == 0):
+                    raise ValueError()
+            except ValueError:
+                await message.reply( "Invalid console ID.")
+                return
+            if mode not in ["get", "set", "clear"]:
+                await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()[bot_cmd] + "```")
+                return
+            if (mode == "get"):
+                if (ctgp7_server.database.get_console_is_admin(consoleID)):
+                    await message.reply("The specified console ID is admin.")
+                else:
+                    await message.reply("The specified console ID is not admin.")
+            else:
+                ctgp7_server.database.set_console_is_admin(consoleID, mode == "set")
                 await message.reply( "Operation succeeded.")
     elif bot_cmd == "stats":
         tag = get_server_bot_args(message.content)

@@ -6,6 +6,7 @@ import datetime
 import textwrap
 import uuid
 import threading
+import random
 
 current_time_min = lambda: int(round(time.time() / 60))
 
@@ -105,6 +106,7 @@ class OnlineRoom:
     def __init__(self, gID: int, gamemode: int):
         self.gID = gID
         self.gamemode = gamemode
+        self.roomKeySeed = random.getrandbits(64)
         self.players = set()
         self.state = RoomState.SEARCHING.value
         self.race = ""
@@ -116,6 +118,9 @@ class OnlineRoom:
     def joinPlayer(self, user: OnlineUser):
         self.players.add(user.cID)
         self.needsUpdate = True
+    
+    def getKeySeed(self):
+        return self.roomKeySeed
     
     def removePlayer(self, user: OnlineUser=None, cID:int =None):
         cidRem = None
@@ -199,7 +204,7 @@ class CTGP7CtwwHandler:
         self.newRooms = 0
 
     def get_console_message(self, user: OnlineUser):
-        msg = self.database.get_console_message(user.cID)
+        msg = self.database.get_console_message(user.cID, user.cID)
         if msg is None:
             return None
         typeStr = ""
@@ -327,6 +332,7 @@ class CTGP7CtwwHandler:
             gID = input.get("gatherID")
             gMode = input.get("gameMode")
             token = input.get("token")
+            retDict = {}
             
             if (gID is None or gMode is None or token is None):
                 return (-1, {})
@@ -344,11 +350,12 @@ class CTGP7CtwwHandler:
                 self.newRooms += 1
             
             room.joinPlayer(user)
+            retDict["roomKeySeed"] = room.getKeySeed()
             user.setState(UserState.SEARCHING.value)
 
             user.isAlive()
 
-            return (CTWWLoginStatus.SUCCESS.value, {})
+            return (CTWWLoginStatus.SUCCESS.value, retDict)
     
     def handle_user_prepare_room(self, input, cID):
         with self.lock:
@@ -546,6 +553,7 @@ class CTGP7CtwwHandler:
                 roomInfo["playerCount"] = playerCount
                 roomInfo["state"] = room.getStateName()
                 roomInfo["gameMode"] = room.getModeName()
+                roomInfo["fakeID"] = room.getKeySeed() >> 32
                 roomInfo["messageID"] = room.getMessageID()
                 roomInfo["updated"] = room.wasUpdated()
                 roomInfo["log"] = room.needsLog()

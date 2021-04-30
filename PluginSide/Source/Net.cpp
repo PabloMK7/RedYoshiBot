@@ -127,6 +127,16 @@ namespace CTRPluginFramework {
 				}
 				else
 					MarioKartFramework::dialogBlackOut();
+			} else {
+				res = req->GetResult(NetHandler::RequestHandler::RequestType::ONLINE_SEARCH, &reqDoc);
+				if (res < 0)
+					MarioKartFramework::dialogBlackOut();
+				u64 keyseed = reqDoc.get_numerical("roomKeySeed", 0);
+				if (keyseed == 0)
+					MarioKartFramework::dialogBlackOut();
+				u8 roomKey[MarioKartFramework::getRoomKeySize()];
+				MarioKartFramework::generateRoomEncryption(roomKey, keyseed);
+				MarioKartFramework::setRoomEncryption(roomKey);
 			}
 		}
 		else if (req->Contains(NetHandler::RequestHandler::RequestType::ONLINE_PREPARING)) {

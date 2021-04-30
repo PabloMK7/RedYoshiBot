@@ -160,7 +160,7 @@ class CTGP7ServerDatabase:
         if (self.kickCallback):
             self.kickCallback(cID, messageType, message, amountMin, isSilent)
 
-    def get_console_message(self, cID):
+    def get_console_message(self, cID, realConsoleID): # Real console ID is to keep track if cID is 0
         ret = None
         startTime = None
         amountTime = None
@@ -172,17 +172,22 @@ class CTGP7ServerDatabase:
                 messageType = row[2]
                 startTime = row[3]
                 amountTime = row[4]
-                ret = (messageType, messageText, startTime, amountTime)
+                ret = [messageType, messageText, startTime, amountTime]
                 
         if (ret is not None):
+            if (ret[0] == ConsoleMessageType.SINGLE_KICKMESSAGE.value and self.get_console_is_admin(realConsoleID)):
+                ret[0] = ConsoleMessageType.SINGLE_MESSAGE.value
+            elif (ret[0] == ConsoleMessageType.TIMED_KICKMESSAGE.value and self.get_console_is_admin(realConsoleID)):
+                ret[0] = ConsoleMessageType.TIMED_MESSAGE.value
+            
             if ret[0] == ConsoleMessageType.SINGLE_MESSAGE.value or ret[0] == ConsoleMessageType.SINGLE_KICKMESSAGE.value:
                 self.delete_console_message(cID)
             elif (startTime is not None and amountTime is not None and startTime + amountTime < current_time_min()):
                 self.delete_console_message(cID)
         if (ret is None and cID != 0):
-            ret = self.get_console_message(0)
+            ret = self.get_console_message(0, realConsoleID)
         
-        return ret
+        return tuple(ret) if ret is not None else None
 
     def set_console_is_verified(self, cID, isVerified):
         wasVerified = self.get_console_is_verified(cID)
@@ -201,4 +206,25 @@ class CTGP7ServerDatabase:
             c = self.conn.cursor()
             rows = c.execute("SELECT * FROM verified_consoles WHERE cID = ?", (int(cID),))
             for row in rows:
-                return row[0]
+                return True
+            return False
+
+    def set_console_is_admin(self, cID, isAdmin):
+        wasAdmin = self.get_console_is_admin(cID)
+        if (wasAdmin == isAdmin):
+            return
+        with self.lock:
+            c = self.conn.cursor()
+            if (isAdmin):
+                c.execute('INSERT INTO admin_consoles VALUES (?)', (int(cID),))
+            else:
+                c.execute("DELETE FROM admin_consoles WHERE cID = ?", (int(cID),))
+
+
+    def get_console_is_admin(self, cID):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM admin_consoles WHERE cID = ?", (int(cID),))
+            for row in rows:
+                return True
+            return False

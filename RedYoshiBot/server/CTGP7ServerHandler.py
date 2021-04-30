@@ -55,7 +55,7 @@ class CTGP7ServerHandler:
 
                 inputData = bson.loads(connData)
                 if not "_CID" in inputData:
-                    raise Exception()
+                    raise Exception("Input data has no cID: {}".format(str(inputData)))
                 
                 reqConsoleID = inputData["_CID"]
 
