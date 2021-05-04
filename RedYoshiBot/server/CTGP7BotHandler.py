@@ -35,7 +35,9 @@ def staff_server_help_array():
         "clear": ">@RedYoshiBot server clear (consoleID)\nClears all the messages/kicks/bans associated with the console (hex format, 0 for everyone).",
         "disband": ">@RedYoshiBot server disband (roomID)\nDisbands the specified room ID, kicking all players.",
         "console_verify": ">@RedYoshiBot server console_verify (get/set/clear) (consoleID)\nSets or clears the verification mark for the specified console.",
-        "console_admin": ">@RedYoshiBot server console_admin (get/set/clear) (consoleID)\nSets or clears the admin status for the specified console."
+        "console_admin": ">@RedYoshiBot server console_admin (get/set/clear) (consoleID)\nSets or clears the admin status for the specified console.",
+        "region": ">@RedYoshiBot server region (newvalue)\nSets the CTWW/CD online region in the server.",
+        "manage_vr": ">@RedYoshiBot server manage_vr (get/set) (consoleID) (ctww/cd) (newvalue)\nGets or sets the VR for the specified console (Don't set if console is in racing state online)."
     }
     
 def staff_server_command_level():
@@ -52,7 +54,9 @@ def staff_server_command_level():
         "disband" : 1,
         "stats": 1,
         "console_verify": 1,
-        "console_admin": 0
+        "console_admin": 0,
+        "region": 0,
+        "manage_vr": 1
     }
 
 async def staff_server_can_execute(message, command, silent=False):
@@ -284,7 +288,12 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isFirst: boo
             embed=discord.Embed(title="{} Room".format(room["gameMode"]), description="State: {}\nID: 0x{:08X}".format(room["state"], room["fakeID"]), color=0xff0000, timestamp=datetime.datetime.utcnow())
             playerString = "```\n"
             for player in room["players"]:
-                playerString += "- {}{} {}\n".format(player["name"].replace("\u2705", ""), " \u2705" if player["verified"] else "", player["state"])
+                vrStr = ""
+                if (player["vrIncr"] is not None):
+                    vrStr = "{}({:+}) VR".format(player["vr"], player["vrIncr"])
+                else:
+                    vrStr = "{} VR".format(player["vr"])
+                playerString += "{}{} - {} - {}\n".format(player["name"].replace("\u2705", ""), " \u2705" if player["verified"] else "", vrStr, player["state"])
             playerString += "```"
             if (playerString == "```\n```"):
                 playerString = "```\n- (None)\n```"
@@ -339,14 +348,14 @@ async def server_bot_loop(ctgp7_server: CTGP7ServerHandler):
             await kick_message_logger(ctgp7_server)
             await server_message_logger(ctgp7_server)
             server_bot_loop_dbcommit_cnt += 1
-            if (server_bot_loop_dbcommit_cnt >= 6 * 5): # Commit every 5 minutes
+            if (server_bot_loop_dbcommit_cnt >= 60 * 5 / 5): # Commit every 5 minutes
                 ctgp7_server.database.commit()
                 server_bot_loop_dbcommit_cnt = 0
             firstLoop = False
         except:
             traceback.print_exc()
             pass
-        await asyncio.sleep(10)
+        await asyncio.sleep(5)
 stats_command_last_exec = datetime.datetime.utcnow()
 async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: discord.Message):
     global stats_command_last_exec
@@ -413,6 +422,26 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 elif mode == "beta":
                     ctgp7_server.database.set_beta_version(version)
                 await message.reply( "{} version set to: {}".format( mode, version))
+                return
+    elif bot_cmd == "region":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content)
+            if (len(tag) != 2 and len(tag) != 3):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["region"] + "```")
+                return
+            if (len(tag) == 2):
+                region = -1
+                region = ctgp7_server.database.get_online_region()
+                await message.reply( "Current region is: {}".format(region))
+                return
+            else:
+                try:
+                    region = int(tag[2])
+                except ValueError:
+                    await message.reply( "Invalid number.")
+                    return
+                ctgp7_server.database.set_online_region(region)
+                await message.reply( "Region set to: {}".format(region))
                 return
     elif bot_cmd == "statsmsg":
         if await staff_server_can_execute(message, bot_cmd):
@@ -636,6 +665,49 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             opt = 2
         embed = gen_course_usage_embed(ctgp7_server, opt)
         await message.reply(embed=embed)
+    elif bot_cmd == "manage_vr":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content)
+            if (len(tag) != 5 and len(tag) != 6):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            mode = tag[2]
+            game = tag[4]
+            consoleID = tag[3]
+            if (consoleID.startswith("0x")):
+                consoleID = consoleID[2:]
+            try:
+                consoleID = int(consoleID, 16)
+                if (consoleID == 0):
+                    raise ValueError()
+            except ValueError:
+                await message.reply( "Invalid console ID.")
+                return
+            if mode not in ["get", "set"]:
+                await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()[bot_cmd] + "```")
+                return
+            if game not in ["ctww", "cd"]:
+                await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()[bot_cmd] + "```")
+                return
+            if (mode == "get"):
+                vrData = ctgp7_server.database.get_console_vr(consoleID)
+                vr = vrData[0 if game == "ctww" else 1]
+                await message.reply("Console has {} VR in {}".format(vr, "Custom Tracks" if game == "ctww" else "Countdown"))
+            else:
+                if (len(tag) != 6):
+                    await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()[bot_cmd] + "```")
+                    return
+                try:
+                    vr = int(tag[5])
+                    if (vr < 1 or vr > 99999):
+                        raise ValueError()
+                except ValueError:
+                    await message.reply( "Invalid number.")
+                    return
+                vrData = list(ctgp7_server.database.get_console_vr(consoleID))
+                vrData[0 if game == "ctww" else 1] = vr
+                ctgp7_server.database.set_console_vr(consoleID, tuple(vrData))
+                await message.reply( "Operation succeeded.")
     else:
         await message.reply( "Invalid server command, use `@RedYoshiBot server help` to get all the available server commands.")
         

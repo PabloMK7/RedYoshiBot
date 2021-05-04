@@ -35,6 +35,7 @@ class RoomState(Enum):
     SEARCHING = 0
     PREPARING_RACE = 1
     RACING = 2
+    FINISHED = 3
 
 class OnlineUserName:
     def __init__(self, mode: int, name: str, miiName: str):
@@ -62,6 +63,20 @@ class OnlineUser:
         self.state = UserState.IDLE.value
         self.token = uuid.uuid1().int>>64
         self.isVerified = isVerified
+        self.vr = [1000, 1000]
+        self.vrIncr = None
+
+    def setVR(self, vr):
+        self.vr = vr
+    
+    def getVR(self):
+        return self.vr
+
+    def setVRIncr(self, vrIncr):
+        self.vrIncr = vrIncr
+
+    def getVRIncr(self):
+        return self.vrIncr
 
     def setState(self, state: int):
         self.state = state
@@ -85,6 +100,8 @@ class OnlineUser:
             return "(Watching)"
         elif (self.state == UserState.HOSTING.value):
             return "(Host)"
+        elif(self.state == UserState.CLIENT.value):
+            return "(Client)"
         return ""
 
     def getMiiName(self):
@@ -147,6 +164,8 @@ class OnlineRoom:
             return "Preparing Race"
         elif (self.state == RoomState.RACING.value):
             return "Racing ({})".format(CTGP7Defines.getTrackNameFromSzs(self.race))
+        elif (self.state == RoomState.FINISHED.value):
+            return "Race Finished"
         return ""
 
     def getModeName(self):
@@ -155,6 +174,9 @@ class OnlineRoom:
         elif (self.gamemode == 1):
             return "Countdown"
         return ""
+    
+    def getMode(self):
+        return self.gamemode
 
     def setState(self, state: int):
         self.state = state
@@ -254,6 +276,7 @@ class CTGP7CtwwHandler:
 
     def user_login(self, user: OnlineUser):
         self.loggedUsers[user.cID] = user
+        self.database.set_console_last_name(user.cID, user.getName())
 
     def user_logout(self, user: OnlineUser=None, cID=None):
         cidRem = None
@@ -320,6 +343,11 @@ class CTGP7CtwwHandler:
             self.user_login(user)
             self.newLogins += 1
             retDict["token"] = user.getToken()
+            vrData = self.database.get_console_vr(cID)
+            user.setVR(vrData)
+            retDict["ctvr"] = vrData[0]
+            retDict["cdvr"] = vrData[1]
+            retDict["regionID"] = self.database.get_online_region()
 
             if (consoleMsg is not None and consoleMsg[0] == CTWWLoginStatus.MESSAGE.value):
                 retDict["loginMessage"] = consoleMsg[1]
@@ -352,6 +380,11 @@ class CTGP7CtwwHandler:
             room.joinPlayer(user)
             retDict["roomKeySeed"] = room.getKeySeed()
             user.setState(UserState.SEARCHING.value)
+            vrData = self.database.get_console_vr(cID)
+            retDict["ctvr"] = vrData[0]
+            retDict["cdvr"] = vrData[1]
+            user.setVR([vrData[0], vrData[1]])
+            user.setVRIncr(None)
 
             user.isAlive()
 
@@ -376,6 +409,10 @@ class CTGP7CtwwHandler:
             user = self.getUser(cID, token)
             if (user is None): # User not logged in
                 return (CTWWLoginStatus.NOTLOGGED.value, {})
+
+            vrData = self.database.get_console_vr(cID)
+            user.setVR([vrData[0], vrData[1]])
+            user.setVRIncr(None)
 
             room = self.activeRooms.get(gID)
             if (room is None or not room.hasPlayer(user)):
@@ -407,8 +444,10 @@ class CTGP7CtwwHandler:
             gID = input.get("gatherID")
             szsName = input.get("courseSzsID")
             token = input.get("token")
+            ctvr = input.get("ctvr")
+            cdvr = input.get("cdvr")
 
-            if (gID is None or szsName is None or token is None):
+            if (gID is None or szsName is None or token is None or ctvr is None or cdvr is None):
                 return (-1, {})
 
             user = self.getUser(cID, token)
@@ -424,6 +463,38 @@ class CTGP7CtwwHandler:
                 room.setRace(szsName)
                 room.enableLog()
             
+            user.isAlive()
+            self.database.set_console_vr(cID, [ctvr, cdvr])
+
+            return (CTWWLoginStatus.SUCCESS.value, {})
+    
+    def handle_user_racefinish_room(self, input, cID):
+        with self.lock:
+            gID = input.get("gatherID")
+            token = input.get("token")
+            ctvr = input.get("ctvr")
+            cdvr = input.get("cdvr")
+
+            if (gID is None or token is None or ctvr is None or cdvr is None):
+                return (-1, {})
+
+            user = self.getUser(cID, token)
+            if (user is None): # User not logged in
+                return (CTWWLoginStatus.NOTLOGGED.value, {})
+
+            self.database.set_console_vr(cID, [ctvr, cdvr])
+
+            room = self.activeRooms.get(gID)
+            if (room is None or not room.hasPlayer(user)):
+                return (CTWWLoginStatus.FAILED.value, {})
+            
+            if (user.getState() == UserState.HOSTING.value):
+                room.setState(RoomState.FINISHED.value)
+            
+            prevVr = user.getVR()[0 if room.getMode() == 0 else 1]
+            nowVR = ctvr if room.getMode() == 0 else cdvr
+            user.setVRIncr(nowVR - prevVr)
+
             user.isAlive()
 
             return (CTWWLoginStatus.SUCCESS.value, {})
@@ -564,11 +635,14 @@ class CTGP7CtwwHandler:
                         continue
                     userInfo = {}
                     userInfo["name"] = user.getName()
+                    userInfo["vr"] = user.getVR()[0 if room.getMode() == 0 else 1]
+                    userInfo["vrIncr"] = user.getVRIncr()
                     userInfo["miiName"] = user.getMiiName()
                     userInfo["state"] = user.getStateName()
                     userInfo["cID"] = u
                     userInfo["verified"] = user.verified()
                     roomInfo["players"].append(userInfo)
+                roomInfo["players"].sort(key=lambda x:x["vr"], reverse=True)
                 ret["rooms"].append(roomInfo)
                 room.resetUpdate()
             

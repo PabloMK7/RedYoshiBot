@@ -552,11 +552,9 @@ def staff_game_help_array():
         "showcookie":">@RedYoshiBot game showcookie (user)\nShows the amount of yoshi cookies of the specified user.",
         "setcookie": ">@RedYoshiBot game setcookie (user) (amount)\nSets the amount of yoshi cookies of the specified user."
     }
-#All the ids
+# All the ids
 
 # Main server
-
-# CTGP7 Server
 def ch_list():
     return {
         "ANN": 163072540061728768,
@@ -610,7 +608,6 @@ def EMERGENCY_SPECIAL_ROLES():
 def MIKU_EMOJI_ID():
     return 749336816745709648
 
-
 # Test Server
 """
 def ch_list():
@@ -628,7 +625,9 @@ def ch_list():
         "STATS": 811222039503175710,
         "CTWW": 813073781912371241,
         "KICKS": 813408189684514876,
-        "ONLINELOGS": 813408297524265000
+        "STAFFKICKS": 839229838485225512,
+        "ONLINELOGS": 813408297524265000,
+        "EMERGENCY": 839229978657816646
     }
 
 def NUMBER_EMOJI():
@@ -649,13 +648,12 @@ def MODERATORROLE_ID():
 def SERVER_ID():
     return 739825190456000567
 
-def MUTABLE_CHANNELS():
-    return [749237961928998912, 749238058704044192, 749238142686724096]
+def EMERGENCY_SPECIAL_ROLES():
+    return []
 
 def MIKU_EMOJI_ID():
     return 813179872327106601
 """
-
 # Beta server
 """
 def ch_list():

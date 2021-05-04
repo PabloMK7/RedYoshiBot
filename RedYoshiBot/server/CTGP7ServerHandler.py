@@ -92,6 +92,8 @@ class CTGP7ServerHandler:
             
             self.wfile.write(connOutData)
             
+            elap = datetime.datetime.now() - timeNow
+            logStr += "Elapsed: {:.3f}ms\n".format(elap.seconds * 1000 + elap.microseconds / 1000)
             logStr += "--------------------\n"
 
             with CTGP7ServerHandler.logging_lock:

@@ -82,6 +82,9 @@ class CTGP7Requests:
     def server_user_room_racestart_handler(self, input):
         return self.ctwwHandler.handle_user_racestart_room(input, self.cID)
 
+    def server_user_room_racefinish_handler(self, input):
+        return self.ctwwHandler.handle_user_racefinish_room(input, self.cID)
+
     def server_user_room_watch_handler(self, input):
         return self.ctwwHandler.handle_user_watch_room(input, self.cID)
     
@@ -102,9 +105,10 @@ class CTGP7Requests:
         "onlsearch": server_user_room_join_handler,
         "onlprepare": server_user_room_prepare_handler,
         "onlrace": server_user_room_racestart_handler,
+        "onlracefinish": server_user_room_racefinish_handler,
         "onlwatch": server_user_room_watch_handler,
         "onlleaveroom": server_user_room_leave_handler,
-        "hrtbt": server_user_heartbeat
+        "hrtbt": server_user_heartbeat,
     }
 
     def solve(self):

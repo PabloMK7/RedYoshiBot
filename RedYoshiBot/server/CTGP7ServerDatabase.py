@@ -53,6 +53,12 @@ class CTGP7ServerDatabase:
             for row in rows:
                 return row[1]
 
+    def get_online_region(self):
+        return int(self.get_database_config("onlregion"))
+    
+    def set_online_region(self, value):
+        self.set_database_config("onlregion", value)
+
     def get_ctww_version(self):
         return int(self.get_database_config("ctwwver"))
     
@@ -228,3 +234,39 @@ class CTGP7ServerDatabase:
             for row in rows:
                 return True
             return False
+    
+    def set_console_last_name(self, cID, lastName):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM console_name WHERE cID = ?", (int(cID),))
+            for row in rows:
+                c.execute("UPDATE console_name SET name = ? WHERE cID = ?", (str(lastName), int(cID)))
+                return
+            c.execute('INSERT INTO console_name VALUES (?,?)', (int(cID), str(lastName)))
+
+
+    def get_console_last_name(self, cID):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM console_name WHERE cID = ?", (int(cID),))
+            for row in rows:
+                return str(row[1])
+            return "(Unknown)"
+    
+    def set_console_vr(self, cID, vr):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM console_vr WHERE cID = ?", (int(cID),))
+            for row in rows:
+                c.execute("UPDATE console_vr SET ctvr = ?, cdvr = ? WHERE cID = ?", (int(vr[0]), int(vr[1]), int(cID)))
+                return
+            c.execute('INSERT INTO console_vr VALUES (?,?,?)', (int(cID), int(vr[0]), int(vr[1])))
+
+
+    def get_console_vr(self, cID):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM console_vr WHERE cID = ?", (int(cID),))
+            for row in rows:
+                return (row[1], row[2])
+            return (1000, 1000)
