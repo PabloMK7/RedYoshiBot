@@ -504,7 +504,8 @@ def staff_help_array():
         "closebug": ">@RedYoshiBot closebug (bugID) [Reason]\nCloses the specified bug with the specified reason.",
         "schedule": ">@RedYoshiBot schedule (channel/user) (time_amount) (text)\nSchedules a message to be sent in/to the channel/user specified after time_amount has passed. (Works the same way as mute time amount).",
         "cancel_schedule": ">@RedYoshiBot cancel_schedule (scheduleid)\nCancels the specified scheduled message. The schedule id can be obtained from the id of the message sent by the bot.",
-        "emergency": "!emergency (off)\nEnables or disables emergency mode. (Mutes all channels).",
+        "emergency": "!emergency\nEnables emergency mode.",
+        "emergency_off": "!emergency_off\nDisables emergency mode.", 
         "talk": ">@RedYoshiBot talk (channel/user)\nSets the chat destination ID (don't specify an ID to clear the current one). Use `+` before a message to talk with the specified ID and `++` to talk and clear the destination ID afterwards."
     }
     
@@ -513,8 +514,8 @@ def staff_command_level():
         "say": 0,
         "edit": 0,
         "release": 0,
-        "restart": 0,
-        "stop": 0,
+        "restart": -1,
+        "stop": -1,
         "mute": 1,
         "unmute": 1,
         "warn": 1,
@@ -572,7 +573,8 @@ def ch_list():
         "CTWW": 815663222946005022,
         "KICKS": 815663318365896724,
         "STAFFKICKS": 816640864994066434,
-        "ONLINELOGS": 815663494945964072
+        "ONLINELOGS": 815663494945964072,
+        "EMERGENCY": 839085550606614558
     }
 
 def NUMBER_EMOJI():
@@ -590,11 +592,20 @@ def ADMINROLE_ID():
 def MODERATORROLE_ID():
     return 315474999001612288
 
+def STAFFROLE_ID():
+    return 383673430030942208
+
 def SERVER_ID():
     return 163070769067327488
 
-def MUTABLE_CHANNELS():
-    return [163070769067327488, 336915016387395584, 337396714967400449, 325752333185056769, 315921603756163082, 163072964353458177, 163073383888715776, 329983699804487681, 163074261903343616, 163333095725072384, 324672297812099093, 704127200961626122, 811009119556468746]
+def EMERGENCY_SPECIAL_ROLES():
+    return [
+        608313379668623411, # Nitro boost
+        389785433124634638, # Translators
+        325843915125030914, # Course creator
+        326154532977377281, # Contributor
+        385544890030751754, # Muted
+    ]
 
 def MIKU_EMOJI_ID():
     return 749336816745709648
@@ -741,7 +752,7 @@ async def staff_can_execute(message, command, silent=False):
         adminRole = get_role(ADMINROLE_ID())
         hasMod = moderatorRole in message.author.roles
         hasAdmin = (adminRole in message.author.roles) or message.author.id == SELF_BOT_SERVER.owner.id
-        privilegeLevel = 0 if hasAdmin else (1 if hasMod else 2)
+        privilegeLevel = -1 if message.author.id == SELF_BOT_SERVER.owner.id else (0 if hasAdmin else (1 if hasMod else 2))
         try:
             retVal = staff_command_level()[command] >= privilegeLevel
         except:
@@ -954,23 +965,72 @@ async def change_game():
         await perform_game_change()
         await asyncio.sleep(600)
 
+G_LAST_PUNISH_TIME = datetime.datetime(year=2000, month=1, day=1)
+G_LAST_PUNISH_AMOUNT = 0
+def checkCanPunish(warnamount):
+    global G_LAST_PUNISH_TIME
+    global G_LAST_PUNISH_AMOUNT
+    if (warnamount < 3):
+        return True
+    if (datetime.datetime.now() - G_LAST_PUNISH_TIME <= datetime.timedelta(hours=4)):
+        if (G_LAST_PUNISH_AMOUNT >= 9):
+            return False
+        else:
+            G_LAST_PUNISH_AMOUNT += 1
+            return True
+    else:
+        G_LAST_PUNISH_TIME = datetime.datetime.now()
+        G_LAST_PUNISH_AMOUNT = 0
+        return True
+
+
 async def enableEmergency():
-    overwrite = discord.PermissionOverwrite()
-    overwrite.send_messages = False
-    for ch in SELF_BOT_SERVER.channels:
-        if ch.id in MUTABLE_CHANNELS():
-            await ch.set_permissions(SELF_BOT_SERVER.default_role, overwrite=overwrite)
-        if ch.id == ch_list()["STAFF"]:
-            await ch.send("@here, emergency mode has been enabled.")
+    
+    emerchn = client.get_channel(ch_list()["EMERGENCY"])
+    emerstr = ":rotating_light: " * 16 + "\n\n"
+    emerstr += "Emergency mode has been enabled by the server staff.\n"
+    emerstr += "Please wait until staff addresses the issue.\n"
+    emerstr += "For any urgent matter, send a Direct Message to PabloMK7.\n"
+    emerstr += "\nSorry for the incovenience.\n"
+    emerstr += "- CTGP-7 Staff\n\n"
+    emerstr += ":rotating_light: " * 16 + "\n"
+    await emerchn.send(emerstr)
+
+    emeroverwrite = emerchn.overwrites_for(SELF_BOT_SERVER.default_role)
+    emeroverwrite.read_messages = True
+    await emerchn.set_permissions(SELF_BOT_SERVER.default_role, overwrite=emeroverwrite)
+
+    targetroles = [SELF_BOT_SERVER.default_role]
+    for rID in EMERGENCY_SPECIAL_ROLES():
+        targetroles.append(SELF_BOT_SERVER.get_role(rID))
+    for role in targetroles:
+        roleperm = role.permissions
+        roleperm.read_messages = False
+        await role.edit(permissions=roleperm)
+    
+    staffchn = client.get_channel(ch_list()["STAFF"])
+    await staffchn.send("@everyone, emergency mode has been enabled!")
 
 async def disableEmergency():
-    overwrite = discord.PermissionOverwrite()
-    overwrite.send_messages = True
-    for ch in SELF_BOT_SERVER.channels:
-        if ch.id in MUTABLE_CHANNELS():
-            await ch.set_permissions(SELF_BOT_SERVER.default_role, overwrite=overwrite)
-        if ch.id == ch_list()["STAFF"]:
-            await ch.send("Emergency mode has been disabled.")
+    
+    targetroles = [SELF_BOT_SERVER.default_role]
+    for rID in EMERGENCY_SPECIAL_ROLES():
+        targetroles.append(SELF_BOT_SERVER.get_role(rID))
+    for role in targetroles:
+        roleperm = role.permissions
+        roleperm.read_messages = True
+        await role.edit(permissions=roleperm)
+
+    emerchn = client.get_channel(ch_list()["EMERGENCY"])
+    emeroverwrite = emerchn.overwrites_for(SELF_BOT_SERVER.default_role)
+    emeroverwrite.read_messages = False
+    await emerchn.set_permissions(SELF_BOT_SERVER.default_role, overwrite=emeroverwrite)
+
+    async for m in emerchn.history(limit=200):
+        await m.delete()
+    
+    staffchn = client.get_channel(ch_list()["STAFF"])
+    await staffchn.send("Emergency mode has been disabled.")
 
 async def sendMikuMessage(message):
     global db_mng
@@ -1086,7 +1146,7 @@ async def on_member_remove(member):
 @client.event
 async def on_message_delete(message):
     staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["STAFF"])
-    if (message.channel != staff_chan and not message.author.bot):
+    if (message.channel != staff_chan and not message.author.bot and not is_channel_private(message.channel)):
         parsedcontent = message.content.replace("@", "(at)")
         await staff_chan.send("Message by {} ({}) was deleted in {}\n\n------------------------\n{}\n------------------------".format(message.author.name, message.author.id, message.channel.mention, parsedcontent))
 
@@ -1294,6 +1354,9 @@ async def on_message(message):
                         if(warn_member != None):
                             warncount = await db_mng.warn_get(warn_member.id)
                             warncount += 1
+                            if (not checkCanPunish(warncount)):
+                                await message.reply("Operation Denied. Max amount of kick/bans in the last 4 hours reached.\nEnable emergency mode with `!emergency` and contact PabloMK7.")
+                                return
                             await db_mng.warn_set(warn_member.id, warncount)
                             await message.reply( "{} got a warning. {} warnings in total.".format(warn_member.name, warncount))
                             try:
@@ -1340,6 +1403,9 @@ async def on_message(message):
                             else:
                                 warnreason = tag[3]
                         if(warn_member != None):
+                            if (not checkCanPunish(warncount)):
+                                await message.reply("Operation Denied. Max amount of kick/bans in the last 4 hours reached.\nEnable emergency mode with `!emergency` and contact PabloMK7.")
+                                return
                             await db_mng.warn_set(warn_member.id, warncount)
                             await message.reply( "Set {} warnings to {}.".format(warn_member.name, warncount))
                             try:
@@ -1877,15 +1943,11 @@ async def on_message(message):
                     await notif_msg.edit(content="{}, adding your bug report: ```{}```**Fail**".format(message.author.name, tag[1]))
             else:
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["report"] + "```")            
-        elif (await staff_can_execute(message, "emergency", silent=True) and (message.author != client.user) and bot_mtn == "!emergency"):
-            tag = message.content.split(None, 1)
-            if (len(tag) > 1):
-                if (tag[1] == "off"):
-                    await disableEmergency()
-                else:
-                    await enableEmergency()
-            else:
+        elif ((bot_mtn == "!emergency" or  bot_mtn == "!emergency_off") and await staff_can_execute(message, "emergency", silent=True) and (message.author != client.user)):
+            if ( bot_mtn == "!emergency"):
                 await enableEmergency()
+            else:
+                await disableEmergency()
         elif (await staff_can_execute(message, "talk", silent=True) and (message.author != client.user) and message.content[0] == '+' and len(message.content) > 2):
             if (message.content[1] == '+'):
                 subsindex = 2

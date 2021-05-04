@@ -553,7 +553,7 @@ class CTGP7CtwwHandler:
                 roomInfo["playerCount"] = playerCount
                 roomInfo["state"] = room.getStateName()
                 roomInfo["gameMode"] = room.getModeName()
-                roomInfo["fakeID"] = room.getKeySeed() >> 32
+                roomInfo["fakeID"] = (room.getKeySeed() & 0xFFFFFF) | 0x03000000
                 roomInfo["messageID"] = room.getMessageID()
                 roomInfo["updated"] = room.wasUpdated()
                 roomInfo["log"] = room.needsLog()
