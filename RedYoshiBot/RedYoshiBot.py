@@ -1638,7 +1638,7 @@ async def on_message(message):
                                 print("Error parsing: " + fact_id)
                                 continue
                             factSend.append(str(row[0]) + " - " + text_isdyn +  " - " + final_text + "\n----------\n")
-                    await sendMultiMessage(message.channel, factSend, "```\n----------\n", "```")
+                    await sendMultiMessage(message.author, factSend, "```\n----------\n", "```")
                 elif bot_cmd == 'delfact':
                     if await staff_can_execute(message, bot_cmd, silent=True):
                         tag = message.content.split()
