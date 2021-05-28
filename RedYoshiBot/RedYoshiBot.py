@@ -497,7 +497,7 @@ def staff_help_array():
         "ban": ">@RedYoshiBot ban (user) [Reason]\nSets warnings to 4 and bans the user.",
         "kick": ">@RedYoshiBot warn (user) [Reason]\nSets warnings to 3 and kicks the user",
         "setwarn": ">@RedYoshiBot setwarn (user) (amount) [Reason]\nSets the warning amount of an user. Reason is optional.",
-        "getwarn": ">@RedYoshiBot getwarn\nGets all the warned users.",
+        "getwarn": ">@RedYoshiBot getwarn [user]\nGets all the warned users or the warnings for the specified user.",
         "getmute": ">@RedYoshiBot getmute\nGets all the muted users.",
         "delfact": ">@RedYoshiBot delfact (id)\nDeletes specified fact.",
         "change_game": ">@RedYoshiBot change_game\nChanges the current playing game to a new random one.",
@@ -1416,18 +1416,28 @@ async def on_message(message):
                 elif bot_cmd == 'getwarn':
                     tag = message.content.split()
                     if await staff_can_execute(message, bot_cmd):
-                        if (len(tag) != 2):
+                        if (len(tag) != 2 and len(tag) != 3):
                             await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()["getwarn"] + "```")
                             return
-                        rows = await db_mng.warn_get_all()
-                        nameList = []
-                        for row in rows:
-                            member = get_from_mention(str(row[0]))
-                            if (member is None):
-                                member = CreateFakeMember(str(row[0]))
-                            membname = member.name
-                            nameList.append("{}: {}\n".format(membname, row[1]))
-                        await sendMultiMessage(message.channel, nameList, "```", "```")
+                        if (len(tag) == 2):
+                            rows = await db_mng.warn_get_all()
+                            nameList = []
+                            for row in rows:
+                                member = get_from_mention(str(row[0]))
+                                if (member is None):
+                                    member = CreateFakeMember(str(row[0]))
+                                membname = member.name
+                                nameList.append("{}: {}\n".format(membname, row[1]))
+                            await sendMultiMessage(message.channel, nameList, "```", "```")
+                        else:
+                            warn_member = get_from_mention(tag[2])
+                            if (warn_member is None):
+                                warn_member = CreateFakeMember(tag[2])
+                            if (warn_member is not None):
+                                warncount = await db_mng.warn_get(warn_member.id)
+                                await message.reply("{} has {} warnings.".format(warn_member.name, warncount))
+                            else:
+                                await message.reply( "Invalid member.")
                     else:
                         if (len(tag) != 2):
                             await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["getwarn"] + "```")

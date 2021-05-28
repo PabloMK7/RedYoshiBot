@@ -647,10 +647,10 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
     elif bot_cmd == "stats":
         tag = get_server_bot_args(message.content)
         if (len(tag) != 3):
-            await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["stats"] + "```")
+            await message.reply( "Invalid syntax, correct usage:\r\n```" + server_help_array()["stats"] + "```")
             return
         if (tag[2] not in ["ct", "ot", "ba"]):
-            await message.reply( "Invalid option, correct usage:\r\n```" + staff_server_help_array()["stats"] + "```")
+            await message.reply( "Invalid option, correct usage:\r\n```" + server_help_array()["stats"] + "```")
             return
         if (datetime.datetime.utcnow() - stats_command_last_exec < datetime.timedelta(seconds=10)):
             await message.reply( "Please wait a few seconds before using this command again.")
