@@ -1295,24 +1295,23 @@ async def on_message(message):
                         bug_closed = SELF_BOT_SERVER.get_channel(ch_list()["BUG_CLOSE"])
                         bugs = SELF_BOT_SERVER.get_channel(ch_list()["BUGS"])
                         bot_msg = await bug_reports.fetch_message(tag[2])
+                        member = get_from_mention(str(bug_entry[0]))
+                        if (member is None):
+                            member = FakeMember(str(bug_entry[0]))
                         if (len(tag) == 4):
                             try:
-                                await bug_closed.send("```State: Closed\nReason: {}\n------------------\nReported by: {}\nExplanation: {}```".format(tag[3], get_from_mention(str(bug_entry[0])).name, bug_entry[1]))
+                                await bug_closed.send("```State: Closed\nReason: {}\n------------------\nReported by: {}\nExplanation: {}```".format(tag[3], member.name, bug_entry[1]))
                                 await bot_msg.delete()
                             except:
                                 pass
-                            member = get_from_mention(str(bug_entry[0]))
-                            if (member is None):
-                                member = FakeMember(str(bug_entry[0]))                
-                            membname = member.mention
-                            await bugs.send("{}, your bug with ID: `{}` has been closed. Reason: ```{}```".format(membname, bot_msg.id, tag[3]))
+                            await bugs.send("{}, your bug with ID: `{}` has been closed. Reason: ```{}```".format(member.mention, bot_msg.id, tag[3]))
                         else:
                             try:
-                                await bug_closed.send("```State: Closed\nReason: No reason given.\n------------------\nReported by: {}\nExplanation: {}```".format( get_from_mention(str(bug_entry[0])).name, bug_entry[1]))
+                                await bug_closed.send("```State: Closed\nReason: No reason given.\n------------------\nReported by: {}\nExplanation: {}```".format(member.name, bug_entry[1]))
                                 await bot_msg.delete()
                             except:
                                 pass
-                            await bugs.send("{}, your bug with ID: `{}` has been closed. Reason: ```No reason given.```".format(get_from_mention(str(bug_entry[0])).mention, bot_msg.id))
+                            await bugs.send("{}, your bug with ID: `{}` has been closed. Reason: ```No reason given.```".format(member.mention, bot_msg.id))
                         await message.reply( "Closed successfully.")
                 elif bot_cmd == "bugcount":
                     tag = message.content.split()

@@ -489,6 +489,7 @@ class CTGP7CtwwHandler:
                 return (CTWWLoginStatus.FAILED.value, {})
             
             if (user.getState() == UserState.HOSTING.value):
+                self.database.set_stats_dirty(True)
                 room.setState(RoomState.FINISHED.value)
             
             prevVr = user.getVR()[0 if room.getMode() == 0 else 1]

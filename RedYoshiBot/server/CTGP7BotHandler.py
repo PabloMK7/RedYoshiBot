@@ -26,7 +26,6 @@ def server_help_array():
 def staff_server_help_array():
     return {
         "version": ">@RedYoshiBot server version (ctww/beta) (newvalue)\nSets the ctww or beta values. If \'newvalue\' is not specified, the current version is displayed.",
-        "statsmsg": ">@RedYoshiBot server statsmsg (set/update) (newmessageid)\nSets the new stats message ID or forces the stats message to update.",
         "kick": ">@RedYoshiBot server kick (consoleID) (time) (message)\nKicks the console (hex format, 0 for everyone) for the specified time (for example: 2h, 12m, 7d, etc, or 0m for a single time) with the specified message. Takes effect after the next race.",
         "skick": ">@RedYoshiBot server skick (consoleID) (time) (message)\nSilently kicks the console (hex format, 0 for everyone) for the specified time (for example: 2h, 12m, 7d, etc, or 0m for a single time) with the specified message. Takes effect after the next race.",
         "ban": ">@RedYoshiBot server ban (consoleID) (message)\nPermanently bans the console (hex format, 0 for everyone) with the specified message (Use kick for temporary bans). Takes effect after the next race.",
@@ -43,7 +42,6 @@ def staff_server_help_array():
 def staff_server_command_level():
     return {
         "version": 0,
-        "statsmsg": 0,
         "help": 1,
         "kick": 1,
         "skick": 1,
@@ -176,19 +174,23 @@ tried_edit_stats_message_times = 0
 stats_curr_online_users = 0
 stats_curr_online_rooms = 0
 stats_curr_online_stuff_changed = True
+stats_message_id = 0
+vr_message_id = 0
 async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
     global tried_edit_stats_message_times
     global stats_curr_online_stuff_changed
     global stats_curr_online_users
     global stats_curr_online_rooms
+    global stats_message_id
+    global vr_message_id
     stats_curr_online_stuff_changed = False
     try:
-        messageid = ctgp7_server.database.get_stats_message_id()
         ch = SELF_BOT_SERVER.get_channel(ch_list()["STATS"])
         if (ch is None):
             raise Exception()
-        msg = await ch.fetch_message(messageid)
-        if (msg is None or msg.author != SELF_BOT_MEMBER):
+        msg = await ch.fetch_message(stats_message_id)
+        vrLead = await ch.fetch_message(vr_message_id)
+        if (msg is None or msg.author != SELF_BOT_MEMBER or vrLead is None or vrLead.author != SELF_BOT_MEMBER):
             raise Exception()
         tried_edit_stats_message_times = 0
 
@@ -197,9 +199,10 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
         totOnlineRaces = genStats["online_races"] + genStats["comm_races"] + genStats["ctww_races"] + genStats["cd_races"] + genStats["online_coin_battles"] + genStats["online_balloon_battles"]
         mostTracks = ctgp7_server.database.get_most_played_tracks(1, 10)
         uniqueConsoles = ctgp7_server.database.get_unique_console_count()
+        uniqueOnlineUsers = ctgp7_server.database.get_unique_console_vr_count()
 
         embed=discord.Embed(title="CTGP-7 Statistics", description="Statistics from all CTGP-7 players!", color=0xff0000, timestamp=datetime.datetime.utcnow())
-        embed.set_thumbnail(url="https://cdn.discordapp.com/icons/163070769067327488/d2de2cb6b732adf45551fa8164e851c7.png")
+        embed.set_thumbnail(url=str(SELF_BOT_SERVER.icon_url))
         embed.add_field(name="Total Launches", value=str(genStats["launches"]), inline=True)
         embed.add_field(name="Unique Consoles", value=str(uniqueConsoles), inline=True)
         embed.add_field(name="** **", value="** **", inline=False)
@@ -217,7 +220,8 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
         embed.add_field(name="Coin Battles", value=str(genStats["online_coin_battles"]), inline=True)
         embed.add_field(name="Balloon Battles", value=str(genStats["online_balloon_battles"]), inline=True)
         embed.add_field(name="** **", value="** **", inline=False)
-        embed.add_field(name="Total Online Logins", value=str(genStats["total_logins"]), inline=True)
+        embed.add_field(name="Total Logins", value=str(genStats["total_logins"]), inline=True)
+        embed.add_field(name="Unique Logins", value=str(uniqueOnlineUsers), inline=True)
         embed.add_field(name="Total Online Rooms", value=str(genStats["total_rooms"]), inline=True)
         embed.add_field(name="Current Users Online", value=str(stats_curr_online_users), inline=True)
         embed.add_field(name="Current Rooms Online", value=str(stats_curr_online_rooms), inline=True)
@@ -235,6 +239,30 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
         embed.add_field(name="Most Played Tracks", value=mostPlayedStr, inline=False)
         await msg.edit(embed=embed, content=None)
         tried_edit_stats_message_times = 0
+
+        vrRankCtww = ctgp7_server.database.get_most_users_vr(0, 20)
+        vrRankCD = ctgp7_server.database.get_most_users_vr(1, 20)
+        embed=discord.Embed(title="CTWW Leaderboard", description="Players with most VR!", color=0xff0000, timestamp=datetime.datetime.utcnow())
+        currPos = 1
+        for i in range(2):
+            leaderText = "```"
+            leaderTextVR = "```"
+            for user in (vrRankCtww if i == 0 else vrRankCD):
+                userName = ctgp7_server.database.get_console_last_name(user[0])
+                position = str(currPos)
+                positionSpaces = " " * max((4 - len(position)), 0)
+                leaderText += "{}.{}{}{}\n".format(position, positionSpaces, userName.replace("\u2705", ""), " \u2705" if ctgp7_server.database.get_console_is_verified(user[0]) else "")
+                leaderTextVR += "{}.{}{}vr\n".format(position, positionSpaces, str(user[1]))
+                currPos += 1
+            leaderText += "```"
+            leaderTextVR += "```"
+            embed.add_field(name="CTWW" if i == 0 else "Countdown", value=leaderText, inline=True)
+            embed.add_field(name="** **", value=leaderTextVR, inline=True)
+            currPos = 1
+            if (i == 0):
+                embed.add_field(name="** **", value="** **", inline=False)
+        await vrLead.edit(embed=embed, content=None)
+        
     except Exception:
         tried_edit_stats_message_times += 1
         if (tried_edit_stats_message_times == 6 * 30):
@@ -244,16 +272,31 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
             traceback.print_exc()
         return
 
+async def prepare_server_channels(ctgp7_server: CTGP7ServerHandler):
+    global stats_message_id
+    global vr_message_id
+    ctwwChan = SELF_BOT_SERVER.get_channel(ch_list()["CTWW"])
+    async for m in ctwwChan.history(limit=200):
+        await m.delete()
+    statsChan = SELF_BOT_SERVER.get_channel(ch_list()["STATS"])
+    mIds = []
+    i = 0
+    async for m in statsChan.history(limit=200, oldest_first=True):
+        if (i < 2 and m.author.id == SELF_BOT_MEMBER.id):
+            mIds.append(m.id)
+            i += 1
+        else:
+            await m.delete()
+    stats_message_id = mIds[0] if len(mIds) > 0 else (await statsChan.send("Loading...")).id
+    vr_message_id = mIds[1] if len(mIds) > 1 else (await statsChan.send("Loading...")).id
+
 all_prev_room_msg_ids = set()
-async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isFirst: bool):
+async def update_online_room_info(ctgp7_server: CTGP7ServerHandler):
     global all_prev_room_msg_ids
     global stats_curr_online_stuff_changed
     global stats_curr_online_users
     global stats_curr_online_rooms
     ctwwChan = SELF_BOT_SERVER.get_channel(ch_list()["CTWW"])
-    if (isFirst):
-        async for m in ctwwChan.history(limit=200):
-            await m.delete()
     ctgp7_server.ctwwHandler.purge_users(datetime.timedelta(minutes=10))
     ctgp7_server.ctwwHandler.purge_rooms()
     serverInfo = ctgp7_server.ctwwHandler.fetch_state()
@@ -341,7 +384,9 @@ async def server_bot_loop(ctgp7_server: CTGP7ServerHandler):
     global server_bot_loop_dbcommit_cnt
     while (True):
         try:
-            await update_online_room_info(ctgp7_server, firstLoop)
+            if (firstLoop):
+                await prepare_server_channels(ctgp7_server)
+            await update_online_room_info(ctgp7_server)
             if (firstLoop or ctgp7_server.database.get_stats_dirty() or stats_curr_online_stuff_changed):
                 await update_stats_message(ctgp7_server)
                 ctgp7_server.database.set_stats_dirty(False)
@@ -443,36 +488,6 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 ctgp7_server.database.set_online_region(region)
                 await message.reply( "Region set to: {}".format(region))
                 return
-    elif bot_cmd == "statsmsg":
-        if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content)
-            if (len(tag) != 3 and len(tag) != 4):
-                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["statsmsg"] + "```")
-                return
-            mode = tag[2]
-            if mode not in ["set", "update"]:
-                await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()["statsmsg"] + "```")
-                return
-            if mode == "update":
-                if len(tag) == 3:
-                    ctgp7_server.database.set_stats_dirty(True)
-                    await message.reply( "Stats message will update shortly...")
-                else:
-                    await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["statsmsg"] + "```")
-                    return
-            elif mode == "set":
-                if len(tag) == 4:
-                    try:
-                        msgid = int(tag[3])
-                    except ValueError:
-                        await message.reply( "Invalid number.")
-                        return
-                    ctgp7_server.database.set_stats_message_id(msgid)
-                    ctgp7_server.database.set_stats_dirty(True)
-                    await message.reply( "Stats message updated successfully.")
-                else:
-                    await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["statsmsg"] + "```")
-                    return
     elif bot_cmd == "kick" or bot_cmd == "skick":
         if await staff_server_can_execute(message, bot_cmd):
             tag = get_server_bot_args(message.content, 4)

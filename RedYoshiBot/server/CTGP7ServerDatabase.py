@@ -77,12 +77,6 @@ class CTGP7ServerDatabase:
     def set_stats_dirty(self, isDirty):
         self.set_database_config("stats_dirty", 1 if isDirty else 0)
 
-    def get_stats_message_id(self):
-        return int(self.get_database_config("stats_message_id"))
-
-    def set_stats_message_id(self, messageID):
-        self.set_database_config("stats_message_id", messageID)
-
     def get_most_played_tracks(self, course_type, amount):
         with self.lock:
             c = self.conn.cursor()
@@ -270,3 +264,23 @@ class CTGP7ServerDatabase:
             for row in rows:
                 return (row[1], row[2])
             return (1000, 1000)
+
+    def get_unique_console_vr_count(self):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT COUNT(*) FROM console_vr")
+            for row in rows:
+                return row[0]
+            return 0
+
+    def get_most_users_vr(self, mode, amount):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM console_vr ORDER BY {} DESC".format("ctvr" if mode == 0 else "cdvr"))
+            i = 0
+            ret = []
+            for row in rows:
+                if (i >= amount): break
+                ret.append([row[0], row[1] if mode == 0 else row[2]])
+                i += 1
+            return ret
