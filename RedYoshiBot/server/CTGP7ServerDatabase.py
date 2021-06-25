@@ -2,6 +2,7 @@ import threading
 import sqlite3
 from enum import Enum
 import time
+import datetime
 
 from ..CTGP7Defines import CTGP7Defines
 
@@ -284,3 +285,23 @@ class CTGP7ServerDatabase:
                 ret.append([row[0], row[1] if mode == 0 else row[2]])
                 i += 1
             return ret
+    
+    def increment_today_launches(self):
+        with self.lock:
+            now = datetime.datetime.utcnow().strftime('%Y-%m-%d')
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM launch_times WHERE date = ?", (now,))
+            for row in rows:
+                c.execute("UPDATE launch_times SET value = ? WHERE date = ?", (row[1] + 1, now))
+                return
+            c.execute('INSERT INTO launch_times VALUES (?,?)', (now, 1))
+    
+    def increment_today_unique_consoles(self):
+        with self.lock:
+            now = datetime.datetime.utcnow().strftime('%Y-%m-%d')
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM new_launch_times WHERE date = ?", (now,))
+            for row in rows:
+                c.execute("UPDATE new_launch_times SET value = ? WHERE date = ?", (row[1] + 1, now))
+                return
+            c.execute('INSERT INTO new_launch_times VALUES (?,?)', (now, 1))

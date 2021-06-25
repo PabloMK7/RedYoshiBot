@@ -35,16 +35,20 @@ class CTGP7Requests:
         if (not "seqID" in input):
             return (-1, 0)
         msgSeqID = input["seqID"]
+        isFirstReport = input.get("firstReport", False)
         if (len(input) == 1):
             if (msgSeqID == 0): # Request sequence ID
                 seqID = self.database.get_stats_seqid(self.cID)
                 if (seqID == 0):
+                    self.database.increment_today_unique_consoles()
                     seqID = self.database.fetch_stats_seqid(self.cID)
                 return (1, seqID)
             else:
                 return (-1, 0)
         else:
             if (msgSeqID != 0 and msgSeqID == self.database.get_stats_seqid(self.cID)): # Sequence ID is valid
+                if (isFirstReport):
+                    self.database.increment_today_launches()
                 for k in input:
                     if (k in CTGP7Requests.statsList):
                         self.database.increment_general_stats(k, input[k])
