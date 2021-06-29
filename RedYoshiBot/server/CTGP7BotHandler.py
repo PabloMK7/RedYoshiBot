@@ -8,6 +8,8 @@ import threading
 import traceback
 import datetime
 import profanity_check
+import matplotlib.pyplot as plt
+import io
 
 SELF_BOT_MEMBER = None
 SELF_BOT_SERVER = None
@@ -176,6 +178,55 @@ stats_curr_online_rooms = 0
 stats_curr_online_stuff_changed = True
 stats_message_id = 0
 vr_message_id = 0
+graph_launches_message_id = 0
+last_graph_update_date = None
+
+async def update_graph_message(ctgp7_server: CTGP7ServerHandler):
+    global graph_launches_message_id
+    global last_graph_update_date
+    DAYS_PAST = 30
+    today = datetime.datetime.utcnow().date()
+    if (today == last_graph_update_date):
+        return
+    last_graph_update_date = today
+    x = []
+    y1 = []
+    y2 = []
+    for i in range(DAYS_PAST):
+        date = today - datetime.timedelta(days=DAYS_PAST - i)
+        x.append(date.strftime("%b %-d"))
+        y1.append(ctgp7_server.database.get_daily_launches(date))
+        y2.append(ctgp7_server.database.get_daily_unique_consoles(date))
+    
+    plt.rcParams["figure.figsize"] = (plt.rcParamsDefault["figure.figsize"][0] * 1.75, plt.rcParamsDefault["figure.figsize"][1])
+    plt.plot(x, y1, color = "dodgerblue", label = "Launches", marker="o", markersize=3)
+    plt.plot(x, y2, color = "lightskyblue", linestyle='dashed', label = "New Consoles", marker="o", markersize=3)
+    for i,j in zip(x,y1):
+        plt.annotate(str(j),xy=(i,j), fontsize=8)
+    for i,j in zip(x,y2):
+        plt.annotate(str(j),xy=(i,j), fontsize=8)
+    plt.xticks(rotation = 45)
+    plt.subplots_adjust(bottom=0.15)
+    plt.grid()
+    plt.title("CTGP-7 Daily Stats (UTC)")
+    plt.legend()
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight')
+    plt.clf()
+    plt.rcParams["figure.figsize"] = plt.rcParamsDefault["figure.figsize"]
+    buf.seek(0)
+
+    file = discord.File(fp=buf, filename="image.png")
+    embed = discord.Embed()
+    chPrivate = SELF_BOT_SERVER.get_channel(ch_list()["ONLINELOGS"])
+    tmpMsg = await chPrivate.send(file=file)
+    imageUrl = tmpMsg.attachments[0].url
+    embed.set_image(url=imageUrl)
+    ch = SELF_BOT_SERVER.get_channel(ch_list()["STATS"])
+    msg = await ch.fetch_message(graph_launches_message_id)
+    await msg.edit(embed=embed, content=None)
+    buf.close()
+
 async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
     global tried_edit_stats_message_times
     global stats_curr_online_stuff_changed
@@ -263,6 +314,8 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
                 embed.add_field(name="** **", value="** **", inline=False)
         await vrLead.edit(embed=embed, content=None)
         
+        await update_graph_message(ctgp7_server)
+
     except Exception:
         tried_edit_stats_message_times += 1
         if (tried_edit_stats_message_times == 6 * 30):
@@ -275,6 +328,7 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
 async def prepare_server_channels(ctgp7_server: CTGP7ServerHandler):
     global stats_message_id
     global vr_message_id
+    global graph_launches_message_id
     ctwwChan = SELF_BOT_SERVER.get_channel(ch_list()["CTWW"])
     async for m in ctwwChan.history(limit=200):
         await m.delete()
@@ -282,13 +336,14 @@ async def prepare_server_channels(ctgp7_server: CTGP7ServerHandler):
     mIds = []
     i = 0
     async for m in statsChan.history(limit=200, oldest_first=True):
-        if (i < 2 and m.author.id == SELF_BOT_MEMBER.id):
+        if (i < 3 and m.author.id == SELF_BOT_MEMBER.id):
             mIds.append(m.id)
             i += 1
         else:
             await m.delete()
     stats_message_id = mIds[0] if len(mIds) > 0 else (await statsChan.send("Loading...")).id
-    vr_message_id = mIds[1] if len(mIds) > 1 else (await statsChan.send("Loading...")).id
+    graph_launches_message_id = mIds[1] if len(mIds) > 1 else (await statsChan.send("Loading...")).id
+    vr_message_id = mIds[2] if len(mIds) > 2 else (await statsChan.send("Loading...")).id
 
 all_prev_room_msg_ids = set()
 async def update_online_room_info(ctgp7_server: CTGP7ServerHandler):

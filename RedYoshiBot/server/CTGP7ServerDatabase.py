@@ -296,6 +296,15 @@ class CTGP7ServerDatabase:
                 return
             c.execute('INSERT INTO launch_times VALUES (?,?)', (now, 1))
     
+    def get_daily_launches(self, date: datetime.datetime):
+        with self.lock:
+            d = date.strftime('%Y-%m-%d')
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM launch_times WHERE date = ?", (d,))
+            for row in rows:
+                return row[1]
+            return 0
+
     def increment_today_unique_consoles(self):
         with self.lock:
             now = datetime.datetime.utcnow().strftime('%Y-%m-%d')
@@ -305,3 +314,12 @@ class CTGP7ServerDatabase:
                 c.execute("UPDATE new_launch_times SET value = ? WHERE date = ?", (row[1] + 1, now))
                 return
             c.execute('INSERT INTO new_launch_times VALUES (?,?)', (now, 1))
+    
+    def get_daily_unique_consoles(self, date: datetime.datetime):
+        with self.lock:
+            d = date.strftime('%Y-%m-%d')
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM new_launch_times WHERE date = ?", (d,))
+            for row in rows:
+                return row[1]
+            return 0
