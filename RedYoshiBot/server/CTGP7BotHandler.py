@@ -208,7 +208,6 @@ async def update_graph_message(ctgp7_server: CTGP7ServerHandler):
     plt.xticks(rotation = 45)
     plt.subplots_adjust(bottom=0.15)
     plt.grid()
-    plt.title("CTGP-7 Daily Stats (UTC)")
     plt.legend()
     buf = io.BytesIO()
     plt.savefig(buf, format='png', bbox_inches='tight')
@@ -217,7 +216,7 @@ async def update_graph_message(ctgp7_server: CTGP7ServerHandler):
     buf.seek(0)
 
     file = discord.File(fp=buf, filename="image.png")
-    embed = discord.Embed()
+    embed = discord.Embed(title="Daily Statistics (UTC)", color=0xff0000)
     chPrivate = SELF_BOT_SERVER.get_channel(ch_list()["ONLINELOGS"])
     tmpMsg = await chPrivate.send(file=file)
     imageUrl = tmpMsg.attachments[0].url
