@@ -1,3 +1,4 @@
+from RedYoshiBot.server.CTGP7Requests import CTGP7Requests
 import discord
 import datetime
 import random
@@ -593,6 +594,12 @@ def MODERATORROLE_ID():
 def STAFFROLE_ID():
     return 383673430030942208
 
+def CONTRIBUTORROLE_ID():
+    return 326154532977377281
+
+def COURSECREATORROLE_ID():
+    return 325843915125030914
+
 def SERVER_ID():
     return 163070769067327488
 
@@ -645,6 +652,12 @@ def ADMINROLE_ID():
 def MODERATORROLE_ID():
     return 808687591331332117
 
+def CONTRIBUTORROLE_ID():
+    return 0
+
+def COURSECREATORROLE_ID():
+    return 0
+
 def SERVER_ID():
     return 739825190456000567
 
@@ -688,6 +701,12 @@ def ADMINROLE_ID():
 
 def MODERATORROLE_ID():
     return 813450017343406130
+
+def CONTRIBUTORROLE_ID():
+    return 0
+
+def COURSECREATORROLE_ID():
+    return 0
 
 def SERVER_ID():
     return 813443857114595399
@@ -1082,7 +1101,7 @@ async def sendMultiMessage(channel, message, startStr, endStr):
     for m in messageList:
         await channel.send(startStr + m + endStr)
 
-from .server.CTGP7BotHandler import handle_server_command, handler_server_init_loop, handler_server_update_globals, kick_message_callback, server_message_logger_callback
+from .server.CTGP7BotHandler import get_user_info, handle_server_command, handler_server_init_loop, handler_server_update_globals, kick_message_callback, server_message_logger_callback
 
 @client.event
 async def on_ready():
@@ -1102,6 +1121,7 @@ async def on_ready():
     ctgp7_server = CTGP7ServerHandler(debug_mode)
     ctgp7_server.database.setKickLogCallback(kick_message_callback)
     CTGP7ServerHandler.loggerCallback = server_message_logger_callback
+    CTGP7Requests.get_user_info = get_user_info
     asyncio.ensure_future(shutdown_watch())
     asyncio.ensure_future(muted_task())
     asyncio.ensure_future(change_game())

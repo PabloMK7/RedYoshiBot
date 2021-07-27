@@ -1,6 +1,7 @@
+from RedYoshiBot.server.CTGP7Requests import CTGP7Requests
 from .CTGP7ServerHandler import CTGP7ServerHandler
 from .CTGP7ServerDatabase import ConsoleMessageType
-from ..RedYoshiBot import ch_list, is_channel, is_channel_private, get_role, parsetime, sendMultiMessage, escapeFormatting, MODERATORROLE_ID, ADMINROLE_ID
+from ..RedYoshiBot import FakeMember, ch_list, is_channel, is_channel_private, get_role, parsetime, sendMultiMessage, escapeFormatting, MODERATORROLE_ID, ADMINROLE_ID, get_from_mention, CreateFakeMember, CONTRIBUTORROLE_ID, COURSECREATORROLE_ID
 from ..CTGP7Defines import CTGP7Defines
 import discord
 import asyncio
@@ -23,7 +24,8 @@ def handler_server_update_globals(bot_member, bot_server):
 def server_help_array():
     return {
         "help": ">@RedYoshiBot server help\nGets the help for the server specific commands.",
-        "stats": ">@RedYoshiBot server stats (ct/ot/ba)\nGets the usage stats for custom tracks (ct), original tracks (ot) or battle arenas (ba)."
+        "stats": ">@RedYoshiBot server stats (ct/ot/ba)\nGets the usage stats for custom tracks (ct), original tracks (ot) or battle arenas (ba).",
+        "link": ">@RedYoshiBot server link (link code)\nLinks a console to your discord account using the code provided by the CTGP-7 plugin."
     }
 def staff_server_help_array():
     return {
@@ -38,7 +40,9 @@ def staff_server_help_array():
         "console_verify": ">@RedYoshiBot server console_verify (get/set/clear) (consoleID)\nSets or clears the verification mark for the specified console.",
         "console_admin": ">@RedYoshiBot server console_admin (get/set/clear) (consoleID)\nSets or clears the admin status for the specified console.",
         "region": ">@RedYoshiBot server region (newvalue)\nSets the CTWW/CD online region in the server.",
-        "manage_vr": ">@RedYoshiBot server manage_vr (get/set) (consoleID) (ctww/cd) (newvalue)\nGets or sets the VR for the specified console (Don't set if console is in racing state online)."
+        "manage_vr": ">@RedYoshiBot server manage_vr (get/set) (consoleID) (ctww/cd) (newvalue)\nGets or sets the VR for the specified console (Don't set if console is in racing state online).",
+        "getlink": ">@RedYoshiBot server getlink (consoleID/discordID)\nGets link between console ID and Discord account.",
+        "unlink": ">@RedYoshiBot server getlink (consoleID/discordID)\nBreaks the link between console ID and Discord account."
     }
     
 def staff_server_command_level():
@@ -56,7 +60,9 @@ def staff_server_command_level():
         "console_verify": 1,
         "console_admin": 0,
         "region": 0,
-        "manage_vr": 1
+        "manage_vr": 1,
+        "getlink": 1,
+        "unlink": 1
     }
 
 async def staff_server_can_execute(message, command, silent=False):
@@ -455,6 +461,21 @@ async def server_bot_loop(ctgp7_server: CTGP7ServerHandler):
             traceback.print_exc()
             pass
         await asyncio.sleep(5)
+
+def get_user_info(userID):
+    member = get_from_mention(userID)
+    if (member is None):
+        return None
+    ret = {}
+    ret["name"] = member.name
+    ret["discrim"] = str(member.discriminator)
+    ret["nick"] = member.display_name
+
+    contrRole = get_role(CONTRIBUTORROLE_ID())
+    courseRole = get_role(COURSECREATORROLE_ID())
+    ret["canBeta"] = contrRole in member.roles or courseRole in member.roles or member.premium_since is not None
+    return ret
+
 stats_command_last_exec = datetime.datetime.utcnow()
 async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: discord.Message):
     global stats_command_last_exec
@@ -734,6 +755,92 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             opt = 2
         embed = gen_course_usage_embed(ctgp7_server, opt)
         await message.reply(embed=embed)
+    elif bot_cmd == "link":
+        tag = get_server_bot_args(message.content)
+        if (len(tag) != 3):
+            await message.reply( "Invalid syntax, correct usage:\r\n```" + server_help_array()["link"] + "```")
+            return
+        
+        linkcode = tag[2]
+        try:
+            linkcode = int(linkcode, 16)
+            cID = [k for k, v in CTGP7Requests.pendingDiscordLinks.items() if v == linkcode][0]
+        except:
+            traceback.print_exc()
+            await message.reply("Invalid code provided.")
+            return
+        
+        ctgp7_server.database.set_discord_link_console(message.author.id, cID)
+        del CTGP7Requests.pendingDiscordLinks[cID]
+        await message.reply("Operation succeeded.")
+    elif bot_cmd == "getlink":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content)
+            if (len(tag) != 3):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + server_help_array()["getlink"] + "```")
+                return
+            
+            checkid = tag[2]
+            consoleID = None
+            discordID = None
+
+            if (checkid.startswith("0x")): # Console ID
+                try:
+                    consoleID = int(checkid, 16)
+                except:
+                    await message.reply("Invalid console ID provided.")
+                    return
+                discordID = ctgp7_server.database.get_discord_link_console(consoleID)
+            else:
+                try:
+                    discordID = get_from_mention(checkid).id
+                except:
+                    await message.reply("Invalid discord ID provided.")
+                    return
+                consoleID = ctgp7_server.database.get_discord_link_user(discordID)
+            
+            if (consoleID is None or discordID is None):
+                await message.reply("Specified ID has no link established.")
+                return
+
+            member = get_from_mention(discordID)
+            if (member is None):
+                member = CreateFakeMember(discordID)
+            
+            lastName = ctgp7_server.database.get_console_last_name(consoleID)
+            await message.reply("`{:016X} {}` -> {}".format(consoleID, lastName, member.mention))
+    elif bot_cmd == "unlink":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content)
+            if (len(tag) != 3):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + server_help_array()["unlink"] + "```")
+                return
+            
+            checkid = tag[2]
+            consoleID = None
+            discordID = None
+
+            if (checkid.startswith("0x")): # Console ID
+                try:
+                    consoleID = int(checkid, 16)
+                except:
+                    await message.reply("Invalid console ID provided.")
+                    return
+                discordID = ctgp7_server.database.get_discord_link_console(consoleID)
+            else:
+                try:
+                    discordID = get_from_mention(checkid).id
+                except:
+                    await message.reply("Invalid discord ID provided.")
+                    return
+                consoleID = ctgp7_server.database.get_discord_link_user(discordID)
+
+            if (consoleID is None or discordID is None):
+                await message.reply("Specified ID has no link established.")
+                return
+
+            ctgp7_server.database.delete_discord_link_console(consoleID)
+            await message.reply("Operation succeeded.")
     elif bot_cmd == "manage_vr":
         if await staff_server_can_execute(message, bot_cmd):
             tag = get_server_bot_args(message.content)

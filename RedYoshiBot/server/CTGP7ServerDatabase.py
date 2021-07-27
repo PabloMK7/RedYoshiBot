@@ -323,3 +323,33 @@ class CTGP7ServerDatabase:
             for row in rows:
                 return row[1]
             return 0
+
+    def set_discord_link_console(self, discordID, cID):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM discord_link WHERE cID = ?", (int(cID),))
+            for row in rows:
+                c.execute("UPDATE discord_link SET discordID = ? WHERE cID = ?", (int(discordID), int(cID)))
+                return
+            c.execute('INSERT INTO discord_link VALUES (?,?)', (int(cID), int(discordID)))
+
+    def get_discord_link_console(self, cID):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM discord_link WHERE cID = ?", (int(cID),))
+            for row in rows:
+                return row[1]
+            return None
+
+    def get_discord_link_user(self, discordID):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM discord_link WHERE discordID = ?", (int(discordID),))
+            for row in rows:
+                return row[0]
+            return None
+
+    def delete_discord_link_console(self, cID):
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute("DELETE FROM discord_link WHERE cID = ?", (int(cID),))

@@ -1,6 +1,7 @@
 import sqlite3
 import traceback
 import time
+import random
 
 from ..CTGP7Defines import CTGP7Defines
 from .CTGP7ServerDatabase import CTGP7ServerDatabase
@@ -21,6 +22,10 @@ class CTGP7Requests:
 		"online_coin_battles",
 		"online_balloon_battles",
     }
+
+    get_user_info = None
+
+    pendingDiscordLinks = {}
 
     def __init__(self, database: CTGP7ServerDatabase, ctwwHandler: CTGP7CtwwHandler, request: dict, debug: bool, consoleID: int):
         self.req = request
@@ -63,6 +68,25 @@ class CTGP7Requests:
                     seqID = self.database.fetch_stats_seqid(self.cID)
                 return (2, seqID)
 
+    def req_discord_info(self, input):
+        discordLink = self.database.get_discord_link_console(self.cID)
+        if (discordLink is None):
+            if ("request" in input and input["request"]):
+                if (not self.cID in CTGP7Requests.pendingDiscordLinks):
+                    CTGP7Requests.pendingDiscordLinks[self.cID] = random.getrandbits(32) | 1
+                return (1, {"code" : CTGP7Requests.pendingDiscordLinks[self.cID]})
+            else:
+                return (1, {})
+        else:
+            if (self.cID in CTGP7Requests.pendingDiscordLinks):
+                del CTGP7Requests.pendingDiscordLinks[self.cID]
+            print(CTGP7Requests.get_user_info)
+            usrInfo = CTGP7Requests.get_user_info(discordLink)
+            if (usrInfo is None):
+                self.database.delete_discord_link_console(self.cID)
+                return self.req_discord_info(input)
+            return (0, usrInfo)
+
     def get_beta_version(self, input):
         
         print(type(input))
@@ -101,7 +125,8 @@ class CTGP7Requests:
     request_functions = {
         "betaver": get_beta_version,
         "login": server_login_handler,
-        "logout": server_logout_handler
+        "logout": server_logout_handler,
+        "discordinfo": req_discord_info
     }
 
     put_functions = {
