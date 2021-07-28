@@ -309,15 +309,12 @@ class CTGP7CtwwHandler:
             nameMode = input.get("nameMode")
             nameValue = input.get("nameValue")
             localver = input.get("localVer")
-            seed = input.get("seed")
             isRelogin = input.get("reLogin")
             miiName = input.get("miiName")
             retDict = {}
             
-            if (isRelogin is None or localver is None or seed is None or miiName is None):
+            if (isRelogin is None or localver is None or miiName is None):
                 return (-1, {})
-            
-            retDict["seed"] = seed
 
             if (not isRelogin and self.database.get_ctww_version() != localver):
                 return (CTWWLoginStatus.VERMISMATCH.value, retDict)

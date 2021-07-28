@@ -54,8 +54,8 @@ class CTGP7ServerHandler:
                     raise Exception()
 
                 inputData = bson.loads(connData)
-                if not "_CID" in inputData:
-                    raise Exception("Input data has no cID: {}".format(str(inputData)))
+                if not "_CID" in inputData or not "_seed" in inputData:
+                    raise Exception("")
                 
                 reqConsoleID = inputData["_CID"]
 
@@ -66,6 +66,7 @@ class CTGP7ServerHandler:
                 logStr += solver.info
 
                 outputData["_CID"] = reqConsoleID
+                outputData["_seed"] = inputData["_seed"]
                 outputData["res"] = 0
 
             except Exception:

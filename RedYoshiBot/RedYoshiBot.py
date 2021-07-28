@@ -1664,7 +1664,6 @@ async def on_message(message):
                                 final_text = await fact_parse(row[2])
                                 text_isdyn = "(dynamic)" if await isfact_dynamic(row[2]) else "(static)"
                             except:
-                                print("Error parsing: " + fact_id)
                                 continue
                             factSend.append(str(row[0]) + " - " + text_isdyn +  " - " + final_text + "\n----------\n")
                     await sendMultiMessage(message.author, factSend, "```\n----------\n", "```")
