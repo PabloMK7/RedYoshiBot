@@ -1,3 +1,4 @@
+from operator import contains
 from RedYoshiBot.server.CTGP7Requests import CTGP7Requests
 import discord
 import datetime
@@ -18,6 +19,7 @@ import sqlite3
 import struct
 from urllib.request import *
 from urllib.error import *
+from urllib.parse import urlparse
 import traceback
 import atexit
 
@@ -38,7 +40,6 @@ miku_last_message_time = datetime.datetime.utcnow()
 class ServerDatabase:
     global debug_mode
     global current_time_min
-    #Stores and obtains friend codes using an SQLite 3 database.
     def __init__(self):
         self.isTerminated = False
         self.conn = sqlite3.connect('RedYoshiBot/data/fc.sqlite')
@@ -59,22 +60,6 @@ class ServerDatabase:
             except NameError:
                 traceback.print_exc()
                 pass
-
-    # based on https://github.com/megumisonoda/SaberBot/blob/master/lib/saberbot/valid_fc.rb
-    def verify_fc(self, fc):
-        try:
-            fc = int(fc.replace('-', ''))
-        except ValueError:
-            return None
-        if fc > 0x7FFFFFFFFF:
-            return None
-        principal_id = fc & 0xFFFFFFFF
-        checksum = (fc & 0xFF00000000) >> 32
-        return (fc if hashlib.sha1(struct.pack('<L', principal_id)).digest()[0] >> 1 == checksum else None)
-
-    def fc_to_string(self, fc):
-        fc = str(fc).rjust(12, '0')
-        return "{}-{}-{}".format(fc[0:4], fc[4:8], fc[8:12])
     async def warn_set(self, memberid, value):
         c = self.conn.cursor()
         if(value == 0):
@@ -187,77 +172,6 @@ class ServerDatabase:
         (clo_t,)=cursor.fetchone()
         ope_t = tot_t - clo_t
         return [ope_t, clo_t]
-    # Based on kurisu from homebrew discord server https://github.com/ihaveamac/Kurisu
-    async def fcregister(self, message, fc, notify):
-        """Add your friend code."""
-        fc = self.verify_fc(fc)
-        if not fc:
-            await message.channel.send( '{}, that\'s an invalid friend code.'.format(message.author.name))
-            return
-        if (notify.lower() == "true"):
-            notify = True 
-        elif (notify.lower() == "false"):
-            notify = False
-        else:
-            await message.channel.send( '{}, invalid command syntax, `(notify)` must be `true` or `false`.'.format(message.author.name))
-            return
-        c = self.conn.cursor()
-        rows = c.execute('SELECT * FROM friend_codes WHERE userid = ?', (int(message.author.id),))
-        for row in rows:
-            # if the user already has one, this prevents adding another
-            await message.channel.send( "{}, please delete your current friend code with `@RedYoshiBot fcdelete` before adding another.".format(message.author.name))
-            return
-        c.execute('INSERT INTO friend_codes VALUES (?,?,?)', (int(message.author.id), fc, notify))
-        if notify:
-            info_str = ". You will be notified whenever someone requests your code."
-        else:
-            info_str = ""
-        await message.channel.send( "{}, your friend code has been added to the database: `{}`{}".format(message.author.name, self.fc_to_string(fc), info_str))
-        self.conn.commit()
-
-    async def fcquery(self, message):
-        global SELF_BOT_MEMBER
-        global SELF_BOT_SERVER
-        """Get other user's friend code. You must have one yourself in the database."""
-        c = self.conn.cursor()
-        member = None
-        for m in message.mentions:
-            if m != SELF_BOT_MEMBER:
-                member = m
-        if not member:
-            await message.channel.send( "{}, no user or invalid user specified.".format(message.author.name))
-            return
-        rows = c.execute('SELECT * FROM friend_codes WHERE userid = ?', (int(message.author.id),))
-        for row in rows:
-            # assuming there is only one, which there should be
-            rows_m = c.execute('SELECT * FROM friend_codes WHERE userid = ?', (int(member.id),))
-            for row_m in rows_m:
-                if (member.name[-1:] == "s"):
-                    suffix = "\'"
-                else:
-                    suffix = "\'s"
-                await message.channel.send( "{}{} friend code is `{}`".format(member.name, suffix, self.fc_to_string(row_m[1])))
-                try:
-                    if (row_m[2]):
-                        await member.send( "{} in {} server has queried your friend code! Their code is `{}`.".format(message.author.name, SELF_BOT_SERVER.name, self.fc_to_string(row[1])))
-                except discord.errors.Forbidden:
-                    pass  # don't fail in case user has DMs disabled for this server, or blocked the bot
-                return
-            await message.channel.send( "{}, looks like {} has no friend code registered.".format(message.author.name, member.name))
-            return
-        await message.channel.send( "{}, you need to register your own friend code with `@RedYoshiBot fcregister` before getting others.".format(message.author.name))
-
-    async def fcdelete(self, message):
-        #Delete your friend code.
-        if (type(message) is discord.Message):
-            c = self.conn.cursor()
-            c.execute('DELETE FROM friend_codes WHERE userid = ?', (int(message.author.id),))
-            await message.channel.send( "{}, your friend code has been removed from database.".format(message.author.name))
-            self.conn.commit()
-        elif (type(message) is discord.Member):
-            c = self.conn.cursor()
-            c.execute('DELETE FROM friend_codes WHERE userid = ?', (int(message.id),))
-            self.conn.commit()
     async def get_cookie(self, user):
         c = self.conn.cursor()
         rows = c.execute("SELECT * FROM cookies WHERE userid = ?", (int(user),))
@@ -464,9 +378,6 @@ async def game_coin(bot_ch, usr_ch, message):
 
 def help_array():
     return {
-        "fcregister": ">@RedYoshiBot fcregister (friendcode) (notify)\r\nAdds your friend code to the server database. If notify is \"true\", you will be notified whenever someone queries your friend code, otherwise set it to \"false\".", 
-        "fcquery": ">@RedYoshiBot fcquery (user)\r\nGets the friend code from the specified user (you need to have your own friend code registered). If the specified user has the notify option enabled, your friend code will be sent to them as well.",
-        "fcdelete": ">@RedYoshiBot fcdelete\r\nRemoves your friend code from the server database.",
         "ping": ">@RedYoshiBot ping\r\nPings the bot.",
         "membercount": ">@RedYoshiBot membercount\r\nDisplays the member count of the server.",
         "getwarn": ">@RedYoshiBot getwarn\nSends your warning amount in a DM.",
@@ -573,7 +484,8 @@ def ch_list():
         "KICKS": 815663318365896724,
         "STAFFKICKS": 816640864994066434,
         "ONLINELOGS": 815663494945964072,
-        "EMERGENCY": 839085550606614558
+        "EMERGENCY": 839085550606614558,
+        "PHISING": 882574850688950322
     }
 
 def NUMBER_EMOJI():
@@ -1101,6 +1013,51 @@ async def sendMultiMessage(channel, message, startStr, endStr):
     for m in messageList:
         await channel.send(startStr + m + endStr)
 
+async def bulkDeleteUserMessages(member, afterDateTime):
+    for ch in SELF_BOT_SERVER.channels:
+        if isinstance(ch, discord.TextChannel):
+            await ch.purge(limit=25, check=lambda m: m.author.id == member.id, after=afterDateTime)
+
+def getURLs(s: str):
+    regex = r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))"
+    url = re.findall(regex,s)      
+    return [x[0] for x in url]
+
+checkNitroScam_data = {}
+
+async def checkNitroScam(message):
+    global checkNitroScam_data
+    contents = message.content
+    phisingScore = sum([contents.count("@everyone") * 2, contents.count("nitro") * 2, contents.count("free"), contents.count("CS:GO"), contents.count("claim"), contents.count("steam"), contents.count("gift")])
+    urlCount = 0
+    for url in getURLs(contents):
+        website = urlparse(url).netloc
+        if (website.startswith("www.")):
+            website = website[4:]
+        whitelist = ["google.com", "discord.gift"]
+        if website in whitelist:
+            continue
+        urlCount += 1
+    if (urlCount > 0):
+        data = checkNitroScam_data.get(message.author.id, None)
+        if (data is None):
+            data = {}
+            data["score"] = 0
+            data["last"] = datetime.datetime.utcnow()
+            checkNitroScam_data[message.author.id] = data
+        if (datetime.datetime.utcnow() - data["last"] > datetime.timedelta(hours=1)):
+            data["score"] = 0
+        data["last"] = datetime.datetime.utcnow()
+        data["score"] += phisingScore
+        if (data["score"] > 2):
+            if (data["score"] <= 5): await message.author.send("**CTGP-7 server:** Suspicious phising activity has been detected.\nThis is only a warning and won't have any consequences, but further suspicious activity will result in a mute.\nPlease contact a staff member if you think this is a mistake.")
+            phisChn = client.get_channel(ch_list()["PHISING"])
+            await sendMultiMessage(phisChn, "User: {} ({})\nScore: {}\nContents:\n--------------\n{}\n--------------".format(message.author.name, message.author.id, data["score"], contents.replace("@", "(at)")), "", "")
+        if (data["score"] > 5):
+            await message.author.send("**CTGP-7 server:** Suspicious phising activity has been detected.\nYou have been muted for 3 days.\nPlease contact a staff member if you think this is a mistake.")
+            await mute_user(message.author.id, 3*24*60)
+            await bulkDeleteUserMessages(message.author, message.created_at - datetime.timedelta(hours=1))
+
 from .server.CTGP7BotHandler import get_user_info, handle_server_command, handler_server_init_loop, handler_server_update_globals, kick_message_callback, server_message_logger_callback
 
 @client.event
@@ -1583,36 +1540,6 @@ async def on_message(message):
                         await message.reply( "We are now {} members.".format(SELF_BOT_SERVER.member_count))
                     else:
                         await message.reply( "This command cannot be used here.")
-                elif bot_cmd == 'fcregister':
-                    if is_channel(message, ch_list()["FRIEND"]):
-                        tag = message.content.split()
-                        if not (len(tag) == 3 or len(tag) == 4):
-                            await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["fcregister"] + "```")
-                            return
-                        if (len(tag) == 4):
-                            await db_mng.fcregister(message, tag[2], tag[3])
-                        else:
-                            await db_mng.fcregister(message, tag[2], "true")
-                    else:
-                        await message.reply( "Friend code related commands can only be used in {}".format(SELF_BOT_SERVER.get_channel(ch_list()["FRIEND"]).mention))
-                elif bot_cmd == 'fcquery':
-                    if is_channel(message, ch_list()["FRIEND"]):
-                        tag = message.content.split()
-                        if (len(tag) != 3):
-                            await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["fcquery"] + "```")
-                            return
-                        await db_mng.fcquery(message)
-                    else:
-                        await message.reply( "Friend code related commands can only be used in {}".format(SELF_BOT_SERVER.get_channel(ch_list()["FRIEND"]).mention))
-                elif bot_cmd == 'fcdelete':
-                    if is_channel(message, ch_list()["FRIEND"]):
-                        tag = message.content.split()
-                        if (len(tag) != 2):
-                            await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["fcdelete"] + "```")
-                            return
-                        await db_mng.fcdelete(message)
-                    else:
-                        await message.reply( "Friend code related commands can only be used in {}".format(SELF_BOT_SERVER.get_channel(ch_list()["FRIEND"]).mention))
                 elif bot_cmd == 'fact':
                     tag = message.content.split()
                     if not (len(tag) == 2 or len(tag) == 3):
@@ -1988,6 +1915,9 @@ async def on_message(message):
                 await message.reply( "Cleared chat destination.")
         elif (all(x in message.content.lower() for x in ["miku"]) or all(x in message.content.lower() for x in ["mbs"])) and itercount((x in message.content.lower() for x in ["remove", "replace", "delete"]), 1) and message.author != client.user:
             await sendMikuMessage(message)
+        else:
+            if (message.author != client.user):
+                await checkNitroScam(message)
     except:
         if(debug_mode):
             raise
