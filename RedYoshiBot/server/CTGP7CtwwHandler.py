@@ -311,6 +311,7 @@ class CTGP7CtwwHandler:
             localver = input.get("localVer")
             isRelogin = input.get("reLogin")
             miiName = input.get("miiName")
+            isDebug = input.get("debugRegion")
             retDict = {}
             
             if (isRelogin is None or localver is None or miiName is None):
@@ -344,7 +345,7 @@ class CTGP7CtwwHandler:
             user.setVR(vrData)
             retDict["ctvr"] = vrData[0]
             retDict["cdvr"] = vrData[1]
-            retDict["regionID"] = self.database.get_online_region()
+            retDict["regionID"] = self.database.get_debugonline_region() if isDebug else self.database.get_online_region()
 
             if (consoleMsg is not None and consoleMsg[0] == CTWWLoginStatus.MESSAGE.value):
                 retDict["loginMessage"] = consoleMsg[1]

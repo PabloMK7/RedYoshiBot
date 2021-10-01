@@ -56,6 +56,9 @@ class CTGP7ServerDatabase:
 
     def get_online_region(self):
         return int(self.get_database_config("onlregion"))
+
+    def get_debugonline_region(self):
+        return int(self.get_database_config("onlregion")) + 2
     
     def set_online_region(self, value):
         self.set_database_config("onlregion", value)
