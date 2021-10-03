@@ -1,7 +1,7 @@
 from RedYoshiBot.server.CTGP7Requests import CTGP7Requests
 from .CTGP7ServerHandler import CTGP7ServerHandler
 from .CTGP7ServerDatabase import ConsoleMessageType
-from ..RedYoshiBot import FakeMember, ch_list, is_channel, is_channel_private, get_role, parsetime, sendMultiMessage, escapeFormatting, MODERATORROLE_ID, ADMINROLE_ID, get_from_mention, CreateFakeMember, CONTRIBUTORROLE_ID, COURSECREATORROLE_ID
+from ..RedYoshiBot import FakeMember, ch_list, is_channel, is_channel_private, get_role, parsetime, sendMultiMessage, escapeFormatting, MODERATORROLE_ID, ADMINROLE_ID, get_from_mention, CreateFakeMember, CONTRIBUTORROLE_ID, COURSECREATORROLE_ID, BETAACCESSROLE_ID
 from ..CTGP7Defines import CTGP7Defines
 import discord
 import asyncio
@@ -473,7 +473,8 @@ def get_user_info(userID):
 
     contrRole = get_role(CONTRIBUTORROLE_ID())
     courseRole = get_role(COURSECREATORROLE_ID())
-    ret["canBeta"] = contrRole in member.roles or courseRole in member.roles or member.premium_since is not None
+    betaAccessRole = get_role(BETAACCESSROLE_ID())
+    ret["canBeta"] = contrRole in member.roles or courseRole in member.roles or betaAccessRole in member.roles or member.premium_since is not None
     return ret
 
 stats_command_last_exec = datetime.datetime.utcnow()

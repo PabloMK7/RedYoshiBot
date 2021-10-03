@@ -80,7 +80,6 @@ class CTGP7Requests:
         else:
             if (self.cID in CTGP7Requests.pendingDiscordLinks):
                 del CTGP7Requests.pendingDiscordLinks[self.cID]
-            print(CTGP7Requests.get_user_info)
             usrInfo = CTGP7Requests.get_user_info(discordLink)
             if (usrInfo is None):
                 self.database.delete_discord_link_console(self.cID)
@@ -89,7 +88,6 @@ class CTGP7Requests:
 
     def get_beta_version(self, input):
         
-        print(type(input))
         if (type(input) is not int):
             return (-1, 0)
 
