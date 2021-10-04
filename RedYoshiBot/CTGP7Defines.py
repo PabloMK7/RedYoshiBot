@@ -224,14 +224,17 @@ class CTGP7Defines(object):
             if v > ctgpver:
                 break
             lastVer = v
-        id = CTGP7Defines.trackszsnames[lastVer][szsName]
+        try:
+            id = CTGP7Defines.trackszsnames[lastVer][szsName]
+        except:
+            return 1
         if (id <= 31):
             return 0
         if (id >= 42):
             return 1
         if (id >= 32 and id <= 38):
             return 2
-        return -1
+        return 1
 
     @staticmethod
     def getTrackString(ctgpver, trackID):
@@ -240,8 +243,10 @@ class CTGP7Defines(object):
             if v > ctgpver:
                 break
             lastVer = v
-        
-        return CTGP7Defines.trackNames[lastVer][trackID]
+        try:
+            return CTGP7Defines.trackNames[lastVer][trackID]
+        except:
+            return "???"
     
     @staticmethod
     def getTrackNameFromSzs(szsName, ctgpver=-1):
@@ -252,7 +257,10 @@ class CTGP7Defines(object):
             if v > ctgpver:
                 break
             lastVer = v
-        return CTGP7Defines.trackNames[lastVer][CTGP7Defines.trackszsnames[lastVer][szsName]]
+        try:
+            return CTGP7Defines.trackNames[lastVer][CTGP7Defines.trackszsnames[lastVer][szsName]]
+        except:
+            return "???"
 
     @staticmethod
     def getMenuString(menuID):
