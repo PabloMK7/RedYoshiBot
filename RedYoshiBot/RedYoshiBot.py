@@ -391,7 +391,7 @@ def help_array():
         "report": "!report (Explanation)\nReports a bug with the given explanation. Can only be used in #bugs_discussion.",
         "bugcount": ">@RedYoshiBot bugcount\nShows the amount of open and closed bugs.",
         "getlang": ">@RedYoshiBot getlang (Language)\nGets the language file from the MK Translation Project spreadsheet. Can only be used by translators.",
-        "parseqr": ">@RedYoshiBot parseqr (url)\nParses the CTGP-7 QR crash data from the image url.",
+        "parseqr": ">@RedYoshiBot parseqr [url]\nParses the CTGP-7 QR crash data from the image url. You can either specify the image url or attach the image to the message.",
         "funcname": ">@RedYoshiBot funcname (address) (region) (version)\nFinds the Mario Kart 7 function name for a given address, region and version combination.\n- address: Address to find in hex.\n- region: Region of the game (1 - EUR, 2 - USA, 3 - JAP).\n- version: Version of the game (1 - rev0 v1.1, 2 - rev1).",
 
         "server": ">@RedYoshiBot server (command) (options)\nRuns a server related command.\nUse \'@RedYoshiBot server help\' to get all the available server commands."
@@ -1636,15 +1636,20 @@ async def on_message(message):
                     await message.reply( "Fact added: \n```{}```".format(dummy))                        
                 elif bot_cmd == "parseqr":
                     tag = message.content.split(None, 2)
-                    if (len(tag) != 3):
+                    if ((len(tag) != 3 and len(tag) != 2) or (len(tag) == 2 and len(message.attachments) == 0)):
                         await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["parseqr"] + "```")
                         return
                     try:
-                        await message.channel.trigger_typing()
-                        if (tag[2].startswith("data:")):
-                            qr = QRCrashDecode(data=tag[2][5:])
+                        url = ""
+                        if (len(tag) == 3):
+                            url = tag[2]
                         else:
-                            qr = QRCrashDecode(url=tag[2])
+                            url = message.attachments[0].url
+                        await message.channel.trigger_typing()
+                        if (url.startswith("data:")):
+                            qr = QRCrashDecode(data=url[5:])
+                        else:
+                            qr = QRCrashDecode(url=url)
                         qrtext = qr.printData()
                     except Exception as e:
                         await message.reply( "Failed to parse QR data:\n```{}```".format(str(e)))

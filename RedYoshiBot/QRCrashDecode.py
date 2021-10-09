@@ -99,8 +99,27 @@ class QRCrashDecode:
             return ret
         except:
             raise Exception("QR Code parameters invalid!")
+    
+    @staticmethod
+    def __printDataVerA(data):
+        try:
+            region = (data[2] >> 4) & 0xF
+            version = data[2] & 0xF
+            ret = ""
+            major = data[0] >> 24
+            minor = (data[0] >> 16) & 0xFF
+            micro = (data[0] >> 8) & 0xFF
+            ctgpver = "{}.{}.{}".format(major, minor, micro)
+            ret += "CTGP-7: v{}\n".format(ctgpver)
+            ret += "MK7: {} {}\n".format(QRCrashDecode.gameRegion[region], QRCrashDecode.gameRevision[version])
+            ret += QRCrashDecode.SEPARATOR
+            ret += "Text:\n\t" + data[1].decode("utf-8") + "\n"
+            ret += QRCrashDecode.SEPARATOR
+            return ret
+        except:
+            raise Exception("QR Code parameters invalid!")
 
-    versionFormats = {'0': 'IIIII6IIIBBxx'}
-    versionFunctions = {'0': __printDataVer0.__func__}
+    versionFormats = {'0': 'IIIII6IIIBBxx', 'A': 'I48sBBxx'}
+    versionFunctions = {'0': __printDataVer0.__func__, 'A': __printDataVerA.__func__}
 
     
