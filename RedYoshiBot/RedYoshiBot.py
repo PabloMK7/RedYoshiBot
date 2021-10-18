@@ -1057,8 +1057,9 @@ async def checkNitroScam(message):
             phisChn = client.get_channel(ch_list()["PHISING"])
             await sendMultiMessage(phisChn, "User: {} ({})\nScore: {}\nContents:\n--------------\n{}\n--------------".format(message.author.name, message.author.id, data["score"], contents.replace("@", "(at)")), "", "")
         if (data["score"] > 5):
-            await message.author.send("**CTGP-7 server:** Suspicious phising activity has been detected.\nYou have been muted for 3 days.\nPlease contact a staff member if you think this is a mistake.")
+            await message.author.send("**CTGP-7 server:** Suspicious phising activity has been detected.\nYou have been kicked and muted for 3 days.\nPlease contact a staff member if you think this is a mistake.")
             await mute_user(message.author.id, 3*24*60)
+            await message.author.kick()
             await bulkDeleteUserMessages(message.author, message.created_at - datetime.timedelta(hours=1))
 
 from .server.CTGP7BotHandler import get_user_info, handle_server_command, handler_server_init_loop, handler_server_update_globals, kick_message_callback, server_message_logger_callback
@@ -1119,7 +1120,6 @@ async def on_member_remove(member):
     global client
     door_chan = SELF_BOT_SERVER.get_channel(ch_list()["DOORSTEP"])
     await door_chan.send("See ya **{}**. We are now {} members.".format(member.name, SELF_BOT_SERVER.member_count))
-    await db_mng.fcdelete(member)
     
 @client.event
 async def on_message_delete(message):
