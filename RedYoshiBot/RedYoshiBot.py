@@ -1636,7 +1636,7 @@ async def on_message(message):
                     await message.reply( "Fact added: \n```{}```".format(dummy))                        
                 elif bot_cmd == "parseqr":
                     tag = message.content.split(None, 2)
-                    if ((len(tag) != 3 and len(tag) != 2) or (len(tag) == 2 and len(message.attachments) == 0)):
+                    if ((len(tag) != 3 and len(tag) != 2) or (len(tag) == 2 and len(message.attachments) == 0 and message.reference is None)):
                         await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["parseqr"] + "```")
                         return
                     try:
@@ -1644,7 +1644,14 @@ async def on_message(message):
                         if (len(tag) == 3):
                             url = tag[2]
                         else:
-                            url = message.attachments[0].url
+                            if (message.reference is not None):
+                                replyFromID = message.reference.message_id
+                                try:
+                                    url = (await message.channel.fetch_message(replyFromID)).attachments[0].url
+                                except:
+                                    raise Exception("Image not found in replied message.")
+                            else:
+                                url = message.attachments[0].url
                         await message.channel.trigger_typing()
                         if (url.startswith("data:")):
                             qr = QRCrashDecode(data=url[5:])
@@ -1653,7 +1660,6 @@ async def on_message(message):
                         qrtext = qr.printData()
                     except Exception as e:
                         await message.reply( "Failed to parse QR data:\n```{}```".format(str(e)))
-                        raise e
                         return
                     await message.reply( "Parsed QR data:\n```{}```".format(qrtext))
                 elif bot_cmd == "funcname":
