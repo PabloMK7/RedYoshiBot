@@ -31,8 +31,6 @@ ctgp7_server = None
 intents = discord.Intents.default()
 intents.members = True
 client = discord.Client(intents=intents)
-shutdown_watch_running = False
-running_State = True
 debug_mode = False
 current_talk_id = ''
 miku_last_message_time = datetime.datetime.utcnow()
@@ -46,7 +44,6 @@ class ServerDatabase:
         print('Addon "{}" loaded\n'.format(self.__class__.__name__))
 
     def terminate(self):
-        global running_State
         global ctgp7_server
         if not (self.isTerminated):
             self.isTerminated = True
@@ -634,32 +631,6 @@ def MIKU_EMOJI_ID():
 """
 COMMUNITIES_TEXT = "```Here are the main CTGP-7 communities:\n\nCustom Tracks: 29-1800-5228-2361\nCustom Tracks, 200cc: 52-3127-4613-8641\nNormal Tracks: 02-5770-2485-4638\nNormal Tracks, 200cc: 54-0178-4815-8814\n\nMake sure you are in 0.17.1 or greater to play in those communities.```"
 
-async def shutdown_watch():
-    global db_mng
-    global ctgp7_server
-    global client
-    global shutdown_watch_running
-    global running_State
-    if (shutdown_watch_running):
-        return
-    shutdown_watch_running = True
-    while True:
-        await asyncio.sleep(5)
-        if os.path.isfile("RedYoshiBot/data/stop.flag"):
-            running_State = False
-            os.remove("RedYoshiBot/data/stop.flag")
-            print("Manually stopping by terminal.")
-            db_mng.terminate()
-            del db_mng
-            await client.close()
-            client = None
-            with open("RedYoshiBot/data/stopped.flag", "w") as f:
-                f.write("dummy")
-            try:
-                sys.exit(0)
-            except:
-                pass
-
 def parsetime(timestr):
     try:
         basenum = float(timestr[0:-1])
@@ -1075,6 +1046,7 @@ async def on_ready():
     if(os.path.isfile("debug.flag")):
         print("Debug mode enabled.")
         debug_mode = True
+        atexit.unregister(exit_handler)
     SELF_BOT_SERVER = client.get_guild(SERVER_ID())
     SELF_BOT_MEMBER = SELF_BOT_SERVER.get_member(client.user.id)
     db_mng = ServerDatabase()
@@ -1083,7 +1055,6 @@ async def on_ready():
     ctgp7_server.database.setKickLogCallback(kick_message_callback)
     CTGP7ServerHandler.loggerCallback = server_message_logger_callback
     CTGP7Requests.get_user_info = get_user_info
-    asyncio.ensure_future(shutdown_watch())
     asyncio.ensure_future(muted_task())
     asyncio.ensure_future(change_game())
     handler_server_update_globals(SELF_BOT_MEMBER, SELF_BOT_SERVER)
@@ -1144,7 +1115,6 @@ async def on_message(message):
     global SELF_BOT_MEMBER
     global COMMUNITIES_TEXT
     global client
-    global running_State
     global debug_mode
     global current_time_min
     global current_talk_id
@@ -1510,23 +1480,23 @@ async def on_message(message):
                         return
                 elif bot_cmd == 'restart':
                     if await staff_can_execute(message, bot_cmd):
-                        await message.channel.send( "The bot is now restarting.")
+                        await message.channel.send( "The bot is now restarting...")
                         print("Manually restarting by {} ({})".format(message.author.id, message.author.name))
-                        running_State = False
-                        del db_mng
+                        db_mng.terminate()
                         await client.close()
                         client = None
+                        atexit.unregister(exit_handler)
                         os.execv(sys.executable, ['python3'] + sys.argv)
                 elif bot_cmd == 'stop':
                     if await staff_can_execute(message, bot_cmd):
                         await message.reply( "The bot is now stopping, see ya.")
                         print("Manually stopping by {} ({})".format(message.author.id, message.author.name))
-                        running_State = False
-                        del db_mng
+                        db_mng.terminate()
                         await client.close()
                         client = None
+                        atexit.unregister(exit_handler)
                         try:
-                            sys.exit(0)
+                            os._exit(0)
                         except:
                             pass
                 elif bot_cmd == 'ping':
@@ -1939,30 +1909,26 @@ async def on_message(message):
             pass
 
 def exit_handler():
-    if (running_State and not debug_mode):
-        print("Unexpected interpreter exit at {}, rebooting.".format(str(datetime.datetime.now())))
-        os.execv(sys.executable, ['python3'] + sys.argv)
+    print("Unexpected exit at {}, rebooting in 10 seconds.".format(str(datetime.datetime.now())))
+    try:
+        time.sleep(10)
+    except KeyboardInterrupt:
+        print("Exiting...")
+        os._exit(0)
+    os.execv(sys.executable, ['python3'] + sys.argv)
+
+def perform_exit():
+    try:
+        db_mng.terminate()
+    except:
+        print("Got exception on exit:")
+        traceback.print_exc()
+    print("Bot exiting, see ya!")
+    os._exit(0)
 
 try:
     atexit.register(exit_handler)
     client.run(sys.argv[1])
 except:
-    if (running_State):
-        print("Got exception at {}, restarting bot in a while.".format(str(datetime.datetime.now())))
-        traceback.print_exc()
-        retryam = get_retry_times()
-        if(retryam < 30):
-            time.sleep(30)
-        elif(retryam < 180):
-            time.sleep(300)
-        else:
-            print("Retried too many times, exiting.")
-            running_State = False
-            raise
-        print("Retry count: {}\n".format(retryam))
-        set_retry_times(retryam + 1)
-        running_State = False
-        db_mng.terminate()
-        os.execv(sys.executable, ['python3'] + sys.argv)
-    else:
-        pass
+    perform_exit()
+    pass
