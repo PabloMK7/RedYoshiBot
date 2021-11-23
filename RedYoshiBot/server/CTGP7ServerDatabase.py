@@ -63,6 +63,12 @@ class CTGP7ServerDatabase:
     def set_online_region(self, value):
         self.set_database_config("onlregion", value)
 
+    def get_track_freq_split(self):
+        return int(self.get_database_config("trackfreqsplit"))
+    
+    def set_track_freq_split(self, value):
+        self.set_database_config("trackfreqsplit", value)
+
     def get_ctww_version(self):
         return int(self.get_database_config("ctwwver"))
     
@@ -82,27 +88,31 @@ class CTGP7ServerDatabase:
         self.set_database_config("stats_dirty", 1 if isDirty else 0)
 
     def get_most_played_tracks(self, course_type, amount):
+        currsplit = self.get_track_freq_split()
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM stats_tracksfreq WHERE type = ? ORDER BY freq DESC", (int(course_type),))
+            c2 = self.conn.cursor()
+            rows = c.execute("SELECT * FROM stats_tracksfreq WHERE split = ? AND type = ? ORDER BY freq DESC", (int(currsplit), int(course_type)))
             i = 0
             ret = []
             for row in rows:
                 if (i >= amount): break
-                ret.append([row[0], row[1]])
+                prevValue = c2.execute("SELECT SUM(freq) FROM stats_tracksfreq WHERE id = ? AND split < ?", (str(row[0]), int(currsplit))).fetchone()[0]
+                ret.append([row[0], row[2], 0 if prevValue is None else prevValue])
                 i += 1
             return ret
 
     def increment_track_frequency(self, szsName, value):
+        currsplit = self.get_track_freq_split()
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM stats_tracksfreq WHERE id = ?", (str(szsName),))
+            rows = c.execute("SELECT * FROM stats_tracksfreq WHERE id = ? AND split = ?", (str(szsName),int(currsplit)))
             for _ in rows:
-                c.execute("UPDATE stats_tracksfreq SET freq = freq + {} WHERE id = ?".format(str(int(value))), (str(szsName),))
+                c.execute("UPDATE stats_tracksfreq SET freq = freq + {} WHERE id = ? AND split = ?".format(str(int(value))), (str(szsName),int(currsplit)))
                 return
             courseType = CTGP7Defines.getTypeFromSZS(szsName)
             if (courseType != -1):
-                c.execute('INSERT INTO stats_tracksfreq VALUES (?,?,?)', (str(szsName), int(value), int(courseType)))
+                c.execute('INSERT INTO stats_tracksfreq VALUES (?,?,?,?)', (str(szsName), int(currsplit), int(value), int(courseType)))
     
     def get_stats(self):
         with self.lock:

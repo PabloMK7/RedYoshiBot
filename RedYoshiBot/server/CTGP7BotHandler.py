@@ -1,3 +1,4 @@
+from typing import Tuple
 from RedYoshiBot.server.CTGP7Requests import CTGP7Requests
 from .CTGP7ServerHandler import CTGP7ServerHandler
 from .CTGP7ServerDatabase import ConsoleMessageType
@@ -30,6 +31,7 @@ def server_help_array():
 def staff_server_help_array():
     return {
         "version": ">@RedYoshiBot server version (ctww/beta) (newvalue)\nSets the ctww or beta values. If \'newvalue\' is not specified, the current version is displayed.",
+        "tracksplit": ">@RedYoshiBot server tracksplit [newVer]\nSets or gets the current track frequency split.",
         "kick": ">@RedYoshiBot server kick (consoleID) (time) (message)\nKicks the console (hex format, 0 for everyone) for the specified time (for example: 2h, 12m, 7d, etc, or 0m for a single time) with the specified message. Takes effect after the next race.",
         "skick": ">@RedYoshiBot server skick (consoleID) (time) (message)\nSilently kicks the console (hex format, 0 for everyone) for the specified time (for example: 2h, 12m, 7d, etc, or 0m for a single time) with the specified message. Takes effect after the next race.",
         "ban": ">@RedYoshiBot server ban (consoleID) (message)\nPermanently bans the console (hex format, 0 for everyone) with the specified message (Use kick for temporary bans). Takes effect after the next race.",
@@ -48,6 +50,7 @@ def staff_server_help_array():
 def staff_server_command_level():
     return {
         "version": 0,
+        "tracksplit": 0,
         "help": 1,
         "kick": 1,
         "skick": 1,
@@ -113,7 +116,7 @@ def gen_course_usage_embed(ctgp7_server: CTGP7ServerHandler, course_type: int):
                 mostPlayedStr += "{}.{}{}\n".format(position, positionSpaces, trackName)
                 currTrack += 1
             else:
-                mostPlayedStr += "{}\n".format(str(k[1]))
+                mostPlayedStr += "{} ({})\n".format(str(k[1]), str(k[1]+k[2]))
         mostPlayedStr += "```"
         embed.add_field(name="** **", value=mostPlayedStr, inline=True)
     return embed
@@ -182,7 +185,7 @@ tried_edit_stats_message_times = 0
 stats_curr_online_users = 0
 stats_curr_online_rooms = 0
 stats_curr_online_stuff_changed = True
-stats_message_id = 0
+stats_message_id = [0, 0]
 vr_message_id = 0
 graph_launches_message_id = 0
 last_graph_update_date = None
@@ -244,20 +247,25 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
         ch = SELF_BOT_SERVER.get_channel(ch_list()["STATS"])
         if (ch is None):
             raise Exception()
-        msg = await ch.fetch_message(stats_message_id)
+        msg1 = await ch.fetch_message(stats_message_id[0])
+        msg2 = await ch.fetch_message(stats_message_id[1])
         vrLead = await ch.fetch_message(vr_message_id)
-        if (msg is None or msg.author != SELF_BOT_MEMBER or vrLead is None or vrLead.author != SELF_BOT_MEMBER):
+        if (msg1 is None or msg1.author != SELF_BOT_MEMBER or msg2 is None or msg2.author != SELF_BOT_MEMBER or vrLead is None or vrLead.author != SELF_BOT_MEMBER):
             raise Exception()
         tried_edit_stats_message_times = 0
 
         genStats = ctgp7_server.database.get_stats()
         totOfflineRaces = genStats["races"] + genStats["ttrials"] + genStats["coin_battles"] + genStats["balloon_battles"]
+        totMissions = genStats["failed_mission"] + genStats["completed_mission"] + genStats["perfect_mission"]
+        completedMissions = genStats["completed_mission"] + genStats["perfect_mission"]
+        averageGrade = genStats["grademean_mission"] / genStats["gradecount_mission"]
         totOnlineRaces = genStats["online_races"] + genStats["comm_races"] + genStats["ctww_races"] + genStats["cd_races"] + genStats["online_coin_battles"] + genStats["online_balloon_battles"]
         mostTracks = ctgp7_server.database.get_most_played_tracks(1, 10)
         uniqueConsoles = ctgp7_server.database.get_unique_console_count()
         uniqueOnlineUsers = ctgp7_server.database.get_unique_console_vr_count()
 
         embed=discord.Embed(title="CTGP-7 Statistics", description="Statistics from all CTGP-7 players!", color=0xff0000, timestamp=datetime.datetime.utcnow())
+        embed2=discord.Embed(color=0xff0000, timestamp=datetime.datetime.utcnow())
         embed.set_thumbnail(url=str(SELF_BOT_SERVER.icon_url))
         embed.add_field(name="Total Launches", value=str(genStats["launches"]), inline=True)
         embed.add_field(name="Unique Consoles", value=str(uniqueConsoles), inline=True)
@@ -268,6 +276,13 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
         embed.add_field(name="Coin Battles", value=str(genStats["coin_battles"]), inline=True)
         embed.add_field(name="Balloon Battles", value=str(genStats["balloon_battles"]), inline=True)
         embed.add_field(name="** **", value="** **", inline=False)
+        embed.add_field(name="Total Missions Played", value=str(totMissions), inline=False)
+        embed.add_field(name="Completed Missions", value=str(completedMissions), inline=True)
+        embed.add_field(name="(with perfect grade)", value=str(genStats["perfect_mission"]), inline=True)
+        embed.add_field(name="Failed Missions", value=str(genStats["failed_mission"]), inline=True)
+        embed.add_field(name="Average Grade", value="{:.3f}".format(averageGrade), inline=True)
+        embed.add_field(name="Custom Missions Played", value=str(genStats["custom_mission"]), inline=False)
+        embed.add_field(name="** **", value="** **", inline=False)
         embed.add_field(name="Total Online Races", value=str(totOnlineRaces), inline=False)
         embed.add_field(name="Vanilla Races", value=str(genStats["online_races"]), inline=True)
         embed.add_field(name="Community Races", value=str(genStats["comm_races"]), inline=True)
@@ -275,13 +290,14 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
         embed.add_field(name="Countdown Races", value=str(genStats["cd_races"]), inline=True)
         embed.add_field(name="Coin Battles", value=str(genStats["online_coin_battles"]), inline=True)
         embed.add_field(name="Balloon Battles", value=str(genStats["online_balloon_battles"]), inline=True)
-        embed.add_field(name="** **", value="** **", inline=False)
-        embed.add_field(name="Total Logins", value=str(genStats["total_logins"]), inline=True)
-        embed.add_field(name="Unique Logins", value=str(uniqueOnlineUsers), inline=True)
-        embed.add_field(name="Total Online Rooms", value=str(genStats["total_rooms"]), inline=True)
-        embed.add_field(name="Current Users Online", value=str(stats_curr_online_users), inline=True)
-        embed.add_field(name="Current Rooms Online", value=str(stats_curr_online_rooms), inline=True)
-        embed.add_field(name="** **", value="** **", inline=False)
+        
+
+        embed2.add_field(name="Total Logins", value=str(genStats["total_logins"]), inline=True)
+        embed2.add_field(name="Unique Logins", value=str(uniqueOnlineUsers), inline=True)
+        embed2.add_field(name="Total Online Rooms", value=str(genStats["total_rooms"]), inline=True)
+        embed2.add_field(name="Current Users Online", value=str(stats_curr_online_users), inline=True)
+        embed2.add_field(name="Current Rooms Online", value=str(stats_curr_online_rooms), inline=True)
+        embed2.add_field(name="** **", value="** **", inline=False)
         mostPlayedStr = "```\n"
         currTrack = 1
         for k in mostTracks:
@@ -289,11 +305,12 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
             trackNameSpaces = " " * max((24 - len(trackName)), 0)
             position = str(currTrack)
             positionSpaces = " " * max((4 - len(position)), 0)
-            mostPlayedStr += "{}.{}{}{}{}\n".format(position, positionSpaces, trackName, trackNameSpaces, str(k[1]))
+            mostPlayedStr += "{}.{}{}{}{} ({})\n".format(position, positionSpaces, trackName, trackNameSpaces, str(k[1]), str(k[1]+k[2]))
             currTrack += 1
         mostPlayedStr += "```"
-        embed.add_field(name="Most Played Tracks", value=mostPlayedStr, inline=False)
-        await msg.edit(embed=embed, content=None)
+        embed2.add_field(name="Most Played Tracks", value=mostPlayedStr, inline=False)
+        await msg1.edit(embed=embed, content=None)
+        await msg2.edit(embed=embed2, content=None)
         tried_edit_stats_message_times = 0
 
         vrRankCtww = ctgp7_server.database.get_most_users_vr(0, 20)
@@ -341,14 +358,15 @@ async def prepare_server_channels(ctgp7_server: CTGP7ServerHandler):
     mIds = []
     i = 0
     async for m in statsChan.history(limit=200, oldest_first=True):
-        if (i < 3 and m.author.id == SELF_BOT_MEMBER.id):
+        if (i < 4 and m.author.id == SELF_BOT_MEMBER.id):
             mIds.append(m.id)
             i += 1
         else:
             await m.delete()
-    stats_message_id = mIds[0] if len(mIds) > 0 else (await statsChan.send("Loading...")).id
-    graph_launches_message_id = mIds[1] if len(mIds) > 1 else (await statsChan.send("Loading...")).id
-    vr_message_id = mIds[2] if len(mIds) > 2 else (await statsChan.send("Loading...")).id
+    stats_message_id[0] = mIds[0] if len(mIds) > 0 else (await statsChan.send("Loading...")).id
+    stats_message_id[1] = mIds[1] if len(mIds) > 1 else (await statsChan.send("Loading...")).id
+    graph_launches_message_id = mIds[2] if len(mIds) > 2 else (await statsChan.send("Loading...")).id
+    vr_message_id = mIds[3] if len(mIds) > 3 else (await statsChan.send("Loading...")).id
 
 all_prev_room_msg_ids = set()
 async def update_online_room_info(ctgp7_server: CTGP7ServerHandler):
@@ -543,6 +561,25 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 elif mode == "beta":
                     ctgp7_server.database.set_beta_version(version)
                 await message.reply( "{} version set to: {}".format( mode, version))
+                return
+    elif bot_cmd == "tracksplit":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content)
+            if (len(tag) != 2 and len(tag) != 3):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["tracksplit"] + "```")
+                return
+            if (len(tag) == 2):
+                split = ctgp7_server.database.get_track_freq_split()
+                await message.reply( "Current split value is: {}".format(split))
+                return
+            else:
+                try:
+                    split = int(tag[2])
+                except ValueError:
+                    await message.reply( "Invalid number.")
+                    return
+                ctgp7_server.database.set_track_freq_split(split)
+                await message.reply( "Split value set to: {}".format(split))
                 return
     elif bot_cmd == "region":
         if await staff_server_can_execute(message, bot_cmd):
