@@ -105,7 +105,23 @@ class CTGP7Defines(object):
             70: "N64 Rainbow Road",
             71: "GBA Rainbow Road",
             72: "Space Road",
-            97: "Rainbow Road DX"
+            97: "Rainbow Road DX",
+            98: "Stargaze Summit",
+            99: "Sunset Raceway",
+            100: "GBA Broken Pier",
+            101: "Glacier Mine",
+            102: "Flowerbed Fortress",
+            103: "Seaside Palace",
+            104: "DKR Star City",
+            105: "Mushroom Mountain",
+            106: "N64 Sherbet Land",
+            107: "Block Island",
+            108: "DS Bowser Castle",
+            109: "DKR Jungle Falls",
+            110: "Retro Raceway",
+            111: "Frozen Grotto",
+            112: "GBA Lakeside Park",
+            113: "Dragon Burial Grounds"
         }
     }
 
@@ -211,7 +227,23 @@ class CTGP7Defines(object):
             "Ctgp_DogeDesert": 94,
             "Gn64_BansheeBoard": 95,
             "Ctgp_GCNMarioCirc": 96,
-            "Ctgp_RainbowRdDX": 97
+            "Ctgp_RainbowRdDX": 97,
+            "Ctgp_StarGSumm": 98,
+            "Ctgp_SunsetRacewa": 99,
+            "Ctgp_GBABroknPier": 100,
+            "Ctgp_GlacrMine": 101,
+            "Ctgp_FlowerBFort": 102,
+            "Ctgp_SeasidePalace": 103,
+            "Ctgp_DKRStaCi": 104,
+            "Ctgp_MushroomMount": 105,
+            "Ctgp_N64ShbLnd": 106,
+            "Ctgp_BlockIslandd": 107,
+            "Ctgp_DSBowserCastle": 108,
+            "Ctgp_DKRJunFa": 109,
+            "Ctgp_RetroRaceway": 110,
+            "Ctgp_FrzGrotto": 111,
+            "Ctgp_GBALksdPrk": 112,
+            "Ctgp_DrgnBGrounds": 113
         }
     }
 

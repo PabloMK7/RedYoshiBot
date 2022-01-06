@@ -804,7 +804,6 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             linkcode = int(linkcode, 16)
             cID = [k for k, v in CTGP7Requests.pendingDiscordLinks.items() if v == linkcode][0]
         except:
-            traceback.print_exc()
             await message.reply("Invalid code provided.")
             return
         

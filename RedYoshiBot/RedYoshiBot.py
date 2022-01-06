@@ -725,8 +725,8 @@ async def unmute_user(memberid):
     if (muted_user is not None):
         mute_role = get_role(MUTEROLE_ID())
         try:
-            await muted_user.send("**CTGP-7 server:** You have been unmuted.")
             await muted_user.remove_roles(mute_role)
+            await muted_user.send("**CTGP-7 server:** You have been unmuted.")
         except:
             pass
 
@@ -1003,6 +1003,7 @@ async def checkNitroScam(message):
     global checkNitroScam_data
     contents = message.content
     phisingScore = sum([contents.count("@everyone") * 2, contents.count("nitro") * 2, contents.count("free"), contents.count("CS:GO"), contents.count("claim"), contents.count("steam"), contents.count("gift")])
+    if (phisingScore == 0): return
     urlCount = 0
     for url in getURLs(contents):
         website = urlparse(url).netloc
@@ -1024,14 +1025,22 @@ async def checkNitroScam(message):
         data["last"] = datetime.datetime.utcnow()
         data["score"] += phisingScore
         if (data["score"] > 2):
-            if (data["score"] <= 5): await message.author.send("**CTGP-7 server:** Suspicious phising activity has been detected.\nThis is only a warning and won't have any consequences, but further suspicious activity will result in a mute.\nPlease contact a staff member if you think this is a mistake.")
+            if (data["score"] <= 5): 
+                try:
+                    await message.author.send("**CTGP-7 server:** Suspicious phising activity has been detected.\nThis is only a warning and won't have any consequences, but further suspicious activity will result in a mute.\nPlease contact a staff member if you think this is a mistake.")
+                except:
+                    pass
             phisChn = client.get_channel(ch_list()["PHISING"])
             await sendMultiMessage(phisChn, "User: {} ({})\nScore: {}\nContents:\n--------------\n{}\n--------------".format(message.author.name, message.author.id, data["score"], contents.replace("@", "(at)")), "", "")
         if (data["score"] > 5):
-            await message.author.send("**CTGP-7 server:** Suspicious phising activity has been detected.\nYou have been kicked and muted for 3 days.\nPlease contact a staff member if you think this is a mistake.")
             await mute_user(message.author.id, 3*24*60)
-            await message.author.kick()
             await bulkDeleteUserMessages(message.author, message.created_at - datetime.timedelta(hours=1))
+            try:
+                await message.author.send("**CTGP-7 server:** Suspicious phising activity has been detected.\nYou have been kicked and muted for 3 days.\nPlease contact a staff member if you think this is a mistake.")
+            except:
+                pass
+            await message.author.kick()
+            
 
 from .server.CTGP7BotHandler import get_user_info, handle_server_command, handler_server_init_loop, handler_server_update_globals, kick_message_callback, server_message_logger_callback
 
@@ -1401,7 +1410,7 @@ async def on_message(message):
                     if await staff_can_execute(message, bot_cmd): 
                         tag = message.content.split()
                         try:
-                            d = urlopen("https://api.github.com/repos/mariohackandglitch/CTGP-7updates/releases/tags/" + tag[2])
+                            d = urlopen("https://api.github.com/repos/PabloMK7/CTGP-7updates/releases/tags/" + tag[2])
                         except HTTPError as err:
                             await message.reply( "Release tag invalid. (Example: v0.14-1)\r\nError: " + str(err.code))
                         else:
