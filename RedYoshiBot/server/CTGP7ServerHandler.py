@@ -50,12 +50,11 @@ class CTGP7ServerHandler:
                 process.wait()
                 
                 if (process.returncode != 0):
-                    print(process.returncode)
-                    raise Exception()
+                    raise Exception("Couldn't decrypt message: {}".format(process.returncode))
 
                 inputData = bson.loads(connData)
                 if not "_CID" in inputData or not "_seed" in inputData:
-                    raise Exception("")
+                    raise Exception("Input is missing: cID: {}, seed: {}".format(not "_CID" in inputData, not "_seed" in inputData))
                 
                 reqConsoleID = inputData["_CID"]
 
@@ -71,8 +70,7 @@ class CTGP7ServerHandler:
 
             except Exception:
                 outputData["res"] = -1
-                if (CTGP7ServerHandler.debug_mode):
-                    traceback.print_exc()
+                traceback.print_exc()
             
             process = subprocess.Popen(["./encbsondocument", "e"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
             process.stdin.write(bson.dumps(outputData))

@@ -246,12 +246,12 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
     try:
         ch = SELF_BOT_SERVER.get_channel(ch_list()["STATS"])
         if (ch is None):
-            raise Exception()
+            raise Exception("Couldn't get stats channel")
         msg1 = await ch.fetch_message(stats_message_id[0])
         msg2 = await ch.fetch_message(stats_message_id[1])
         vrLead = await ch.fetch_message(vr_message_id)
         if (msg1 is None or msg1.author != SELF_BOT_MEMBER or msg2 is None or msg2.author != SELF_BOT_MEMBER or vrLead is None or vrLead.author != SELF_BOT_MEMBER):
-            raise Exception()
+            raise Exception("Stats message invalid state")
         tried_edit_stats_message_times = 0
 
         genStats = ctgp7_server.database.get_stats()
@@ -339,12 +339,11 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
         await update_graph_message(ctgp7_server)
 
     except Exception:
+        traceback.print_exc()
         tried_edit_stats_message_times += 1
         if (tried_edit_stats_message_times == 6 * 30):
             staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["STAFF"])
             await staff_chan.send("<@&383673430030942208> Failed to update stats for more than 30 min.")
-        if (CTGP7ServerHandler.debug_mode):
-            traceback.print_exc()
         return
 
 async def prepare_server_channels(ctgp7_server: CTGP7ServerHandler):
@@ -405,7 +404,9 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler):
             if msgID == 0:
                 msg = await ctwwChan.send("Room is being created...")
                 msgID = msg.id
-                ctgp7_server.ctwwHandler.update_room_messageID(room["gID"], msgID)
+                if (not ctgp7_server.ctwwHandler.update_room_messageID(room["gID"], msgID)):
+                    await msg.delete()
+                    continue
             embed=discord.Embed(title="{} Room".format(room["gameMode"]), description="State: {}\nID: 0x{:08X}".format(room["state"], room["fakeID"]), color=0xff0000, timestamp=datetime.datetime.utcnow())
             playerString = "```\n"
             for player in room["players"]:
@@ -420,7 +421,7 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler):
                 playerString = "```\n- (None)\n```"
             embed.add_field(name="Players", value=playerString, inline=False)
             await msg.edit(embed=embed, content=None)
-            profanityProb = profanity_check.predict_prob([playerString])[0]
+            # profanityProb = profanity_check.predict_prob([playerString])[0]
             if (False): # Disable this for now until I find a proper way to handle it
                 chPrivate = SELF_BOT_SERVER.get_channel(ch_list()["STAFFKICKS"])
                 embed1 = discord.Embed(title="Possible profanity.", description="Probability: {:02f}%".format(profanityProb * 100), color=0xff7f00, timestamp=datetime.datetime.utcnow())
@@ -454,7 +455,7 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler):
         except:
             pass
     all_prev_room_msg_ids = currMsgIds
-    pass
+
 server_bot_loop_dbcommit_cnt = 0
 async def server_bot_loop(ctgp7_server: CTGP7ServerHandler):
     firstLoop = True

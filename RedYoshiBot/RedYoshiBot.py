@@ -1479,6 +1479,7 @@ async def on_message(message):
                                         return
                                     except:
                                         await message.reply( "**Couldn't edit message:** Internal error.")
+                                        traceback.print_exc()
                                         return
                                 else:
                                     await message.reply( "**Couldn't edit message:** Not a bot message.")
@@ -1507,7 +1508,8 @@ async def on_message(message):
                         try:
                             os._exit(0)
                         except:
-                            pass
+                            traceback.print_exc()
+                            while(True): pass
                 elif bot_cmd == 'ping':
                     tag = message.content.split()
                     if (len(tag) != 2):
@@ -1535,8 +1537,8 @@ async def on_message(message):
                             final_text = await fact_parse(fact_id)
                         except:
                             print("Error parsing: " + fact_id)
+                            traceback.print_exc()
                             raise
-                            return
                     else:
                         try:
                             fact_text = await db_mng.fact_get_byrow(int(tag[2]))
@@ -1548,8 +1550,8 @@ async def on_message(message):
                             final_text = await fact_parse(fact_id)
                         except:
                             print("Error parsing: " + fact_id)
+                            traceback.print_exc()
                             raise
-                            return
                     if (len(final_text) < 1994):
                         await message.reply( "```" + final_text + "```")
                 elif bot_cmd == 'listfact':
@@ -1912,10 +1914,8 @@ async def on_message(message):
             if (message.author != client.user):
                 await checkNitroScam(message)
     except:
-        if(debug_mode):
-            raise
-        else:
-            pass
+        traceback.print_exc()
+        pass
 
 def exit_handler():
     print("Unexpected exit at {}, rebooting in 10 seconds.".format(str(datetime.datetime.now())))

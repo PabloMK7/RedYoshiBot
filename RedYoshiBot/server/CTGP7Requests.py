@@ -161,8 +161,7 @@ class CTGP7Requests:
                     outData[k]["res"] = res
                     outData[k]["value"] = value
                 except:
-                    if (self.debug):
-                        traceback.print_exc()
+                    traceback.print_exc()
                     outData[k]["res"] = -1
                 requestList += "  " + k + "\n    in:\n      {}\n    res:\n      {}\n    out:\n      {}\n".format(inData, res, value)
             elif (len(k) > 4 and k.startswith("put_")):
@@ -177,8 +176,7 @@ class CTGP7Requests:
                     outData[k]["res"] = res
                     outData[k]["value"] = value
                 except:
-                    if (self.debug):
-                        traceback.print_exc()
+                    traceback.print_exc()
                     outData[k]["res"] = -1
                 putList += "  " + k + "\n    in:\n      {}\n    res:\n      {}\n    out:\n      {}\n".format(inData, res, value)
         self.info = ""

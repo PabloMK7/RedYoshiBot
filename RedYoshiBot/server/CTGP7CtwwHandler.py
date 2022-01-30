@@ -65,25 +65,31 @@ class OnlineUser:
         self.isVerified = isVerified
         self.vr = [1000, 1000]
         self.vrIncr = None
-        self.isDebug = False
+        self.debug = False
+        self.pretendo = False
+
+    def setPretendo(self):
+        self.pretendo = True
+    
+    def isPretendo(self):
+        return self.pretendo
 
     def setDebug(self):
-        self.isDebug = True
+        self.debug = True
+
+    def isDebug(self):
+        return self.debug
 
     def setVR(self, vr):
-        if (self.isDebug): return
         self.vr = vr
     
     def getVR(self):
-        if (self.isDebug): return [50000, 50000]
         return self.vr
 
     def setVRIncr(self, vrIncr):
-        if (self.isDebug): return
         self.vrIncr = vrIncr
 
     def getVRIncr(self):
-        if (self.isDebug): return
         return self.vrIncr
 
     def setState(self, state: int):
@@ -145,7 +151,7 @@ class OnlineRoom:
         self.needsUpdate = True
     
     def getKeySeed(self, user):
-        return self.roomKeySeed + (1 if user is not None and user.isDebug else 0)
+        return self.roomKeySeed + (1 if user is not None and user.isDebug() else 0)
     
     def removePlayer(self, user: OnlineUser=None, cID:int =None):
         cidRem = None
@@ -320,6 +326,7 @@ class CTGP7CtwwHandler:
             isRelogin = input.get("reLogin")
             miiName = input.get("miiName")
             isDebug = input.get("debugRegion")
+            isPretendo = input.get("pretendo")
             retDict = {}
             
             if (isRelogin is None or localver is None or miiName is None):
@@ -351,9 +358,10 @@ class CTGP7CtwwHandler:
             retDict["token"] = user.getToken()
             vrData = self.database.get_console_vr(cID)
             if (isDebug): user.setDebug()
+            if (isPretendo): user.setPretendo()
             user.setVR(vrData)
-            retDict["ctvr"] = 50000 if isDebug else vrData[0]
-            retDict["cdvr"] = 50000 if isDebug else vrData[1]
+            retDict["ctvr"] = vrData[0]
+            retDict["cdvr"] = vrData[1]
             retDict["regionID"] = self.database.get_debugonline_region() if isDebug else self.database.get_online_region()
 
             if (consoleMsg is not None and consoleMsg[0] == CTWWLoginStatus.MESSAGE.value):
@@ -388,8 +396,8 @@ class CTGP7CtwwHandler:
             retDict["roomKeySeed"] = room.getKeySeed(user)
             user.setState(UserState.SEARCHING.value)
             vrData = self.database.get_console_vr(cID)
-            retDict["ctvr"] = 50000 if user.isDebug else vrData[0]
-            retDict["cdvr"] = 50000 if user.isDebug else vrData[1]
+            retDict["ctvr"] = vrData[0]
+            retDict["cdvr"] = vrData[1]
             user.setVR([vrData[0], vrData[1]])
             user.setVRIncr(None)
 
@@ -471,8 +479,7 @@ class CTGP7CtwwHandler:
                 room.enableLog()
             
             user.isAlive()
-            if (not user.isDebug):
-                self.database.set_console_vr(cID, [ctvr, cdvr])
+            self.database.set_console_vr(cID, [ctvr, cdvr])
 
             return (CTWWLoginStatus.SUCCESS.value, {})
     
@@ -490,8 +497,7 @@ class CTGP7CtwwHandler:
             if (user is None): # User not logged in
                 return (CTWWLoginStatus.NOTLOGGED.value, {})
 
-            if (not user.isDebug):
-                self.database.set_console_vr(cID, [ctvr, cdvr])
+            self.database.set_console_vr(cID, [ctvr, cdvr])
 
             room = self.activeRooms.get(gID)
             if (room is None or not room.hasPlayer(user)):
@@ -603,8 +609,9 @@ class CTGP7CtwwHandler:
         with self.lock:
             room = self.activeRooms.get(gID)
             if (room is None):
-                return
+                return False
             room.setMessageID(messageID)
+            return True
 
     def disband_room(self, gID:int):
         with self.lock:
@@ -613,6 +620,22 @@ class CTGP7CtwwHandler:
                 room.disband()
                 return True
             return False
+
+    def getSpecialRoomState(self, room: OnlineRoom):
+        isDebug = False
+        isPretendo = False
+        for u in room.getPlayers():
+            user = self.loggedUsers.get(u)
+            if (user is None):
+                continue
+            if (user.isDebug()):
+                isDebug = True
+            if (user.isPretendo()):
+                isPretendo = True
+        ret = ""
+        if (isPretendo): ret += " Pretendo"
+        if (isDebug): ret += " (Debug)"
+        return ret
 
     def fetch_state(self):
         with self.lock:
@@ -633,13 +656,12 @@ class CTGP7CtwwHandler:
                 roomInfo["gID"] = room.gID
                 roomInfo["playerCount"] = playerCount
                 roomInfo["state"] = room.getStateName()
-                roomInfo["gameMode"] = room.getModeName()
+                roomInfo["gameMode"] = room.getModeName() + self.getSpecialRoomState(room)
                 roomInfo["fakeID"] = (room.getKeySeed(None) & 0xFFFFFF) | 0x03000000
                 roomInfo["messageID"] = room.getMessageID()
                 roomInfo["updated"] = room.wasUpdated()
                 roomInfo["log"] = room.needsLog()
                 roomInfo["players"] = []
-                setToDebug = False
                 for u in room.getPlayers():
                     user = self.loggedUsers.get(u)
                     if (user is None):
@@ -652,9 +674,6 @@ class CTGP7CtwwHandler:
                     userInfo["state"] = user.getStateName()
                     userInfo["cID"] = u
                     userInfo["verified"] = user.verified()
-                    if user.isDebug and not setToDebug:
-                        roomInfo["gameMode"] += " (Debug)"
-                        setToDebug = True
                     roomInfo["players"].append(userInfo)
                 roomInfo["players"].sort(key=lambda x:x["vr"], reverse=True)
                 ret["rooms"].append(roomInfo)
