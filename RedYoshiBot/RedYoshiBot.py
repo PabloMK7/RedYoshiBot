@@ -276,9 +276,10 @@ def get_from_mention(mention):
             return None
     elif (type(mention) is int):
         mID = mention
-    
     try:
-        return client.get_guild(SERVER_ID()).get_member(mID)
+        ret : discord.Member
+        ret = client.get_guild(SERVER_ID()).get_member(mID)
+        return ret
     except:
         return None
 
@@ -491,26 +492,18 @@ def NUMBER_EMOJI():
 def PLAYING_GAME():
     return ["Yoshi's Story", "Yoshi's Cookie", "Yoshi's Island", "Super Smash Bros.", "Mario Party 8", "Yoshi's Woolly World", "Mario Kart 7", "CTGP-R", "Yoshi Touch & Go"]
 
-def MUTEROLE_ID():
-    return 385544890030751754
-    
-def ADMINROLE_ID():
-    return 222417567036342272
-
-def MODERATORROLE_ID():
-    return 315474999001612288
-
-def STAFFROLE_ID():
-    return 383673430030942208
-
-def CONTRIBUTORROLE_ID():
-    return 326154532977377281
-
-def COURSECREATORROLE_ID():
-    return 325843915125030914
-
-def BETAACCESSROLE_ID():
-    return 894352603830419506
+def role_list():
+    return {
+        "MUTE": 385544890030751754,
+        "ADMIN": 222417567036342272,
+        "MODERATOR": 315474999001612288,
+        "STAFF": 383673430030942208,
+        "CONTRIBUTOR": 326154532977377281,
+        "COURSECREATOR": 325843915125030914,
+        "BETAACCESS": 894352603830419506,
+        # Roles with icons
+        "PLAYER": 946727706005995561
+    }
 
 def SERVER_ID():
     return 163070769067327488
@@ -522,6 +515,8 @@ def EMERGENCY_SPECIAL_ROLES():
         325843915125030914, # Course creator
         326154532977377281, # Contributor
         385544890030751754, # Muted
+        # Roles with icons
+        946727706005995561, # Player
     ]
 
 def MIKU_EMOJI_ID():
@@ -555,19 +550,19 @@ def NUMBER_EMOJI():
 def PLAYING_GAME():
      return ["Yoshi's Story", "Yoshi's Cookie", "Yoshi's Island", "Super Smash Bros.", "Mario Party 8", "Yoshi's Woolly World", "Mario Kart 7", "CTGP-R", "Yoshi Touch & Go"]
 
-def MUTEROLE_ID():
+def role_list()["MUTE"]:
      return 749238545922654271
 
-def ADMINROLE_ID():
+def role_list()["ADMIN"]:
     return 749238765351862282
 
-def MODERATORROLE_ID():
+def role_list()["MODERATOR"]:
     return 808687591331332117
 
-def CONTRIBUTORROLE_ID():
+def role_list()["CONTRIBUTOR"]:
     return 0
 
-def COURSECREATORROLE_ID():
+def role_list()["COURSECREATOR"]():
     return 0
 
 def SERVER_ID():
@@ -605,19 +600,19 @@ def NUMBER_EMOJI():
 def PLAYING_GAME():
      return ["Yoshi's Story", "Yoshi's Cookie", "Yoshi's Island", "Super Smash Bros.", "Mario Party 8", "Yoshi's Woolly World", "Mario Kart 7", "CTGP-R", "Yoshi Touch & Go"]
 
-def MUTEROLE_ID():
+def role_list()["MUTE"]:
      return 813449937244127232
 
-def ADMINROLE_ID():
+def role_list()["ADMIN"]:
     return 813450092437962813
 
-def MODERATORROLE_ID():
+def role_list()["MODERATOR"]:
     return 813450017343406130
 
-def CONTRIBUTORROLE_ID():
+def role_list()["CONTRIBUTOR"]:
     return 0
 
-def COURSECREATORROLE_ID():
+def role_list()["COURSECREATOR"]():
     return 0
 
 def SERVER_ID():
@@ -651,8 +646,8 @@ def parsetime(timestr):
 async def staff_can_execute(message, command, silent=False):
     retVal = False
     if (is_channel(message, ch_list()["STAFF"])):
-        moderatorRole = get_role(MODERATORROLE_ID())
-        adminRole = get_role(ADMINROLE_ID())
+        moderatorRole = get_role(role_list()["MODERATOR"])
+        adminRole = get_role(role_list()["ADMIN"])
         hasMod = moderatorRole in message.author.roles
         hasAdmin = (adminRole in message.author.roles) or message.author.id == SELF_BOT_SERVER.owner.id
         privilegeLevel = -1 if message.author.id == SELF_BOT_SERVER.owner.id else (0 if hasAdmin else (1 if hasMod else 2))
@@ -706,26 +701,40 @@ async def punish(member, amount, onRejoin=False):
             except:
                 pass
 
+async def applyRole(memberID, roleID, atomic = False):
+    try:
+        user = get_from_mention(memberID)
+        if (user is not None):
+            role = get_role(roleID)
+            await user.add_roles(role, atomic=atomic)
+    except:
+        pass
+
+async def removeRole(memberID, roleID, atomic = False):
+    try:
+        user = get_from_mention(memberID)
+        if (user is not None):
+            role = get_role(roleID)
+            await user.remove_roles(role, atomic=atomic)
+    except:
+        pass
+
 async def mute_user(memberid, amount):
     global db_mng
     global client
     global SELF_BOT_SERVER
     await db_mng.mute_apply(memberid, amount)
-    muted_user = get_from_mention(memberid)
-    if (muted_user is not None):
-        mute_role = get_role(MUTEROLE_ID())
-        await muted_user.add_roles(mute_role)
+    await applyRole(memberid, role_list()["MUTE"])
 
 async def unmute_user(memberid):
     global db_mng
     global client
     global SELF_BOT_SERVER
     await db_mng.mute_remove(memberid)
+    await removeRole(memberid, role_list()["MUTE"])
     muted_user = get_from_mention(memberid)
     if (muted_user is not None):
-        mute_role = get_role(MUTEROLE_ID())
         try:
-            await muted_user.remove_roles(mute_role)
             await muted_user.send("**CTGP-7 server:** You have been unmuted.")
         except:
             pass
@@ -1042,7 +1051,7 @@ async def checkNitroScam(message):
             await message.author.kick()
             
 
-from .server.CTGP7BotHandler import get_user_info, handle_server_command, handler_server_init_loop, handler_server_update_globals, kick_message_callback, server_message_logger_callback
+from .server.CTGP7BotHandler import get_user_info, handle_server_command, handler_server_init_loop, handler_server_update_globals, kick_message_callback, server_message_logger_callback, server_on_member_remove
 
 @client.event
 async def on_ready():
@@ -1098,6 +1107,8 @@ async def on_member_remove(member):
     global SELF_BOT_SERVER
     global db_mng
     global client
+    global ctgp7_server
+    await server_on_member_remove(ctgp7_server, member)
     door_chan = SELF_BOT_SERVER.get_channel(ch_list()["DOORSTEP"])
     await door_chan.send("See ya **{}**. We are now {} members.".format(member.name, SELF_BOT_SERVER.member_count))
     

@@ -2,7 +2,7 @@ from typing import Tuple
 from RedYoshiBot.server.CTGP7Requests import CTGP7Requests
 from .CTGP7ServerHandler import CTGP7ServerHandler
 from .CTGP7ServerDatabase import ConsoleMessageType
-from ..RedYoshiBot import FakeMember, ch_list, is_channel, is_channel_private, get_role, parsetime, sendMultiMessage, escapeFormatting, MODERATORROLE_ID, ADMINROLE_ID, get_from_mention, CreateFakeMember, CONTRIBUTORROLE_ID, COURSECREATORROLE_ID, BETAACCESSROLE_ID
+from ..RedYoshiBot import FakeMember, ch_list, is_channel, is_channel_private, get_role, parsetime, sendMultiMessage, escapeFormatting, role_list, get_from_mention, CreateFakeMember, applyRole, removeRole
 from ..CTGP7Defines import CTGP7Defines
 import discord
 import asyncio
@@ -44,7 +44,9 @@ def staff_server_help_array():
         "region": ">@RedYoshiBot server region (newvalue)\nSets the CTWW/CD online region in the server.",
         "manage_vr": ">@RedYoshiBot server manage_vr (get/set) (consoleID) (ctww/cd) (newvalue)\nGets or sets the VR for the specified console (Don't set if console is in racing state online).",
         "getlink": ">@RedYoshiBot server getlink (consoleID/discordID)\nGets link between console ID and Discord account.",
-        "unlink": ">@RedYoshiBot server getlink (consoleID/discordID)\nBreaks the link between console ID and Discord account."
+        "unlink": ">@RedYoshiBot server getlink (consoleID/discordID)\nBreaks the link between console ID and Discord account.",
+        "apply_player_role": ">@RedYoshiBot server apply_player_role\nVERY SLOW!!! Applies the Player role to all linked console accounts.",
+        "purge_console_link": ">@RedYoshiBot server purge_console_link\nRemoved console links from users that are no longer in the server."
     }
     
 def staff_server_command_level():
@@ -65,14 +67,16 @@ def staff_server_command_level():
         "region": 0,
         "manage_vr": 1,
         "getlink": 1,
-        "unlink": 1
+        "unlink": 1,
+        "apply_player_role": 0,
+        "purge_console_link": 0
     }
 
 async def staff_server_can_execute(message, command, silent=False):
     retVal = False
     if (is_channel(message, ch_list()["STAFF"])):
-        moderatorRole = get_role(MODERATORROLE_ID())
-        adminRole = get_role(ADMINROLE_ID())
+        moderatorRole = get_role(role_list()["MODERATOR"])
+        adminRole = get_role(role_list()["ADMIN"])
         hasMod = moderatorRole in message.author.roles
         hasAdmin = (adminRole in message.author.roles) or message.author.id == SELF_BOT_SERVER.owner.id
         privilegeLevel = 0 if hasAdmin else (1 if hasMod else 2)
@@ -456,6 +460,12 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler):
             pass
     all_prev_room_msg_ids = currMsgIds
 
+async def server_on_member_remove(ctgp7_server: CTGP7ServerHandler, member: discord.Member):
+    try:
+        ctgp7_server.database.delete_discord_link_user(member.id)
+    except:
+        pass
+
 server_bot_loop_dbcommit_cnt = 0
 async def server_bot_loop(ctgp7_server: CTGP7ServerHandler):
     firstLoop = True
@@ -490,9 +500,9 @@ def get_user_info(userID):
     ret["discrim"] = str(member.discriminator)
     ret["nick"] = member.display_name
 
-    contrRole = get_role(CONTRIBUTORROLE_ID())
-    courseRole = get_role(COURSECREATORROLE_ID())
-    betaAccessRole = get_role(BETAACCESSROLE_ID())
+    contrRole = get_role(role_list()["CONTRIBUTOR"])
+    courseRole = get_role(role_list()["COURSECREATOR"])
+    betaAccessRole = get_role(role_list()["BETAACCESS"])
     ret["canBeta"] = contrRole in member.roles or courseRole in member.roles or betaAccessRole in member.roles or member.premium_since is not None
     return ret
 
@@ -811,6 +821,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
         ctgp7_server.database.set_discord_link_console(message.author.id, cID)
         del CTGP7Requests.pendingDiscordLinks[cID]
         await message.reply("Operation succeeded.")
+        await applyRole(message.author.id, role_list()["PLAYER"])
     elif bot_cmd == "getlink":
         if await staff_server_can_execute(message, bot_cmd):
             tag = get_server_bot_args(message.content)
@@ -922,6 +933,31 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 vrData[0 if game == "ctww" else 1] = vr
                 ctgp7_server.database.set_console_vr(consoleID, tuple(vrData))
                 await message.reply( "Operation succeeded.")
+    elif bot_cmd == "apply_player_role":
+        if await staff_server_can_execute(message, bot_cmd):
+            await message.channel.send("WARNING: This operation is slow and will take some time!")
+            allCons = ctgp7_server.database.get_all_discord_link()
+            total = 0
+            curr = 0
+            for ac in allCons:
+                userID = ac[1]
+                member = get_from_mention(userID)
+                if (member is not None):
+                    await applyRole(member.id, role_list()["PLAYER"])
+                    curr += 1
+                total += 1
+            await message.reply("Done! Success: {}, Fail: {}".format(curr, total - curr))
+    elif bot_cmd == "purge_console_link":
+        if await staff_server_can_execute(message, bot_cmd):
+            allCons = ctgp7_server.database.get_all_discord_link()
+            total = 0
+            for ac in allCons:
+                userID = ac[1]
+                member = get_from_mention(userID)
+                if (member is None):
+                    ctgp7_server.database.delete_discord_link_user(userID)
+                    total += 1
+            await message.reply("Done! Purged {} users.".format(total))
     else:
         await message.reply( "Invalid server command, use `@RedYoshiBot server help` to get all the available server commands.")
         

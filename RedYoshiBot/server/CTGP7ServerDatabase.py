@@ -361,8 +361,22 @@ class CTGP7ServerDatabase:
             for row in rows:
                 return row[0]
             return None
+    
+    def get_all_discord_link(self):
+        ret = []
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM discord_link")
+            for row in rows:
+                ret.append((row[0], row[1]))
+            return ret
 
     def delete_discord_link_console(self, cID):
         with self.lock:
             c = self.conn.cursor()
             c.execute("DELETE FROM discord_link WHERE cID = ?", (int(cID),))
+
+    def delete_discord_link_user(self, discordID):
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute("DELETE FROM discord_link WHERE discordID = ?", (int(discordID),))
