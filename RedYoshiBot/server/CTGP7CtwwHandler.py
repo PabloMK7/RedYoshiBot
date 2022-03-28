@@ -1,3 +1,4 @@
+from PIL import Image
 from .CTGP7ServerDatabase import CTGP7ServerDatabase, ConsoleMessageType
 from ..CTGP7Defines import CTGP7Defines
 from enum import Enum
@@ -7,6 +8,8 @@ import textwrap
 import uuid
 import threading
 import random
+import subprocess
+import sys
 
 current_time_min = lambda: int(round(time.time() / 60))
 
@@ -317,22 +320,49 @@ class CTGP7CtwwHandler:
             return user
         else:
             return None
+    
+    def getMiiIconData(self, cID):
+        miiIcon = self.database.get_mii_icon(cID)
+        if miiIcon is None:
+            return None
+        process = subprocess.Popen(["./lz77", "d"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        process.stdin.write(len(miiIcon).to_bytes(4, sys.byteorder))
+        process.stdin.write(miiIcon)
+        process.stdin.flush()
+        uncompData = process.stdout.read()
+        process.wait()
+        if (process.returncode != 0):
+            return None
+        return uncompData
+
+    def getMiiIcon(self, cID):
+        miiIcon = self.getMiiIconData(cID)
+        if (miiIcon is None):
+            return None
+        
+        decoder = TEXRGBA5551(miiIcon, 64, 64)
+
+        im = Image.new("RGBA", (64, 64))
+        im.putdata(decoder.ToRGBA8888())
+        return im
 
     def handle_user_login(self, input: dict, cID: int):
         with self.lock:
             nameMode = input.get("nameMode")
             nameValue = input.get("nameValue")
             localver = input.get("localVer")
+            betaVer = input.get("localBetaVer")
             isRelogin = input.get("reLogin")
             miiName = input.get("miiName")
             isDebug = input.get("debugRegion")
             isPretendo = input.get("pretendo")
+            miiChecksum = input.get("miiIconChecksum")
             retDict = {}
             
             if (isRelogin is None or localver is None or miiName is None):
                 return (-1, {})
 
-            if (not isRelogin and self.database.get_ctww_version() != localver):
+            if (not isRelogin and (self.database.get_ctww_version() != localver or (betaVer is not None and self.database.get_beta_version() != betaVer))):
                 return (CTWWLoginStatus.VERMISMATCH.value, retDict)
 
             if (nameMode is None):
@@ -363,6 +393,10 @@ class CTGP7CtwwHandler:
             retDict["ctvr"] = vrData[0]
             retDict["cdvr"] = vrData[1]
             retDict["regionID"] = self.database.get_debugonline_region() if isDebug else self.database.get_online_region()
+
+            if (miiChecksum is not None):
+                storedChecksum = self.database.get_mii_icon_checksum(cID)
+                retDict["needsMiiUpload"] = storedChecksum is None or storedChecksum != miiChecksum
 
             if (consoleMsg is not None and consoleMsg[0] == CTWWLoginStatus.MESSAGE.value):
                 retDict["loginMessage"] = consoleMsg[1]
@@ -410,12 +444,13 @@ class CTGP7CtwwHandler:
             gID = input.get("gatherID")
             isHost = input.get("imHost")
             localver = input.get("localVer")
+            betaVer = input.get("localBetaVer")
             token = input.get("token")
 
             if (localver is None):
                 return (-1, {})
 
-            if (self.database.get_ctww_version() != localver):
+            if (self.database.get_ctww_version() != localver or (betaVer is not None and self.database.get_beta_version() != betaVer)):
                 return (CTWWLoginStatus.VERMISMATCH.value, {})
 
             if (gID is None or isHost is None or token is None):
@@ -680,3 +715,64 @@ class CTGP7CtwwHandler:
                 room.resetUpdate()
             
             return ret
+
+
+# From https://github.com/kwsch/png2bclim/blob/master/png2bclim/BCLIM.cs
+class TEXRGBA5551:
+    
+    def __init__(self, data, sizeX, sizeY):
+        self.data = data
+        self.sizeX = sizeX
+        self.sizeY = sizeY
+    
+    def __gcm(self, n, m):
+        return ((n + m - 1) // m) * m
+
+    def __d2xy(self, d):
+        x = d
+        y = (x >> 1)
+        x &= 0x55555555
+        y &= 0x55555555
+        x |= (x >> 1)
+        y |= (y >> 1)
+        x &= 0x33333333
+        y &= 0x33333333
+        x |= (x >> 2)
+        y |= (y >> 2)
+        x &= 0x0f0f0f0f
+        y &= 0x0f0f0f0f
+        x |= (x >> 4)
+        y |= (y >> 4)
+        x &= 0x00ff00ff
+        y &= 0x00ff00ff
+        x |= (x >> 8)
+        y |= (y >> 8)
+        x &= 0x0000ffff
+        y &= 0x0000ffff
+        return (x, y)
+
+    def ToRGBA8888(self):
+        dataRet = [()] * (self.sizeX * self.sizeY)
+
+        def iteru16(data:bytes):
+            for i in range(0, len(data), 2):
+                yield data[i] | (data[i+1] << 8)
+
+        i = 0
+        p = self.__gcm(self.sizeX, 8) // 8
+        if (p == 0): p = 1
+
+        for px in iteru16(self.data): #RGBA5551 to RGBA8888
+            r = ((px >> 11) & 0x1F) * 255/31
+            g = ((px >> 6) & 0x1F) * 255/31
+            b = ((px >> 1) & 0x1F) * 255/31
+            a = (px & 1) * 255
+
+            x, y = self.__d2xy(i % 64)
+            tile = i // 64
+            x += (tile % p) * 8
+            y += (tile // p) * 8
+
+            dataRet[x + y * self.sizeX] = (int(r),int(g),int(b),int(a))
+            i+=1
+        return dataRet

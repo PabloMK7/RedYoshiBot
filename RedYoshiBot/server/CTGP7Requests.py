@@ -125,6 +125,14 @@ class CTGP7Requests:
 
     def server_user_heartbeat(self, input):
         return self.ctwwHandler.handle_user_heartbeat(input, self.cID)
+    
+    def put_mii_icon(self, input):
+        miiIcon = input.get("miiIcon")
+        miiIconChecksum = input.get("miiIconChecksum")
+        if (miiIcon is None or miiIconChecksum is None):
+            return (-1, 0)
+        self.database.set_mii_icon(self.cID, miiIcon, miiIconChecksum)
+        return (0, 0)
 
     request_functions = {
         "betaver": get_beta_version,
@@ -142,7 +150,12 @@ class CTGP7Requests:
         "onlwatch": server_user_room_watch_handler,
         "onlleaveroom": server_user_room_leave_handler,
         "hrtbt": server_user_heartbeat,
+        "miiicon": put_mii_icon
     }
+
+    hide_logs_input = [
+        "miiicon"
+    ]
 
     def solve(self):
         outData = {}
@@ -163,6 +176,8 @@ class CTGP7Requests:
                 except:
                     traceback.print_exc()
                     outData[k]["res"] = -1
+                if reqType in CTGP7Requests.hide_logs_input:
+                    inData = "__HIDDEN__"
                 requestList += "  " + k + "\n    in:\n      {}\n    res:\n      {}\n    out:\n      {}\n".format(inData, res, value)
             elif (len(k) > 4 and k.startswith("put_")):
                 putType = k[4:]
@@ -178,6 +193,8 @@ class CTGP7Requests:
                 except:
                     traceback.print_exc()
                     outData[k]["res"] = -1
+                if putType in CTGP7Requests.hide_logs_input:
+                    inData = "__HIDDEN__"
                 putList += "  " + k + "\n    in:\n      {}\n    res:\n      {}\n    out:\n      {}\n".format(inData, res, value)
         self.info = ""
         if (requestList != ""):

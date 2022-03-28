@@ -380,3 +380,33 @@ class CTGP7ServerDatabase:
         with self.lock:
             c = self.conn.cursor()
             c.execute("DELETE FROM discord_link WHERE discordID = ?", (int(discordID),))
+
+    def get_mii_icon(self, cID) -> bytes:
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT data FROM mii_icon WHERE cID = ?", (int(cID),))
+            for row in rows:
+                return bytes(row[0])
+            return None
+    
+    def get_mii_icon_checksum(self, cID) -> int:
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT checksum FROM mii_icon WHERE cID = ?", (int(cID),))
+            for row in rows:
+                return row[0]
+            return None
+    
+    def set_mii_icon(self, cID, data: bytes, checksum: int):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT cID FROM mii_icon WHERE cID = ?", (int(cID),))
+            for row in rows:
+                c.execute("UPDATE mii_icon SET data = ?, checksum = ? WHERE cID = ?", (sqlite3.Binary(data), int(checksum), int(cID)))
+                return
+            c.execute('INSERT INTO mii_icon VALUES (?,?,?)', (int(cID), sqlite3.Binary(data), int(checksum)))
+
+    def delete_mii_icon(self, cID):
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute("DELETE FROM mii_icon WHERE cID = ?", (int(cID),))

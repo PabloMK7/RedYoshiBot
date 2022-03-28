@@ -11,6 +11,7 @@ import traceback
 import datetime
 import profanity_check
 import matplotlib.pyplot as plt
+from PIL import Image
 import io
 
 SELF_BOT_MEMBER = None
@@ -46,7 +47,8 @@ def staff_server_help_array():
         "getlink": ">@RedYoshiBot server getlink (consoleID/discordID)\nGets link between console ID and Discord account.",
         "unlink": ">@RedYoshiBot server getlink (consoleID/discordID)\nBreaks the link between console ID and Discord account.",
         "apply_player_role": ">@RedYoshiBot server apply_player_role\nVERY SLOW!!! Applies the Player role to all linked console accounts.",
-        "purge_console_link": ">@RedYoshiBot server purge_console_link\nRemoved console links from users that are no longer in the server."
+        "purge_console_link": ">@RedYoshiBot server purge_console_link\nRemoved console links from users that are no longer in the server.",
+        "get_mii_icon": ">@RedYoshiBot server get_mii_icon (consoleID)\nGets the mii icon of the specified user."
     }
     
 def staff_server_command_level():
@@ -69,7 +71,8 @@ def staff_server_command_level():
         "getlink": 1,
         "unlink": 1,
         "apply_player_role": 0,
-        "purge_console_link": 0
+        "purge_console_link": 0,
+        "get_mii_icon": 1,
     }
 
 async def staff_server_can_execute(message, command, silent=False):
@@ -818,6 +821,14 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             await message.reply("Invalid code provided.")
             return
         
+        if (ctgp7_server.database.get_discord_link_console(cID) is not None):
+            await message.reply("The specified console is already linked to another discord account. Ask one of the staff members to unlink the account.")
+            return
+        
+        if (ctgp7_server.database.get_discord_link_user(message.author.id) is not None):
+            await message.reply("The specified discord account is already linked to another console. Ask one of the staff members to unlink the console.")
+            return
+
         ctgp7_server.database.set_discord_link_console(message.author.id, cID)
         del CTGP7Requests.pendingDiscordLinks[cID]
         await message.reply("Operation succeeded.")
@@ -958,6 +969,26 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     ctgp7_server.database.delete_discord_link_user(userID)
                     total += 1
             await message.reply("Done! Purged {} users.".format(total))
+    elif bot_cmd == "get_mii_icon":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content)
+            if (len(tag) != 3):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["get_mii_icon"] + "```")
+                return
+            try:
+                consoleID = int(tag[2], 16)
+            except:
+                await message.reply("Invalid console ID provided.")
+                return
+            miiIcon = ctgp7_server.ctwwHandler.getMiiIcon(consoleID)
+            miiName = ctgp7_server.database.get_console_last_name(consoleID)
+            if (miiIcon is None):
+                await message.reply("Specified ID has no mii icon.")
+                return
+            with io.BytesIO() as image_binary:
+                miiIcon.save(image_binary, 'PNG')
+                image_binary.seek(0)
+                await message.reply("Mii for {}:".format(miiName), file=discord.File(fp=image_binary, filename='mii.png'))
     else:
         await message.reply( "Invalid server command, use `@RedYoshiBot server help` to get all the available server commands.")
         
