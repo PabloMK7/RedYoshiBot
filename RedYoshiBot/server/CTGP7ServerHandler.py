@@ -54,7 +54,7 @@ class CTGP7ServerHandler:
 
                 inputData = bson.loads(connData)
                 if not "_CID" in inputData or not "_seed" in inputData:
-                    raise Exception("Input is missing: cID: {}, seed: {}\n{}".format(not "_CID" in inputData, not "_seed" in inputData, inputData))
+                    raise Exception("Input is missing: cID: {}, seed: {}".format(not "_CID" in inputData, not "_seed" in inputData))
                 
                 reqConsoleID = inputData["_CID"]
 
