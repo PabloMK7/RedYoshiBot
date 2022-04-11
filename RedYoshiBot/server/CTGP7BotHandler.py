@@ -95,6 +95,10 @@ def get_server_bot_args(content: str, maxslplits=-1): # splits: amount of cuts a
     realsplits = maxslplits + 1 if maxslplits != -1 else maxslplits
     return content.split(maxsplit=realsplits)[1:]
 
+def purge_player_name_symbols(line: str):
+    toTranslate = dict.fromkeys(map(ord, '\n\r\u2705'), None)
+    return line.translate(toTranslate)
+
 def gen_course_usage_embed(ctgp7_server: CTGP7ServerHandler, course_type: int):
     mostTracks = ctgp7_server.database.get_most_played_tracks(course_type, 10000)
     tName = ""
@@ -331,7 +335,7 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
                 userName = ctgp7_server.database.get_console_last_name(user[0])
                 position = str(currPos)
                 positionSpaces = " " * max((4 - len(position)), 0)
-                leaderText += "{}.{}{}{}\n".format(position, positionSpaces, userName.replace("\u2705", ""), " \u2705" if ctgp7_server.database.get_console_is_verified(user[0]) else "")
+                leaderText += "{}.{}{}{}\n".format(position, positionSpaces, purge_player_name_symbols(userName), " \u2705" if ctgp7_server.database.get_console_is_verified(user[0]) else "")
                 leaderTextVR += "{}.{}{}vr\n".format(position, positionSpaces, str(user[1]))
                 currPos += 1
             leaderText += "```"
@@ -422,7 +426,7 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler):
                     vrStr = "{}({:+}) VR".format(player["vr"], player["vrIncr"])
                 else:
                     vrStr = "{} VR".format(player["vr"])
-                playerString += "{}{} - {} - {}\n".format(player["name"].replace("\u2705", ""), " \u2705" if player["verified"] else "", vrStr, player["state"])
+                playerString += "{}{} - {} - {}\n".format(purge_player_name_symbols(player["name"]), " \u2705" if player["verified"] else "", vrStr, player["state"])
             playerString += "```"
             if (playerString == "```\n```"):
                 playerString = "```\n- (None)\n```"
