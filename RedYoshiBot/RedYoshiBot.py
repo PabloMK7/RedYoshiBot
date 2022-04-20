@@ -14,6 +14,7 @@ from .QRCrashDecode import QRCrashDecode
 from .FunctionSearch import MK7FunctionSearch
 from . import MKTranslationDownload
 from .server.CTGP7ServerHandler import CTGP7ServerHandler
+from .HomeMenuVersionList import HomeMenuVersionList
 import hashlib
 import sqlite3
 import struct
@@ -877,6 +878,27 @@ async def change_game():
         await perform_game_change()
         await asyncio.sleep(600)
 
+async def check_version_list():
+    global db_mng
+    keepChecking = True
+    await asyncio.sleep(15)
+    while True:
+        if keepChecking:
+            try:
+                vList = HomeMenuVersionList()
+                japV = vList.get_version_for_title(0x0004000E00030600)
+                eurV = vList.get_version_for_title(0x0004000E00030700)
+                usaV = vList.get_version_for_title(0x0004000E00030800)
+                maxver = max(japV, eurV, usaV)
+                if (maxver > 1040):
+                    staffchan = client.get_channel(ch_list()["STAFF"])
+                    msg = await staffchan.send("@everyone\nAn update for Mario Kart 7 has been detected! (Version: {})\nSending update message in #announcements in 10 minutes... (use the messageID from this message to cancel with @RedYoshiBot cancel_schedule)".format(maxver))
+                    await db_mng.schedule_add(msg.id, ch_list()["ANN"], 10, "@everyone\nAn update for Mario Kart 7 has been detected!\n\n**DO NOT UPDATE MARIO KART 7 IF YOU WANT TO KEEP PLAYING CTGP-7.**\n\nPlease wait while we investigate this update.")
+                    keepChecking = False
+            except:
+                pass
+        await asyncio.sleep(600)
+
 G_LAST_PUNISH_TIME = datetime.datetime(year=2000, month=1, day=1)
 G_LAST_PUNISH_AMOUNT = 0
 def checkCanPunish(warnamount):
@@ -1075,6 +1097,7 @@ async def on_ready():
     CTGP7Requests.get_user_info = get_user_info
     asyncio.ensure_future(muted_task())
     asyncio.ensure_future(change_game())
+    asyncio.ensure_future(check_version_list())
     handler_server_update_globals(SELF_BOT_MEMBER, SELF_BOT_SERVER)
     handler_server_init_loop(ctgp7_server)
     print("Bot running: {}".format(str(datetime.datetime.now())))
