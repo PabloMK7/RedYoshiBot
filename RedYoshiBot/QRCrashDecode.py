@@ -115,7 +115,7 @@ class QRCrashDecode:
             ret += QRCrashDecode.SEPARATOR
             ret += "Text:\n\t" + data[1].decode("utf-8") + "\n"
             ret += QRCrashDecode.SEPARATOR
-            return ret
+            return ret.replace("`", "").replace("@", "(at)")
         except:
             raise Exception("QR Code parameters invalid!")
 
