@@ -148,6 +148,7 @@ class OnlineRoom:
         self.needsUpdate = True
         self.isDisbanding = False
         self.logToStaff = False
+        self.cpuRandomSeed = random.getrandbits(31)
 
     def joinPlayer(self, user: OnlineUser):
         self.players.add(user.cID)
@@ -231,6 +232,23 @@ class OnlineRoom:
         ret = self.logToStaff
         self.logToStaff = False
         return ret
+    
+    def updateCPURandomSeed(self):
+        self.cpuRandomSeed = random.getrandbits(31)
+
+    def getCPURandomSeed(self):
+        return self.cpuRandomSeed
+
+    def getMinPlayerAmount(self, database: CTGP7ServerDatabase):
+        return database.get_room_player_amount(self.gamemode == 1)
+    
+    def getVRMean(self, database: CTGP7ServerDatabase):
+        vrTot = 0
+        for cID in self.players:
+            vrTot += database.get_console_vr(cID)[self.gamemode]
+        vrTot //= len(self.players)
+        return vrTot
+
 
 class CTGP7CtwwHandler:
     
@@ -446,6 +464,7 @@ class CTGP7CtwwHandler:
             localver = input.get("localVer")
             betaVer = input.get("localBetaVer")
             token = input.get("token")
+            retDict = {}
 
             if (localver is None):
                 return (-1, {})
@@ -482,12 +501,16 @@ class CTGP7CtwwHandler:
             if (isHost):
                 room.setState(RoomState.PREPARING_RACE.value)
                 user.setState(UserState.HOSTING.value)
+                retDict["neededPlayerAmount"] = room.getMinPlayerAmount(self.database)
             else:
                 user.setState(UserState.CLIENT.value)
 
+            retDict["cpuRandomSeed"] = room.getCPURandomSeed()
+            retDict["vrMean"] = room.getVRMean(self.database)
+
             user.isAlive()
             
-            return (CTWWLoginStatus.SUCCESS.value, {})
+            return (CTWWLoginStatus.SUCCESS.value, retDict)
 
     def handle_user_racestart_room(self, input, cID):
         with self.lock:
@@ -514,7 +537,7 @@ class CTGP7CtwwHandler:
                 room.enableLog()
             
             user.isAlive()
-            self.database.set_console_vr(cID, [ctvr, cdvr])
+            #self.database.set_console_vr(cID, [ctvr, cdvr])
 
             return (CTWWLoginStatus.SUCCESS.value, {})
     
@@ -541,6 +564,7 @@ class CTGP7CtwwHandler:
             if (user.getState() == UserState.HOSTING.value):
                 self.database.set_stats_dirty(True)
                 room.setState(RoomState.FINISHED.value)
+                room.updateCPURandomSeed()
             
             prevVr = user.getVR()[0 if room.getMode() == 0 else 1]
             nowVR = ctvr if room.getMode() == 0 else cdvr

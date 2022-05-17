@@ -87,6 +87,12 @@ class CTGP7ServerDatabase:
     def set_stats_dirty(self, isDirty):
         self.set_database_config("stats_dirty", 1 if isDirty else 0)
 
+    def get_room_player_amount(self, isCountDown):
+        return int(self.get_database_config("cdRoomPlayerAmount" if isCountDown else "ctRoomPlayerAmount"))
+    
+    def set_room_player_amount(self, isCountDown, value):
+        self.set_database_config("cdRoomPlayerAmount" if isCountDown else "ctRoomPlayerAmount", value)
+
     def get_most_played_tracks(self, course_type, amount):
         currsplit = self.get_track_freq_split()
         with self.lock:

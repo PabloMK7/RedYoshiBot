@@ -31,7 +31,7 @@ def server_help_array():
     }
 def staff_server_help_array():
     return {
-        "version": ">@RedYoshiBot server version (ctww/beta) (newvalue)\nSets the ctww or beta values. If \'newvalue\' is not specified, the current version is displayed.",
+        "version": ">@RedYoshiBot server version (ctww/beta) [newvalue]\nSets the ctww or beta values. If \'newvalue\' is not specified, the current version is displayed.",
         "tracksplit": ">@RedYoshiBot server tracksplit [newVer]\nSets or gets the current track frequency split.",
         "kick": ">@RedYoshiBot server kick (consoleID) (time) (message)\nKicks the console (hex format, 0 for everyone) for the specified time (for example: 2h, 12m, 7d, etc, or 0m for a single time) with the specified message. Takes effect after the next race.",
         "skick": ">@RedYoshiBot server skick (consoleID) (time) (message)\nSilently kicks the console (hex format, 0 for everyone) for the specified time (for example: 2h, 12m, 7d, etc, or 0m for a single time) with the specified message. Takes effect after the next race.",
@@ -48,7 +48,8 @@ def staff_server_help_array():
         "unlink": ">@RedYoshiBot server getlink (consoleID/discordID)\nBreaks the link between console ID and Discord account.",
         "apply_player_role": ">@RedYoshiBot server apply_player_role\nVERY SLOW!!! Applies the Player role to all linked console accounts.",
         "purge_console_link": ">@RedYoshiBot server purge_console_link\nRemoved console links from users that are no longer in the server.",
-        "get_mii_icon": ">@RedYoshiBot server get_mii_icon (consoleID)\nGets the mii icon of the specified user."
+        "get_mii_icon": ">@RedYoshiBot server get_mii_icon (consoleID)\nGets the mii icon of the specified user.",
+        "room_player_amount": ">@RedYoshiBot server room_player_amount (ct/cd) [newValue]\nGets or sets the amount of players that a room should have. If not reached, the room will be filled with bots."
     }
     
 def staff_server_command_level():
@@ -73,6 +74,7 @@ def staff_server_command_level():
         "apply_player_role": 0,
         "purge_console_link": 0,
         "get_mii_icon": 1,
+        "room_player_amount": 0
     }
 
 async def staff_server_can_execute(message, command, silent=False):
@@ -993,6 +995,36 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 miiIcon.save(image_binary, 'PNG')
                 image_binary.seek(0)
                 await message.reply("Mii for {}:".format(miiName), file=discord.File(fp=image_binary, filename='mii.png'))
+    elif bot_cmd == "room_player_amount":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content)
+            if (len(tag) != 3 and len(tag) != 4):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["room_player_amount"] + "```")
+                return
+            mode = tag[2]
+            if mode not in ["ct", "cd"]:
+                await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()["room_player_amount"] + "```")
+                return
+            if (len(tag) == 3):
+                version = -1
+                if mode == "ct":
+                    amount = ctgp7_server.database.get_room_player_amount(False)
+                elif mode == "cd":
+                    amount = ctgp7_server.database.get_room_player_amount(True)
+                await message.reply( "Current {} player amount is: {}".format( mode, amount))
+                return
+            else:
+                try:
+                    amount = int(tag[3])
+                except ValueError:
+                    await message.reply( "Invalid number.")
+                    return
+                if mode == "ct":
+                    ctgp7_server.database.set_room_player_amount(False, amount)
+                elif mode == "cd":
+                    ctgp7_server.database.set_room_player_amount(True, amount)
+                await message.reply( "{} player amount set to: {}".format(mode, amount))
+                return
     else:
         await message.reply( "Invalid server command, use `@RedYoshiBot server help` to get all the available server commands.")
         
