@@ -501,10 +501,10 @@ class CTGP7CtwwHandler:
             if (isHost):
                 room.setState(RoomState.PREPARING_RACE.value)
                 user.setState(UserState.HOSTING.value)
-                retDict["neededPlayerAmount"] = room.getMinPlayerAmount(self.database)
             else:
                 user.setState(UserState.CLIENT.value)
 
+            retDict["neededPlayerAmount"] = room.getMinPlayerAmount(self.database)
             retDict["cpuRandomSeed"] = room.getCPURandomSeed()
             retDict["vrMean"] = room.getVRMean(self.database)
 
