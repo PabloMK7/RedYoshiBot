@@ -41,6 +41,8 @@ class CTGP7ServerHandler:
             logStr = "--------------------\n"
             logStr += "Timestamp: {}\n".format(timeNow.isoformat())
 
+            skipExceptionPrint = False
+
             try:
                 process = subprocess.Popen(["./encbsondocument", "d"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
                 process.stdin.write(connData)
@@ -54,6 +56,7 @@ class CTGP7ServerHandler:
 
                 inputData = bson.loads(connData)
                 if not "_CID" in inputData or not "_seed" in inputData:
+                    skipExceptionPrint = True
                     raise Exception("Input is missing: cID: {}, seed: {}".format(not "_CID" in inputData, not "_seed" in inputData))
                 
                 reqConsoleID = inputData["_CID"]
@@ -70,7 +73,7 @@ class CTGP7ServerHandler:
 
             except Exception:
                 outputData["res"] = -1
-                traceback.print_exc()
+                if not skipExceptionPrint: traceback.print_exc()
             
             process = subprocess.Popen(["./encbsondocument", "e"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
             process.stdin.write(bson.dumps(outputData))

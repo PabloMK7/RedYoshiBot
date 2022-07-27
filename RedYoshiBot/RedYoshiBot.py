@@ -897,7 +897,7 @@ async def check_version_list():
                     keepChecking = False
             except:
                 pass
-        await asyncio.sleep(600)
+        await asyncio.sleep(60)
 
 G_LAST_PUNISH_TIME = datetime.datetime(year=2000, month=1, day=1)
 G_LAST_PUNISH_AMOUNT = 0
@@ -1075,6 +1075,7 @@ async def checkNitroScam(message):
 
 from .server.CTGP7BotHandler import get_user_info, handle_server_command, handler_server_init_loop, handler_server_update_globals, kick_message_callback, server_message_logger_callback, server_on_member_remove
 
+on_ready_completed = False
 @client.event
 async def on_ready():
     print("\n-------------------------\n")
@@ -1083,6 +1084,11 @@ async def on_ready():
     global SELF_BOT_SERVER
     global SELF_BOT_MEMBER
     global debug_mode
+    global on_ready_completed
+    if (on_ready_completed):
+        print("Skipping on_ready...")
+        print('------\n')
+        return
     if(os.path.isfile("debug.flag")):
         print("Debug mode enabled.")
         debug_mode = True
@@ -1104,6 +1110,7 @@ async def on_ready():
     print('Logged in as: {} in server: {}'.format(SELF_BOT_MEMBER.name,SELF_BOT_SERVER.name))
     print('------\n')
     set_retry_times(0)
+    on_ready_completed = True
 
 @client.event
 async def wait_until_login():

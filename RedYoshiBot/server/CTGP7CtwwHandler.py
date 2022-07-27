@@ -371,7 +371,7 @@ class CTGP7CtwwHandler:
             localver = input.get("localVer")
             betaVer = input.get("localBetaVer")
             isRelogin = input.get("reLogin")
-            miiName = input.get("miiName")
+            miiName : str = input.get("miiName")
             isDebug = input.get("debugRegion")
             isPretendo = input.get("pretendo")
             miiChecksum = input.get("miiIconChecksum")
@@ -389,6 +389,10 @@ class CTGP7CtwwHandler:
                 return (-1, {})
             if (nameMode == PlayerNameMode.CUSTOM.value and nameValue is None):
                 return (-1, {})
+
+            if "%" in miiName or "\\" in miiName or (nameValue is not None and ( "%" in nameValue or "\\" in nameValue)):
+                retDict["loginMessage"] = "Invalid name,\nplease change it."
+                return (CTWWLoginStatus.MESSAGEKICK.value, retDict)
             
             user = OnlineUser(OnlineUserName(nameMode, nameValue, miiName), cID, self.database.get_console_is_verified(cID))
 
