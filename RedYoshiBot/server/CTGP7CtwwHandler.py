@@ -245,7 +245,8 @@ class OnlineRoom:
     def getVRMean(self, database: CTGP7ServerDatabase):
         vrTot = 0
         for cID in self.players:
-            vrTot += database.get_console_vr(cID)[self.gamemode]
+            vrData = database.get_console_vr(cID)
+            vrTot += vrData.ctVR if self.gamemode == 0 else vrData.cdVR
         vrTot //= len(self.players)
         return vrTot
 
@@ -411,9 +412,11 @@ class CTGP7CtwwHandler:
             vrData = self.database.get_console_vr(cID)
             if (isDebug): user.setDebug()
             if (isPretendo): user.setPretendo()
-            user.setVR(vrData)
-            retDict["ctvr"] = vrData[0]
-            retDict["cdvr"] = vrData[1]
+            user.setVR(list((vrData.ctVR, vrData.cdVR)))
+            retDict["ctvr"] = vrData.ctVR
+            retDict["cdvr"] = vrData.cdVR
+            retDict["ctvrPos"] = vrData.ctPos
+            retDict["cdvrPos"] = vrData.cdPos
             retDict["regionID"] = self.database.get_debugonline_region() if isDebug else self.database.get_online_region()
 
             if (miiChecksum is not None):
@@ -452,9 +455,11 @@ class CTGP7CtwwHandler:
             retDict["roomKeySeed"] = room.getKeySeed(user)
             user.setState(UserState.SEARCHING.value)
             vrData = self.database.get_console_vr(cID)
-            retDict["ctvr"] = vrData[0]
-            retDict["cdvr"] = vrData[1]
-            user.setVR([vrData[0], vrData[1]])
+            user.setVR(list((vrData.ctVR, vrData.cdVR)))
+            retDict["ctvr"] = vrData.ctVR
+            retDict["cdvr"] = vrData.cdVR
+            retDict["ctvrPos"] = vrData.ctPos
+            retDict["cdvrPos"] = vrData.cdPos
             user.setVRIncr(None)
 
             user.isAlive()
@@ -484,7 +489,7 @@ class CTGP7CtwwHandler:
                 return (CTWWLoginStatus.NOTLOGGED.value, {})
 
             vrData = self.database.get_console_vr(cID)
-            user.setVR([vrData[0], vrData[1]])
+            user.setVR(list((vrData.ctVR, vrData.cdVR)))
             user.setVRIncr(None)
 
             room = self.activeRooms.get(gID)

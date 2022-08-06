@@ -15,6 +15,13 @@ class ConsoleMessageType(Enum):
     TIMED_KICKMESSAGE = 3
 
 class CTGP7ServerDatabase:
+    class VRInfos:
+        def __init__(self):
+            self.ctVR = 1000
+            self.cdVR = 1000
+            self.ctPos = 0
+            self.cdPos = 0
+
     def __init__(self):
         self.isConn = False
         self.conn = None
@@ -259,13 +266,13 @@ class CTGP7ServerDatabase:
             c.execute('INSERT INTO console_name VALUES (?,?)', (int(cID), str(lastName)))
 
 
-    def get_console_last_name(self, cID):
+    def get_console_last_name(self, cID, default="(Unknown)"):
         with self.lock:
             c = self.conn.cursor()
             rows = c.execute("SELECT * FROM console_name WHERE cID = ?", (int(cID),))
             for row in rows:
                 return str(row[1])
-            return "(Unknown)"
+            return default
     
     def set_console_vr(self, cID, vr):
         with self.lock:
@@ -274,34 +281,84 @@ class CTGP7ServerDatabase:
             for row in rows:
                 c.execute("UPDATE console_vr SET ctvr = ?, cdvr = ? WHERE cID = ?", (int(vr[0]), int(vr[1]), int(cID)))
                 return
-            c.execute('INSERT INTO console_vr VALUES (?,?,?)', (int(cID), int(vr[0]), int(vr[1])))
+            c.execute('INSERT INTO console_vr VALUES (?,?,?,?)', (int(cID), int(vr[0]), int(vr[1]), 0))
 
+    def get_console_vr(self, cID) -> VRInfos:
+        with self.lock:
+            vrData = CTGP7ServerDatabase.VRInfos()
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM console_vr WHERE cID = ?", (int(cID),))
+            for row in rows:
+                vrData.ctVR = row[1]
+                vrData.cdVR = row[2]
+                break
+            rows = c.execute("SELECT COUNT(*) from console_vr WHERE ctvr > ?", (int(vrData.ctVR),))
+            for row in rows:
+                vrData.ctPos = row[0] + 1
+            rows = c.execute("SELECT COUNT(*) from console_vr WHERE cdvr > ?", (int(vrData.cdVR),))
+            for row in rows:
+                vrData.cdPos = row[0] + 1
+            return vrData
 
-    def get_console_vr(self, cID):
+    def set_console_points(self, cID, points):
         with self.lock:
             c = self.conn.cursor()
             rows = c.execute("SELECT * FROM console_vr WHERE cID = ?", (int(cID),))
             for row in rows:
-                return (row[1], row[2])
-            return (1000, 1000)
+                c.execute("UPDATE console_vr SET points = ? WHERE cID = ?", (int(points), int(cID)))
+                return
+            c.execute('INSERT INTO console_vr VALUES (?,?,?,?)', (int(cID), 1000, 1000, int(points)))
+
+    def add_console_points(self, cID, points):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM console_vr WHERE cID = ?", (int(cID),))
+            skipInsert = False
+            prevPoints = 0
+            pointsPos = 0
+            for row in rows:
+                skipInsert = True
+                prevPoints = row[3]
+                c.execute("UPDATE console_vr SET points = ? WHERE cID = ?", (int(points + prevPoints), int(cID)))
+                break
+            if (not skipInsert):
+                c.execute('INSERT INTO console_vr VALUES (?,?,?,?)', (int(cID), 1000, 1000, int(points)))
+            rows = c.execute("SELECT COUNT(*) from console_vr WHERE points > ?", (int(points + prevPoints),))
+            for row in rows:
+                pointsPos = row[0] + 1
+            return (prevPoints + points, pointsPos)
+
+    def get_console_points(self, cID) -> VRInfos:
+        with self.lock:
+            points = 0
+            pointsPos = 0
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM console_vr WHERE cID = ?", (int(cID),))
+            for row in rows:
+                points = row[3]
+                break
+            rows = c.execute("SELECT COUNT(*) from console_vr WHERE points > ?", (int(points),))
+            for row in rows:
+                pointsPos = row[0] + 1
+            return (points, pointsPos)
 
     def get_unique_console_vr_count(self):
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT COUNT(*) FROM console_vr")
+            rows = c.execute("SELECT COUNT(*) FROM console_vr WHERE (ctvr != 1000 OR cdvr != 1000)")
             for row in rows:
                 return row[0]
-            return 0
 
     def get_most_users_vr(self, mode, amount):
         with self.lock:
+            modeKind = ["ctvr", "cdvr", "points"]
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM console_vr ORDER BY {} DESC".format("ctvr" if mode == 0 else "cdvr"))
+            rows = c.execute("SELECT * FROM console_vr ORDER BY {} DESC".format(modeKind[mode]))
             i = 0
             ret = []
             for row in rows:
                 if (i >= amount): break
-                ret.append([row[0], row[1] if mode == 0 else row[2]])
+                ret.append([row[0], row[mode + 1]])
                 i += 1
             return ret
     

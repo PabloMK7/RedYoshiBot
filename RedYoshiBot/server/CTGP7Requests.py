@@ -26,7 +26,8 @@ class CTGP7Requests:
         "perfect_mission",
         "custom_mission",
         "grademean_mission",
-        "gradecount_mission"
+        "gradecount_mission",
+        "race_points"
     }
 
     get_user_info = None
@@ -73,6 +74,20 @@ class CTGP7Requests:
                 if (seqID == 0):
                     seqID = self.database.fetch_stats_seqid(self.cID)
                 return (2, seqID)
+    
+    def put_statsv2(self, input):
+        ret = self.put_stats(input)
+        retVal = {}
+        retVal["seqID"] = ret[1]
+        if (ret[0] == 0):
+            pts = ()
+            if ("race_points" in input):
+                pts = self.database.add_console_points(self.cID, input["race_points"])
+            else:
+                pts = self.database.get_console_points(self.cID)
+            retVal["points"] = pts[0]
+            retVal["pointsPos"] = pts[1]
+        return (ret[0], retVal)
 
     def req_discord_info(self, input):
         discordLink = self.database.get_discord_link_console(self.cID)
@@ -143,6 +158,7 @@ class CTGP7Requests:
 
     put_functions = {
         "generalstats": put_stats,
+        "generalstatsv2": put_statsv2,
         "onlsearch": server_user_room_join_handler,
         "onlprepare": server_user_room_prepare_handler,
         "onlrace": server_user_room_racestart_handler,

@@ -43,7 +43,8 @@ def staff_server_help_array():
         "console_verify": ">@RedYoshiBot server console_verify (get/set/clear) (consoleID)\nSets or clears the verification mark for the specified console.",
         "console_admin": ">@RedYoshiBot server console_admin (get/set/clear) (consoleID)\nSets or clears the admin status for the specified console.",
         "region": ">@RedYoshiBot server region (newvalue)\nSets the CTWW/CD online region in the server.",
-        "manage_vr": ">@RedYoshiBot server manage_vr (get/set) (consoleID) (ctww/cd) (newvalue)\nGets or sets the VR for the specified console (Don't set if console is in racing state online).",
+        "manage_vr": ">@RedYoshiBot server manage_vr (get/set) (consoleID) (ctww/cd/points) (newvalue)\nGets or sets the VR or points for the specified console (Don't set if console is in racing state online).",
+        "transfer": ">@RedYoshiBot server transfer (oldConsoleID) (newConsoleID)\nTransfers all the transferable data from an old console to a new console (VR and Discord link).",
         "getlink": ">@RedYoshiBot server getlink (consoleID/discordID)\nGets link between console ID and Discord account.",
         "unlink": ">@RedYoshiBot server getlink (consoleID/discordID)\nBreaks the link between console ID and Discord account.",
         "apply_player_role": ">@RedYoshiBot server apply_player_role\nVERY SLOW!!! Applies the Player role to all linked console accounts.",
@@ -69,6 +70,7 @@ def staff_server_command_level():
         "console_admin": 0,
         "region": 0,
         "manage_vr": 1,
+        "transfer": 1,
         "getlink": 1,
         "unlink": 1,
         "apply_player_role": 0,
@@ -288,6 +290,7 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
         embed.add_field(name="Time Trials", value=str(genStats["ttrials"]), inline=True)
         embed.add_field(name="Coin Battles", value=str(genStats["coin_battles"]), inline=True)
         embed.add_field(name="Balloon Battles", value=str(genStats["balloon_battles"]), inline=True)
+        embed.add_field(name="Total Race Points", value=str(genStats["race_points"]), inline=True)
         embed.add_field(name="** **", value="** **", inline=False)
         embed.add_field(name="Total Missions Played", value=str(totMissions), inline=False)
         embed.add_field(name="Completed Missions", value=str(completedMissions), inline=True)
@@ -328,24 +331,28 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
 
         vrRankCtww = ctgp7_server.database.get_most_users_vr(0, 20)
         vrRankCD = ctgp7_server.database.get_most_users_vr(1, 20)
-        embed=discord.Embed(title="CTWW Leaderboard", description="Players with most VR!", color=0xff0000, timestamp=datetime.datetime.utcnow())
+        pointRank = ctgp7_server.database.get_most_users_vr(2, 20)
+        rankArray = [vrRankCtww, vrRankCD, pointRank]
+        nameArray = ["CTWW", "Countdown", "Race Points"]
+        embed=discord.Embed(title="Leaderboard", color=0xff0000, timestamp=datetime.datetime.utcnow())
         currPos = 1
-        for i in range(2):
+        for i in range(3):
+            
             leaderText = "```"
             leaderTextVR = "```"
-            for user in (vrRankCtww if i == 0 else vrRankCD):
-                userName = ctgp7_server.database.get_console_last_name(user[0])
+            for user in rankArray[i]:
+                userName = ctgp7_server.database.get_console_last_name(user[0], "Player")
                 position = str(currPos)
                 positionSpaces = " " * max((4 - len(position)), 0)
                 leaderText += "{}.{}{}{}\n".format(position, positionSpaces, purge_player_name_symbols(userName), " \u2705" if ctgp7_server.database.get_console_is_verified(user[0]) else "")
-                leaderTextVR += "{}.{}{}vr\n".format(position, positionSpaces, str(user[1]))
+                leaderTextVR += "{}.{}{}{}\n".format(position, positionSpaces, str(user[1]), "vr" if i < 2 else "pts")
                 currPos += 1
             leaderText += "```"
             leaderTextVR += "```"
-            embed.add_field(name="CTWW" if i == 0 else "Countdown", value=leaderText, inline=True)
+            embed.add_field(name=nameArray[i], value=leaderText, inline=True)
             embed.add_field(name="** **", value=leaderTextVR, inline=True)
             currPos = 1
-            if (i == 0):
+            if (i < 2):
                 embed.add_field(name="** **", value="** **", inline=False)
         await vrLead.edit(embed=embed, content=None)
         
@@ -514,6 +521,24 @@ def get_user_info(userID):
     betaAccessRole = get_role(role_list()["BETAACCESS"])
     ret["canBeta"] = contrRole in member.roles or courseRole in member.roles or betaAccessRole in member.roles or member.premium_since is not None
     return ret
+
+def transfer_console_data(ctgp7_server: CTGP7ServerHandler, srcCID: int, dstCID: int):
+    try:
+        # Transfer VR
+        srcVR = ctgp7_server.database.get_console_vr(srcCID)
+        srcPoints = ctgp7_server.database.get_console_points(srcCID)
+        ctgp7_server.database.set_console_vr(dstCID, (srcVR.ctVR, srcVR.cdVR))
+        ctgp7_server.database.set_console_points(dstCID, srcPoints[0])
+        ctgp7_server.database.set_console_vr(srcCID, (1000, 1000))
+        ctgp7_server.database.set_console_points(srcCID, 0)
+        # Transfer discord link
+        discordID = ctgp7_server.database.get_discord_link_console(srcCID)
+        if (discordID is not None):
+            ctgp7_server.database.delete_discord_link_console(srcCID)
+            ctgp7_server.database.set_discord_link_console(discordID, dstCID)
+        return ""
+    except Exception as e:
+        return str(e)
 
 stats_command_last_exec = datetime.datetime.utcnow()
 async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: discord.Message):
@@ -928,28 +953,69 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             if mode not in ["get", "set"]:
                 await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()[bot_cmd] + "```")
                 return
-            if game not in ["ctww", "cd"]:
+            if game not in ["ctww", "cd", "points"]:
                 await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()[bot_cmd] + "```")
                 return
             if (mode == "get"):
-                vrData = ctgp7_server.database.get_console_vr(consoleID)
-                vr = vrData[0 if game == "ctww" else 1]
-                await message.reply("Console has {} VR in {}".format(vr, "Custom Tracks" if game == "ctww" else "Countdown"))
+                if (game == "ctww" or game == "cd"):
+                    vrData = ctgp7_server.database.get_console_vr(consoleID)
+                    vr = vrData.ctVR if game == "ctww" else vrData.cdVR
+                    vrPos = vrData.ctPos if game == "ctww" else vrData.cdPos
+                    await message.reply("Console has {} VR (Position: {}) in {}".format(vr, vrPos, "Custom Tracks" if game == "ctww" else "Countdown"))
+                elif (game == "points"):
+                    pointData = ctgp7_server.database.get_console_points(consoleID)
+                    await message.reply("Console has {} Points (Position: {})".format(pointData[0], pointData[1]))
             else:
                 if (len(tag) != 6):
                     await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()[bot_cmd] + "```")
                     return
                 try:
                     vr = int(tag[5])
-                    if (vr < 1 or vr > 99999):
-                        raise ValueError()
+                    if (game != "points"):
+                        if (vr < 1 or vr > 99999):
+                            raise ValueError()
                 except ValueError:
                     await message.reply( "Invalid number.")
                     return
-                vrData = list(ctgp7_server.database.get_console_vr(consoleID))
-                vrData[0 if game == "ctww" else 1] = vr
-                ctgp7_server.database.set_console_vr(consoleID, tuple(vrData))
+                if (game == "ctww" or game == "cd"):
+                    vrData = ctgp7_server.database.get_console_vr(consoleID)
+                    vrData = list((vrData.ctVR, vrData.cdVR))
+                    vrData[0 if game == "ctww" else 1] = vr
+                    ctgp7_server.database.set_console_vr(consoleID, tuple(vrData))
+                elif (game == "points"):
+                    ctgp7_server.database.set_console_points(consoleID, vr)
                 await message.reply( "Operation succeeded.")
+    elif bot_cmd == "transfer":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content)
+            if (len(tag) != 4):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            srcConsoleID = tag[2]
+            if (srcConsoleID.startswith("0x")):
+                srcConsoleID = srcConsoleID[2:]
+            try:
+                srcConsoleID = int(srcConsoleID, 16)
+                if (srcConsoleID == 0):
+                    raise ValueError()
+            except ValueError:
+                await message.reply( "Invalid source console ID.")
+                return
+            dstConsoleID = tag[3]
+            if (dstConsoleID.startswith("0x")):
+                dstConsoleID = dstConsoleID[2:]
+            try:
+                dstConsoleID = int(dstConsoleID, 16)
+                if (dstConsoleID == 0):
+                    raise ValueError()
+            except ValueError:
+                await message.reply( "Invalid destination console ID.")
+                return
+            res = transfer_console_data(ctgp7_server, srcConsoleID, dstConsoleID)
+            if (res == ""):
+                await message.reply( "Operation succeeded.")
+            else:
+                await message.reply( "Operation failed:```{}```".format(res))
     elif bot_cmd == "apply_player_role":
         if await staff_server_can_execute(message, bot_cmd):
             await message.channel.send("WARNING: This operation is slow and will take some time!")
