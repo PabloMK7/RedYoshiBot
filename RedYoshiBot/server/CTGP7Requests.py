@@ -83,6 +83,7 @@ class CTGP7Requests:
             pts = ()
             if ("race_points" in input):
                 pts = self.database.add_console_points(self.cID, input["race_points"])
+                self.database.set_stats_dirty(True)
             else:
                 pts = self.database.get_console_points(self.cID)
             retVal["points"] = pts[0]
