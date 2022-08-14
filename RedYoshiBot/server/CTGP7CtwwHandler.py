@@ -516,6 +516,8 @@ class CTGP7CtwwHandler:
             retDict["neededPlayerAmount"] = room.getMinPlayerAmount(self.database)
             retDict["cpuRandomSeed"] = room.getCPURandomSeed()
             retDict["vrMean"] = room.getVRMean(self.database)
+            retDict["rubberBMult"] = self.database.get_room_rubberbanding_config(False)
+            retDict["rubberBOffset"] = self.database.get_room_rubberbanding_config(True)
 
             user.isAlive()
             

@@ -50,7 +50,7 @@ def staff_server_help_array():
         "apply_player_role": ">@RedYoshiBot server apply_player_role\nVERY SLOW!!! Applies the Player role to all linked console accounts.",
         "purge_console_link": ">@RedYoshiBot server purge_console_link\nRemoved console links from users that are no longer in the server.",
         "get_mii_icon": ">@RedYoshiBot server get_mii_icon (consoleID)\nGets the mii icon of the specified user.",
-        "room_player_amount": ">@RedYoshiBot server room_player_amount (ct/cd) [newValue]\nGets or sets the amount of players that a room should have. If not reached, the room will be filled with bots."
+        "room_config": ">@RedYoshiBot server room_config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset) [newValue]\nGets or sets the config parameters for rooms."
     }
     
 def staff_server_command_level():
@@ -76,7 +76,7 @@ def staff_server_command_level():
         "apply_player_role": 0,
         "purge_console_link": 0,
         "get_mii_icon": 1,
-        "room_player_amount": 0
+        "room_config": 0
     }
 
 async def staff_server_can_execute(message, command, silent=False):
@@ -1061,35 +1061,46 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 miiIcon.save(image_binary, 'PNG')
                 image_binary.seek(0)
                 await message.reply("Mii for {}:".format(miiName), file=discord.File(fp=image_binary, filename='mii.png'))
-    elif bot_cmd == "room_player_amount":
+    elif bot_cmd == "room_config":
         if await staff_server_can_execute(message, bot_cmd):
             tag = get_server_bot_args(message.content)
             if (len(tag) != 3 and len(tag) != 4):
-                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["room_player_amount"] + "```")
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["room_config"] + "```")
                 return
             mode = tag[2]
-            if mode not in ["ct", "cd"]:
-                await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()["room_player_amount"] + "```")
+            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset"]:
+                await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()["room_config"] + "```")
                 return
             if (len(tag) == 3):
                 version = -1
-                if mode == "ct":
+                if mode == "ctCPUAmount":
                     amount = ctgp7_server.database.get_room_player_amount(False)
-                elif mode == "cd":
+                elif mode == "cdCPUAmount":
                     amount = ctgp7_server.database.get_room_player_amount(True)
-                await message.reply( "Current {} player amount is: {}".format( mode, amount))
+                elif mode == "rubberBMult":
+                    amount = ctgp7_server.database.get_room_rubberbanding_config(False)
+                elif mode == "rubberBOffset":
+                    amount = ctgp7_server.database.get_room_rubberbanding_config(True)
+                await message.reply( "Config for \"{}\" is: {}".format(mode, amount))
                 return
             else:
                 try:
-                    amount = int(tag[3])
+                    if (mode == "ctCPUAmount" or mode == "cdCPUAmount"):
+                        amount = int(tag[3])
+                    elif (mode == "rubberBMult" or mode == "rubberBOffset"):
+                        amount = float(tag[3])
                 except ValueError:
                     await message.reply( "Invalid number.")
                     return
-                if mode == "ct":
+                if mode == "ctCPUAmount":
                     ctgp7_server.database.set_room_player_amount(False, amount)
-                elif mode == "cd":
+                elif mode == "cdCPUAmount":
                     ctgp7_server.database.set_room_player_amount(True, amount)
-                await message.reply( "{} player amount set to: {}".format(mode, amount))
+                elif mode == "rubberBMult":
+                    ctgp7_server.database.set_room_rubberbanding_config(False, amount)
+                elif mode == "rubberBOffset":
+                    ctgp7_server.database.set_room_rubberbanding_config(True, amount)
+                await message.reply("Config for \"{}\" is: {}".format(mode, amount))
                 return
     else:
         await message.reply( "Invalid server command, use `@RedYoshiBot server help` to get all the available server commands.")

@@ -100,6 +100,12 @@ class CTGP7ServerDatabase:
     def set_room_player_amount(self, isCountDown, value):
         self.set_database_config("cdRoomPlayerAmount" if isCountDown else "ctRoomPlayerAmount", value)
 
+    def get_room_rubberbanding_config(self, isOffset: bool):
+        return float(self.get_database_config("rubberBOffset" if isOffset else "rubberBMult"))
+
+    def set_room_rubberbanding_config(self, isOffset: bool, value: float):
+        self.set_database_config("rubberBOffset" if isOffset else "rubberBMult", float(value))
+
     def get_most_played_tracks(self, course_type, amount):
         currsplit = self.get_track_freq_split()
         with self.lock:
