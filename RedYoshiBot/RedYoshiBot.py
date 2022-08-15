@@ -966,6 +966,22 @@ async def disableEmergency():
     staffchn = client.get_channel(ch_list()["STAFF"])
     await staffchn.send("Emergency mode has been disabled.")
 
+lastsentctgpmisspell = datetime.datetime.now()
+async def checkCTGPMissSpell(message):
+    global lastsentctgpmisspell
+    if (datetime.datetime.now() - lastsentctgpmisspell < datetime.timedelta(seconds=10)):
+        return
+    lastsentctgpmisspell = datetime.datetime.now()
+    words : str = message.content.split()
+    for word in words:
+        if (len(word) == 4 or (len(word) == 5 and word[-1:] == "7") or (len(word) == 6 and word[-2:] == "-7")):
+            ctgp = word[0:4].lower()
+            if (all(x in ["c", "t", "g", "p"] for x in ctgp) and ctgp.lower() != "ctgp"):
+                mapping = {"c": "Custom", "t": "Tracks", "g": "Grand", "p": "Prix"}
+                badctgp = [mapping[x] for x in ctgp]
+                await message.reply("It's **CTGP** (Custom Tracks Grand Prix), not **{}** ({} {} {} {})!".format(ctgp.upper(), badctgp[0], badctgp[1], badctgp[2], badctgp[3]))
+                return
+
 async def sendMikuMessage(message):
     global db_mng
     global miku_last_message_time
@@ -1953,6 +1969,7 @@ async def on_message(message):
             await sendMikuMessage(message)
         else:
             if (message.author != client.user):
+                await checkCTGPMissSpell(message)
                 await checkNitroScam(message)
     except:
         traceback.print_exc()
