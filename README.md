@@ -5,7 +5,7 @@ This bot is written with all the channel ids hardcoded to the CTGP-7 server chan
 Also included is the CTGP-7 Plugin server communications C++ code.
 
 ## Dependencies
-- Python 3.5
+- Python 3.9
 - [Discord.py](https://github.com/Rapptz/discord.py)
 
 ## Credits

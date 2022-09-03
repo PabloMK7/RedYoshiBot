@@ -319,24 +319,24 @@ async def game_numberguess(user, machine, diff, message):
     while (i < randsec):
         await asyncio.sleep(1)
         i = i + 1 
-    await game_message.edit(content="You guessed: {} , I guessed: {}:question:".format(int_to_emoji(user), mach1))
+    game_message = await game_message.edit(content="You guessed: {} , I guessed: {}:question:".format(int_to_emoji(user), mach1))
     randsec = random.randint(1, 3)
     while (i < randsec):
         await asyncio.sleep(1)
         i = i + 1
-    await game_message.edit(content="You guessed: {} , I guessed: {}{}".format(int_to_emoji(user), mach1, mach2))
+    game_message = await game_message.edit(content="You guessed: {} , I guessed: {}{}".format(int_to_emoji(user), mach1, mach2))
     if (user == machine):
         if diff == 0:
-            await game_message.edit(content="You guessed: {} , I guessed: {}{} . **You won 10 <:yoshicookie:416533826869657600>!**".format( int_to_emoji(user), mach1, mach2))
+            game_message = await game_message.edit(content="You guessed: {} , I guessed: {}{} . **You won 10 <:yoshicookie:416533826869657600>!**".format( int_to_emoji(user), mach1, mach2))
             await db_mng.add_cookie(message.author.id, 10)
         elif diff == 1:
-            await game_message.edit(content="You guessed: {} , I guessed: {}{} . **You won 50 <:yoshicookie:416533826869657600>!**".format( int_to_emoji(user), mach1, mach2))
+            game_message = await game_message.edit(content="You guessed: {} , I guessed: {}{} . **You won 50 <:yoshicookie:416533826869657600>!**".format( int_to_emoji(user), mach1, mach2))
             await db_mng.add_cookie(message.author.id, 50)
         elif diff == 2:
-            await game_message.edit(content="You guessed: {} , I guessed: {}{} . **You won 100 <:yoshicookie:416533826869657600>!**".format( int_to_emoji(user), mach1, mach2))
+            game_message = await game_message.edit(content="You guessed: {} , I guessed: {}{} . **You won 100 <:yoshicookie:416533826869657600>!**".format( int_to_emoji(user), mach1, mach2))
             await db_mng.add_cookie(message.author.id, 100)
     else:
-        await game_message.edit(content="You guessed: {} , I guessed: {}{} . **You lost 1 <:yoshicookie:416533826869657600>.**".format( int_to_emoji(user), mach1, mach2))
+        game_message = await game_message.edit(content="You guessed: {} , I guessed: {}{} . **You lost 1 <:yoshicookie:416533826869657600>.**".format( int_to_emoji(user), mach1, mach2))
         await db_mng.add_cookie(message.author.id, -1)
     return
 async def game_rps(bot_ch, usr_ch, message):
@@ -1531,7 +1531,7 @@ async def on_message(message):
                                 if (msg.author == client.user):
                                     try:
                                         old_content = msg.content
-                                        await msg.edit(content=tag[3])
+                                        msg = await msg.edit(content=tag[3])
                                         sendMultiMessage(message.channel, "Edited successfully:\nOld: \n--------\n{}\n--------\nNew:\n--------\n{}\n--------\n".format(old_content, msg.content), "```", "```")
                                         return
                                     except:
@@ -1940,12 +1940,12 @@ async def on_message(message):
                 notif_msg = await message.reply( "Adding your bug report: ```{}```".format(tag[1]))
                 bug_reports = SELF_BOT_SERVER.get_channel(ch_list()["BUG_OPEN"])
                 bot_msg = await bug_reports.send("Processing...")
-                await bot_msg.edit(content="```State: Open\n------------------\nReported by: {}\nExplanation: {}\nID: {}```".format(message.author.name, tag[1], bot_msg.id))
+                bot_msg = await bot_msg.edit(content="```State: Open\n------------------\nReported by: {}\nExplanation: {}\nID: {}```".format(message.author.name, tag[1], bot_msg.id))
                 if (bot_msg != None):
                     await db_mng.bug_add(message.author.id, tag[1], bot_msg)
-                    await notif_msg.edit(content="{}, adding your bug report: ```{}```**Success**".format(message.author.name, tag[1]))
+                    notif_msg = await notif_msg.edit(content="{}, adding your bug report: ```{}```**Success**".format(message.author.name, tag[1]))
                 else:
-                    await notif_msg.edit(content="{}, adding your bug report: ```{}```**Fail**".format(message.author.name, tag[1]))
+                    notif_msg = await notif_msg.edit(content="{}, adding your bug report: ```{}```**Fail**".format(message.author.name, tag[1]))
             else:
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["report"] + "```")            
         elif ((bot_mtn == "!emergency" or  bot_mtn == "!emergency_off") and await staff_can_execute(message, "emergency", silent=True) and (message.author != client.user)):

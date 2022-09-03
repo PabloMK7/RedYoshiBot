@@ -112,7 +112,7 @@ def gen_course_usage_embed(ctgp7_server: CTGP7ServerHandler, course_type: int):
         tName = "Custom Tracks"
     elif (course_type == 2):
         tName = "Battle Arenas"
-    embed = discord.Embed(title="Most Played Tracks", description=tName, color=0xff0000, timestamp=datetime.datetime.utcnow())
+    embed = discord.Embed(title="Most Played Tracks", description=tName, color=0xff0000, timestamp=datetime.datetime.now())
     currTrack = 1
     for d in range(0, 4):
         slic = []
@@ -174,8 +174,8 @@ async def kick_message_logger(ctgp7_server: CTGP7ServerHandler):
             if (isSilent or (messageType != ConsoleMessageType.SINGLE_KICKMESSAGE.value and messageType != ConsoleMessageType.TIMED_KICKMESSAGE.value) or cID == 0):
                 continue
             publicCID = "0x\\*\\*\\*\\*\\*\\*\\*\\*\\*\\*\\*\\*\\*\\*{:04X}".format(cID & 0xFFFF)
-            embedPublic=discord.Embed(title="Kick Report", description="Console ID: {}".format(publicCID), color=0xff0000, timestamp=datetime.datetime.utcnow())
-            embedPrivate=discord.Embed(title="Kick Report", description="Console ID: 0x{:016X}".format(cID), color=0xff0000, timestamp=datetime.datetime.utcnow())
+            embedPublic=discord.Embed(title="Kick Report", description="Console ID: {}".format(publicCID), color=0xff0000, timestamp=datetime.datetime.now())
+            embedPrivate=discord.Embed(title="Kick Report", description="Console ID: 0x{:016X}".format(cID), color=0xff0000, timestamp=datetime.datetime.now())
             embedPublic.add_field(name="Reason", value=message, inline=False)
             embedPrivate.add_field(name="Reason", value=message, inline=False)
             if (messageType == ConsoleMessageType.TIMED_KICKMESSAGE.value):
@@ -240,14 +240,15 @@ async def update_graph_message(ctgp7_server: CTGP7ServerHandler):
     buf.seek(0)
 
     file = discord.File(fp=buf, filename="image.png")
-    embed = discord.Embed(title="Daily Statistics (UTC)", color=0xff0000)
+    embed = discord.Embed(title="Daily Statistics (UTC)", color=0xff0000, timestamp=datetime.datetime.now())
     chPrivate = SELF_BOT_SERVER.get_channel(ch_list()["ONLINELOGS"])
     tmpMsg = await chPrivate.send(file=file)
     imageUrl = tmpMsg.attachments[0].url
     embed.set_image(url=imageUrl)
     ch = SELF_BOT_SERVER.get_channel(ch_list()["STATS"])
     msg = await ch.fetch_message(graph_launches_message_id)
-    await msg.edit(embed=embed, content=None)
+    msg = await msg.edit(embed=embed, content=None)
+    await asyncio.sleep(1.5)
     buf.close()
 
 async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
@@ -279,9 +280,9 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
         uniqueConsoles = ctgp7_server.database.get_unique_console_count()
         uniqueOnlineUsers = ctgp7_server.database.get_unique_console_vr_count()
 
-        embed=discord.Embed(title="CTGP-7 Statistics", description="Statistics from all CTGP-7 players!", color=0xff0000, timestamp=datetime.datetime.utcnow())
-        embed2=discord.Embed(color=0xff0000, timestamp=datetime.datetime.utcnow())
-        embed.set_thumbnail(url=str(SELF_BOT_SERVER.icon_url))
+        embed=discord.Embed(title="CTGP-7 Statistics", description="Statistics from all CTGP-7 players!", color=0xff0000, timestamp=datetime.datetime.now())
+        embed2=discord.Embed(color=0xff0000, timestamp=datetime.datetime.now())
+        embed.set_thumbnail(url=str(SELF_BOT_SERVER.icon.url))
         embed.add_field(name="Total Launches", value=str(genStats["launches"]), inline=True)
         embed.add_field(name="Unique Consoles", value=str(uniqueConsoles), inline=True)
         embed.add_field(name="** **", value="** **", inline=False)
@@ -325,8 +326,10 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
             currTrack += 1
         mostPlayedStr += "```"
         embed2.add_field(name="Most Played Tracks", value=mostPlayedStr, inline=False)
-        await msg1.edit(embed=embed, content=None)
-        await msg2.edit(embed=embed2, content=None)
+        msg1 = await msg1.edit(embed=embed, content=None)
+        await asyncio.sleep(1.5)
+        msg2 = await msg2.edit(embed=embed2, content=None)
+        await asyncio.sleep(1.5)
         tried_edit_stats_message_times = 0
 
         vrRankCtww = ctgp7_server.database.get_most_users_vr(0, 20)
@@ -334,7 +337,7 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
         pointRank = ctgp7_server.database.get_most_users_vr(2, 20)
         rankArray = [vrRankCtww, vrRankCD, pointRank]
         nameArray = ["CTWW", "Countdown", "Race Points"]
-        embed=discord.Embed(title="Leaderboard", color=0xff0000, timestamp=datetime.datetime.utcnow())
+        embed=discord.Embed(title="Leaderboard", color=0xff0000, timestamp=datetime.datetime.now())
         currPos = 1
         for i in range(3):
             
@@ -354,7 +357,8 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
             currPos = 1
             if (i < 2):
                 embed.add_field(name="** **", value="** **", inline=False)
-        await vrLead.edit(embed=embed, content=None)
+        vrLead = await vrLead.edit(embed=embed, content=None)
+        await asyncio.sleep(1.5)
         
         await update_graph_message(ctgp7_server)
 
@@ -427,7 +431,7 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler):
                 if (not ctgp7_server.ctwwHandler.update_room_messageID(room["gID"], msgID)):
                     await msg.delete()
                     continue
-            embed=discord.Embed(title="{} Room".format(room["gameMode"]), description="State: {}\nID: 0x{:08X}".format(room["state"], room["fakeID"]), color=0xff0000, timestamp=datetime.datetime.utcnow())
+            embed=discord.Embed(title="{} Room".format(room["gameMode"]), description="State: {}\nID: 0x{:08X}".format(room["state"], room["fakeID"]), color=0xff0000, timestamp=datetime.datetime.now())
             playerString = "```\n"
             for player in room["players"]:
                 vrStr = ""
@@ -440,11 +444,11 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler):
             if (playerString == "```\n```"):
                 playerString = "```\n- (None)\n```"
             embed.add_field(name="Players", value=playerString, inline=False)
-            await msg.edit(embed=embed, content=None)
+            msg = await msg.edit(embed=embed, content=None)
             # profanityProb = profanity_check.predict_prob([playerString])[0]
             if (False): # Disable this for now until I find a proper way to handle it
                 chPrivate = SELF_BOT_SERVER.get_channel(ch_list()["STAFFKICKS"])
-                embed1 = discord.Embed(title="Possible profanity.", description="Probability: {:02f}%".format(profanityProb * 100), color=0xff7f00, timestamp=datetime.datetime.utcnow())
+                embed1 = discord.Embed(title="Possible profanity.", description="Probability: {:02f}%".format(profanityProb * 100), color=0xff7f00, timestamp=datetime.datetime.now())
                 embed1.add_field(name="Players", value=playerString)
                 playerString = "```\n"
                 for player in room["players"]:
@@ -505,7 +509,7 @@ async def server_bot_loop(ctgp7_server: CTGP7ServerHandler):
         except:
             traceback.print_exc()
             pass
-        await asyncio.sleep(5)
+        await asyncio.sleep(7.5)
 
 def get_user_info(userID):
     member = get_from_mention(userID)
@@ -868,7 +872,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
         if await staff_server_can_execute(message, bot_cmd):
             tag = get_server_bot_args(message.content)
             if (len(tag) != 3):
-                await message.reply( "Invalid syntax, correct usage:\r\n```" + server_help_array()["getlink"] + "```")
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["getlink"] + "```")
                 return
             
             checkid = tag[2]
