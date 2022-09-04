@@ -23,6 +23,7 @@ from urllib.error import *
 from urllib.parse import urlparse
 import traceback
 import atexit
+import logging
 
 current_time_min = lambda: int(round(time.time() / 60))
 SELF_BOT_MEMBER = None
@@ -31,6 +32,7 @@ db_mng = None
 ctgp7_server = None
 intents = discord.Intents.default()
 intents.members = True
+intents.message_content = True
 client = discord.Client(intents=intents)
 debug_mode = False
 current_talk_id = ''
@@ -969,14 +971,14 @@ async def disableEmergency():
 lastsentctgpmisspell = datetime.datetime.now()
 async def checkCTGPMissSpell(message):
     global lastsentctgpmisspell
-    if (datetime.datetime.now() - lastsentctgpmisspell < datetime.timedelta(seconds=10)):
-        return
-    lastsentctgpmisspell = datetime.datetime.now()
     words : str = message.content.split()
     for word in words:
         if (len(word) == 4 or (len(word) == 5 and word[-1:] == "7") or (len(word) == 6 and word[-2:] == "-7")):
             ctgp = word[0:4].lower()
             if (all(x in ["c", "t", "g", "p"] for x in ctgp) and ctgp.lower() != "ctgp"):
+                if (datetime.datetime.now() - lastsentctgpmisspell < datetime.timedelta(seconds=10)):
+                    return
+                lastsentctgpmisspell = datetime.datetime.now()
                 mapping = {"c": "Custom", "t": "Tracks", "g": "Grand", "p": "Prix"}
                 badctgp = [mapping[x] for x in ctgp]
                 await message.reply("It's **CTGP** (Custom Tracks Grand Prix), not **{}** ({} {} {} {})!".format(ctgp.upper(), badctgp[0], badctgp[1], badctgp[2], badctgp[3]))
@@ -1995,7 +1997,7 @@ def perform_exit():
 
 try:
     atexit.register(exit_handler)
-    client.run(sys.argv[1])
+    client.run(sys.argv[1], log_level=logging.ERROR)
 except:
     perform_exit()
     pass
