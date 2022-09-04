@@ -762,16 +762,16 @@ async def sayfunc(dest_id, text, chanOrMsg):
     channel_id = int(re.sub("\D", "", dest_id))
     channel_obj = client.get_channel(channel_id)
     if (channel_obj != None):
-        await channel_obj.trigger_typing()
-        await asyncio.sleep(random.randint(1,5))
+        async with channel_obj.typing():
+            await asyncio.sleep(random.randint(1,5))
         await channel_obj.send(text)
         await sendFunc("Message successfully sent in {}.".format(channel_obj.name))
     else:
         member_obj = get_from_mention(dest_id)
         if (member_obj != None):
             try:
-                await member_obj.trigger_typing()
-                await asyncio.sleep(random.randint(1,5))
+                async with member_obj.typing():
+                    await asyncio.sleep(random.randint(1,5))
                 await member_obj.send(text)
                 await sendFunc("Message successfully sent to {}.".format(member_obj.name))
             except:
@@ -1692,16 +1692,16 @@ async def on_message(message):
                                     raise Exception("Image not found in replied message.")
                             else:
                                 url = message.attachments[0].url
-                        await message.channel.trigger_typing()
-                        if (url.startswith("data:")):
-                            qr = QRCrashDecode(data=url[5:])
-                        else:
-                            qr = QRCrashDecode(url=url)
-                        qrtext = qr.printData()
+                        async with message.channel.typing():
+                            if (url.startswith("data:")):
+                                qr = QRCrashDecode(data=url[5:])
+                            else:
+                                qr = QRCrashDecode(url=url)
+                            qrtext = qr.printData()
+                        await message.reply( "Parsed QR data:\n```{}```".format(qrtext))
                     except Exception as e:
                         await message.reply( "Failed to parse QR data:\n```{}```".format(str(e)))
                         return
-                    await message.reply( "Parsed QR data:\n```{}```".format(qrtext))
                 elif bot_cmd == "funcname":
                     tag = message.content.split(None)
                     if (len(tag) != 5):
@@ -1724,9 +1724,10 @@ async def on_message(message):
                         except:
                             await message.reply("`Invalid region or version.`\nCorrect usage:\r\n```" + help_array()["funcname"] + "```")
                             return
-                        await message.channel.trigger_typing()
-                        fs = MK7FunctionSearch(region, version)
-                        name = fs.functionNameForAddr(hexval)
+                        name = ""
+                        async with message.channel.typing():
+                            fs = MK7FunctionSearch(region, version)
+                            name = fs.functionNameForAddr(hexval)
                         await message.reply("```0x{:08X}: ({})```".format(hexval, name))
                     except Exception as e:
                         await message.reply("Failed to get function name.")
