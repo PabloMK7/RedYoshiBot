@@ -32,7 +32,7 @@ def server_help_array():
 def staff_server_help_array():
     return {
         "version": ">@RedYoshiBot server version (ctww/beta) [newvalue]\nSets the ctww or beta values. If \'newvalue\' is not specified, the current version is displayed.",
-        "tracksplit": ">@RedYoshiBot server tracksplit [newVer]\nSets or gets the current track frequency split.",
+        "tracksplit": ">@RedYoshiBot server tracksplit [newVer]\nSets or gets the current track frequency split. If \'newVer\' is \'enable\' or \'disable\' it will activate or deactivate the feature.",
         "kick": ">@RedYoshiBot server kick (consoleID) (time) (message)\nKicks the console (hex format, 0 for everyone) for the specified time (for example: 2h, 12m, 7d, etc, or 0m for a single time) with the specified message. Takes effect after the next race.",
         "skick": ">@RedYoshiBot server skick (consoleID) (time) (message)\nSilently kicks the console (hex format, 0 for everyone) for the specified time (for example: 2h, 12m, 7d, etc, or 0m for a single time) with the specified message. Takes effect after the next race.",
         "ban": ">@RedYoshiBot server ban (consoleID) (message)\nPermanently bans the console (hex format, 0 for everyone) with the specified message (Use kick for temporary bans). Takes effect after the next race.",
@@ -131,7 +131,10 @@ def gen_course_usage_embed(ctgp7_server: CTGP7ServerHandler, course_type: int):
                 mostPlayedStr += "{}.{}{}\n".format(position, positionSpaces, trackName)
                 currTrack += 1
             else:
-                mostPlayedStr += "{} ({})\n".format(str(k[1]), str(k[1]+k[2]))
+                if (k[1] != 0):
+                    mostPlayedStr += "{} ({})\n".format(str(k[1]), str(k[1]+k[2]))
+                else:
+                    mostPlayedStr += "{}\n".format(str(k[2]))
         mostPlayedStr += "```"
         embed.add_field(name="** **", value=mostPlayedStr, inline=True)
     return embed
@@ -322,7 +325,10 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
             trackNameSpaces = " " * max((24 - len(trackName)), 0)
             position = str(currTrack)
             positionSpaces = " " * max((4 - len(position)), 0)
-            mostPlayedStr += "{}.{}{}{}{} ({})\n".format(position, positionSpaces, trackName, trackNameSpaces, str(k[1]), str(k[1]+k[2]))
+            if (k[1] != 0):
+                mostPlayedStr += "{}.{}{}{}{} ({})\n".format(position, positionSpaces, trackName, trackNameSpaces, str(k[1]), str(k[1]+k[2]))
+            else:
+                mostPlayedStr += "{}.{}{}{}{}\n".format(position, positionSpaces, trackName, trackNameSpaces, str(k[2]))
             currTrack += 1
         mostPlayedStr += "```"
         embed2.add_field(name="Most Played Tracks", value=mostPlayedStr, inline=False)
@@ -619,9 +625,14 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 return
             if (len(tag) == 2):
                 split = ctgp7_server.database.get_track_freq_split()
-                await message.reply( "Current split value is: {}".format(split))
+                isenabled = ctgp7_server.database.get_track_freq_split_enabled()
+                await message.reply( "Current split value is: {} ({})".format(split, "enabled" if isenabled else "disabled"))
                 return
             else:
+                if (tag[2] == "enable" or tag[2] == "disable"):
+                    ctgp7_server.database.set_track_frew_split_enabled(tag[2] == "enable")
+                    await message.reply( "Operation succeeded")
+                    return
                 try:
                     split = int(tag[2])
                 except ValueError:

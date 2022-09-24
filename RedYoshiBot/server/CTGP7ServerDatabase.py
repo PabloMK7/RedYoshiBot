@@ -71,10 +71,17 @@ class CTGP7ServerDatabase:
         self.set_database_config("onlregion", value)
 
     def get_track_freq_split(self):
-        return int(self.get_database_config("trackfreqsplit"))
+        return abs(int(self.get_database_config("trackfreqsplit")))
     
     def set_track_freq_split(self, value):
-        self.set_database_config("trackfreqsplit", value)
+        self.set_database_config("trackfreqsplit", abs(value))
+
+    def get_track_freq_split_enabled(self):
+        return int(self.get_database_config("trackfreqsplit")) >= 0
+    
+    def set_track_frew_split_enabled(self, enable):
+        value = self.get_track_freq_split()
+        self.set_database_config("trackfreqsplit", value if enable else -value)
 
     def get_ctww_version(self):
         return int(self.get_database_config("ctwwver"))
@@ -107,19 +114,39 @@ class CTGP7ServerDatabase:
         self.set_database_config("rubberBOffset" if isOffset else "rubberBMult", float(value))
 
     def get_most_played_tracks(self, course_type, amount):
+        splitenabled = self.get_track_freq_split_enabled()
         currsplit = self.get_track_freq_split()
         with self.lock:
+            if (not splitenabled):
+                c = self.conn.cursor()
+                rows = c.execute("SELECT id, SUM(freq) FROM stats_tracksfreq WHERE type = ? GROUP BY id ORDER BY SUM(freq) DESC", (int(course_type),))
+                i = 0
+                ret = []
+                for row in rows:
+                    if (i >= amount): break
+                    ret.append([row[0], 0, row[1]])
+                    i += 1
+                return ret
+            else:
+                c = self.conn.cursor()
+                c2 = self.conn.cursor()
+                rows = c.execute("SELECT * FROM stats_tracksfreq WHERE split = ? AND type = ? ORDER BY freq DESC", (int(currsplit), int(course_type)))
+                i = 0
+                ret = []
+                for row in rows:
+                    if (i >= amount): break
+                    prevValue = c2.execute("SELECT SUM(freq) FROM stats_tracksfreq WHERE id = ? AND split < ?", (str(row[0]), int(currsplit))).fetchone()[0]
+                    ret.append([row[0], row[2], 0 if prevValue is None else prevValue])
+                    i += 1
+                return ret
+
+    def get_max_saved_track_split(self):
+        with self.lock:
             c = self.conn.cursor()
-            c2 = self.conn.cursor()
-            rows = c.execute("SELECT * FROM stats_tracksfreq WHERE split = ? AND type = ? ORDER BY freq DESC", (int(currsplit), int(course_type)))
-            i = 0
-            ret = []
+            rows = c.execute("SELECT * FROM stats_tracksfreq ORDER BY split DESC")
             for row in rows:
-                if (i >= amount): break
-                prevValue = c2.execute("SELECT SUM(freq) FROM stats_tracksfreq WHERE id = ? AND split < ?", (str(row[0]), int(currsplit))).fetchone()[0]
-                ret.append([row[0], row[2], 0 if prevValue is None else prevValue])
-                i += 1
-            return ret
+                return row[1]
+            return 0
 
     def increment_track_frequency(self, szsName, value):
         currsplit = self.get_track_freq_split()
