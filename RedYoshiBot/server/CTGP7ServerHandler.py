@@ -14,6 +14,7 @@ import subprocess
 from .CTGP7Requests import CTGP7Requests
 from .CTGP7ServerDatabase import CTGP7ServerDatabase
 from .CTGP7CtwwHandler import CTGP7CtwwHandler
+from .CTGP7ServerCritical import do_critical_operations
 
 class CTGP7ServerHandler:
     
@@ -32,6 +33,9 @@ class CTGP7ServerHandler:
 
     class PostHandler(BaseHTTPRequestHandler):
         def do_POST(self):
+            if (not do_critical_operations(CTGP7ServerHandler.myself, self)):
+                return
+            
             timeNow = datetime.datetime.now()
             
             connDataLen = int(self.headers['Content-Length'])
