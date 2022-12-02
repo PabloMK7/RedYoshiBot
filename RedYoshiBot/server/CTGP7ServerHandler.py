@@ -134,7 +134,7 @@ class CTGP7ServerHandler:
         print("CTGP-7 server terminated.")
     
     def server_start(self):
-        self.server = self.ThreadingSimpleServer(("", 64333), self.PostHandler)
+        self.server = self.ThreadingSimpleServer(("", 64334), self.PostHandler)
         context = ssl.SSLContext(protocol=ssl.PROTOCOL_TLSv1_1)
         context.options |= ssl.OP_NO_TLSv1_2
         context.load_cert_chain('RedYoshiBot/server/data/server.pem')
