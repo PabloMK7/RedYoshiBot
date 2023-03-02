@@ -14,7 +14,7 @@ class QRCrashDecode:
 
     SEPARATOR = "-----------------------------------\n"
     gameRegion = {0: "None", 1: "Europe", 2: "America", 3: "Japan", 4: "Korea"}
-    gameRevision = {0: "Rev0", 1: "Rev0 1.1", 2: "Rev1"}
+    gameRevision = {0: "Rev0", 1: "Rev0 1.1", 2: "Rev1", 3: "1.2"}
     exceptionType = {0: "Prefetch abort", 1: "Data abort", 2: "Undefined instruction", 3: "Abort", 4: "Custom", 5: "Unknown"}
     gameState = {0: "Uninitialized", 1: "Patch Process", 2: "Main", 3: "Menu (ID: {})", 4: "Race ({})", 5: "Trophy"}
 

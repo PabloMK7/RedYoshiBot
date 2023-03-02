@@ -8,6 +8,10 @@ from ..CTGP7Defines import CTGP7Defines
 
 current_time_min = lambda: int(round(time.time() / 60))
 
+allowed_console_status = [
+    "allgold"
+]
+
 class ConsoleMessageType(Enum):
     SINGLE_MESSAGE = 0
     TIMED_MESSAGE = 1
@@ -506,3 +510,27 @@ class CTGP7ServerDatabase:
         with self.lock:
             c = self.conn.cursor()
             c.execute("DELETE FROM mii_icon WHERE cID = ?", (int(cID),))
+
+    def get_console_status(self, cID, status):
+        if (not status in allowed_console_status):
+            return None
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT {} FROM console_status WHERE cID = ?".format(str(status)), (int(cID),))
+            for row in rows:
+                return row[0]
+            return None
+    
+    def set_console_status(self, cID, status, value):
+        if (not status in allowed_console_status):
+            return None
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT cID FROM console_status WHERE cID = ?", (int(cID),))
+            for row in rows:
+                c.execute("UPDATE console_status SET {} = ? WHERE cID = ?".format(str(status)), (int(value), int(cID)))
+                return
+            # Create entry
+            c.execute('INSERT INTO console_status VALUES (?,?)', (int(cID), int(0),))
+            # Update entry
+            c.execute("UPDATE console_status SET {} = ? WHERE cID = ?".format(str(status)), (int(value), int(cID)))

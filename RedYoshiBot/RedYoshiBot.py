@@ -505,7 +505,8 @@ def role_list():
         "COURSECREATOR": 325843915125030914,
         "BETAACCESS": 894352603830419506,
         # Roles with icons
-        "PLAYER": 946727706005995561
+        "PLAYER": 946727706005995561,
+        "GOLD_PLAYER": 1080603479640383639,
     }
 
 def SERVER_ID():
@@ -520,6 +521,7 @@ def EMERGENCY_SPECIAL_ROLES():
         385544890030751754, # Muted
         # Roles with icons
         946727706005995561, # Player
+        1080603479640383639, # Gold Player
     ]
 
 def MIKU_EMOJI_ID():
@@ -883,7 +885,7 @@ async def change_game():
 async def check_version_list():
     global db_mng
     keepChecking = True
-    await asyncio.sleep(15)
+    await asyncio.sleep(60 * 10)
     while True:
         if keepChecking:
             try:
@@ -892,7 +894,7 @@ async def check_version_list():
                 eurV = vList.get_version_for_title(0x0004000E00030700)
                 usaV = vList.get_version_for_title(0x0004000E00030800)
                 maxver = max(japV, eurV, usaV)
-                if (maxver > 1040):
+                if (maxver > 3152):
                     staffchan = client.get_channel(ch_list()["STAFF"])
                     msg = await staffchan.send("@everyone\nAn update for Mario Kart 7 has been detected! (Version: {})\nSending update message in #announcements in 10 minutes... (use the messageID from this message to cancel with @RedYoshiBot cancel_schedule)".format(maxver))
                     await db_mng.schedule_add(msg.id, ch_list()["ANN"], 10, "@everyone\nAn update for Mario Kart 7 has been detected!\n\n**DO NOT UPDATE MARIO KART 7 IF YOU WANT TO KEEP PLAYING CTGP-7.**\n\nPlease wait while we investigate this update.")
@@ -972,6 +974,7 @@ lastsentctgpmisspell = datetime.datetime.now()
 async def checkCTGPMissSpell(message):
     global lastsentctgpmisspell
     words : str = message.content.split()
+    showSpam = message.channel.id != ch_list()["BOTCHAT"] and len(words) == 1
     for word in words:
         if (len(word) == 4 or (len(word) == 5 and word[-1:] == "7") or (len(word) == 6 and word[-2:] == "-7")):
             ctgp = word[0:4].lower()
@@ -981,7 +984,7 @@ async def checkCTGPMissSpell(message):
                 lastsentctgpmisspell = datetime.datetime.now()
                 mapping = {"c": "Custom", "t": "Tracks", "g": "Grand", "p": "Prix"}
                 badctgp = [mapping[x] for x in ctgp]
-                await message.reply("It's **CTGP** (Custom Tracks Grand Prix), not **{}** ({} {} {} {})!".format(ctgp.upper(), badctgp[0], badctgp[1], badctgp[2], badctgp[3]))
+                await message.reply("It's **CTGP** (Custom Tracks Grand Prix), not **{}** ({} {} {} {})!{}".format(ctgp.upper(), badctgp[0], badctgp[1], badctgp[2], badctgp[3], "\n(Please do not spam this feature outside <#324672297812099093>.)" if showSpam else ""))
                 return
 
 async def sendMikuMessage(message):
@@ -1091,7 +1094,7 @@ async def checkNitroScam(message):
             await message.author.kick()
             
 
-from .server.CTGP7BotHandler import get_user_info, handle_server_command, handler_server_init_loop, handler_server_update_globals, kick_message_callback, server_message_logger_callback, server_on_member_remove
+from .server.CTGP7BotHandler import queue_player_role_update, get_user_info, handle_server_command, handler_server_init_loop, handler_server_update_globals, kick_message_callback, server_message_logger_callback, server_on_member_remove
 
 on_ready_completed = False
 @client.event
@@ -1119,6 +1122,7 @@ async def on_ready():
     ctgp7_server.database.setKickLogCallback(kick_message_callback)
     CTGP7ServerHandler.loggerCallback = server_message_logger_callback
     CTGP7Requests.get_user_info = get_user_info
+    CTGP7Requests.queue_player_role_update = queue_player_role_update
     asyncio.ensure_future(muted_task())
     asyncio.ensure_future(change_game())
     asyncio.ensure_future(check_version_list())

@@ -31,6 +31,7 @@ class CTGP7Requests:
     }
 
     get_user_info = None
+    queue_player_role_update = None
 
     pendingDiscordLinks = {}
 
@@ -41,6 +42,15 @@ class CTGP7Requests:
         self.database = database
         self.ctwwHandler = ctwwHandler
         self.cID = consoleID
+
+    def handle_status(self, input):
+        prevGold = self.database.get_console_status(self.cID, "allgold") == 1
+        newGold = input.get("allgold", False)
+        if (not prevGold and newGold):
+            self.database.set_console_status(self.cID, "allgold", 1)
+            discordID = self.database.get_discord_link_console(self.cID)
+            if (discordID is not None):
+                CTGP7Requests.queue_player_role_update(discordID)
 
     def put_stats(self, input):
         msgSeqID = 0
@@ -67,6 +77,8 @@ class CTGP7Requests:
                     elif (k == "played_tracks"):
                         for t in input[k]:
                             self.database.increment_track_frequency(t, input[k][t])
+                    elif (k == "status"):
+                        self.handle_status(input[k])
                 self.database.set_stats_dirty(True)
                 return (0, self.database.fetch_stats_seqid(self.cID))
             else: # Sequence ID is invalid

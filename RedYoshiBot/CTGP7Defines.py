@@ -75,7 +75,7 @@ class CTGP7Defines(object):
             48: "DS Shroom Ridge",
             51: "CTR Crash Cove",
             56: "CTR Cortex Castle",
-            60: "DS Dokan Course",
+            60: "Warp Pipe Island",
             61: "SNES Choco Island 2",
             64: "Star Slope",
             74: "Sandcastle Park",
@@ -121,7 +121,15 @@ class CTGP7Defines(object):
             110: "Retro Raceway",
             111: "Frozen Grotto",
             112: "GBA Lakeside Park",
-            113: "Dragon Burial Grounds"
+            113: "Dragon Burial Grounds",
+            114: "RMX Rainbow Road 1",
+            115: "Neo Metropolis",
+            116: "Frosty Heights",
+            117: "Gnasty Gnorc's Lair",
+            118: "RMX Vanilla Lake 1",
+            119: "Cliffside Circuit",
+            120: "Interstellar Laboratory",
+            121: "Dark Matter Fortress"
         }
     }
 
@@ -190,7 +198,7 @@ class CTGP7Defines(object):
             "Ctgp_GhostValleyT": 57,
             "Ctgp_MelodSanc": 58,
             "Ctgp_MarioRacewa": 59,
-            "Gds_DokkanCourse": 60,
+            "Ctgp_WarpPipeIsland": 60,
             "Gsfc_ChocoIsland": 61,
             "Ctgp_ElementalCave": 62,
             "Ctgp_YoshFalls": 63,
@@ -243,7 +251,15 @@ class CTGP7Defines(object):
             "Ctgp_RetroRaceway": 110,
             "Ctgp_FrzGrotto": 111,
             "Ctgp_GBALksdPrk": 112,
-            "Ctgp_DrgnBGrounds": 113
+            "Ctgp_DrgnBGrounds": 113,
+            "Ctgp_RMXSFCRbwRd": 114,
+            "Ctgp_NeoMetropolisss": 115,
+            "Ctgp_FrostyHeights": 116,
+            "Ctgp_GnsGnoLair": 117,
+            "Ctgp_VaLkO": 118,
+            "Ctgp_CliffCircuit": 119,
+            "Ctgp_InterstellarLabb": 120,
+            "Ctgp_DarkMatterFortress": 121
         }
     }
 

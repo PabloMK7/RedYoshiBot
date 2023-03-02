@@ -2,7 +2,7 @@ import struct
 
 class MK7FunctionSearch:
 
-    codeSectionFiles = [["", "", ""], ["", "eur_rev0_v11_code.bin", "eur_rev1_code.bin"], ["", "usa_rev0_v11_code.bin", "usa_rev1_code.bin"], ["", "jap_rev0_v11.bin", "jap_rev1_code.bin"]]
+    codeSectionFiles = [["", "", "", ""], ["", "eur_rev0_v11_code.bin", "eur_rev1_code.bin", "eur_rev2_code.bin"], ["", "usa_rev0_v11_code.bin", "usa_rev1_code.bin", "usa_rev2_code.bin"], ["", "jap_rev0_v11.bin", "jap_rev1_code.bin", "jap_rev2_code.bin"], ["", "", "kor_rev1_code.bin", "kor_rev2_code.bin"]]
     downloadPlayCode = "RedYoshiBot/code_sections/dlp_code.bin"
     xmapFile = "RedYoshiBot/code_sections/CTRDash.xmap"
 

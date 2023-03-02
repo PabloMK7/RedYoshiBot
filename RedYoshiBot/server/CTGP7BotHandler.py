@@ -27,7 +27,8 @@ def server_help_array():
     return {
         "help": ">@RedYoshiBot server help\nGets the help for the server specific commands.",
         "stats": ">@RedYoshiBot server stats (ct/ot/ba)\nGets the usage stats for custom tracks (ct), original tracks (ot) or battle arenas (ba).",
-        "link": ">@RedYoshiBot server link (link code)\nLinks a console to your discord account using the code provided by the CTGP-7 plugin."
+        "link": ">@RedYoshiBot server link (link code)\nLinks a console to your discord account using the code provided by the CTGP-7 plugin.",
+        "unlink": ">@RedYoshiBot server unlink\nUnlinks your console and discord account."
     }
 def staff_server_help_array():
     return {
@@ -98,6 +99,33 @@ async def staff_server_can_execute(message, command, silent=False):
 def get_server_bot_args(content: str, maxslplits=-1): # splits: amount of cuts after "server"
     realsplits = maxslplits + 1 if maxslplits != -1 else maxslplits
     return content.split(maxsplit=realsplits)[1:]
+
+player_role_applier_lock = threading.Lock()
+player_role_applier_pending = []
+async def calc_player_role(ctgp7_server: CTGP7ServerHandler, userID: str):
+    cID = ctgp7_server.database.get_discord_link_user(userID)
+    if (cID is None):
+        await removeRole(userID, role_list()["GOLD_PLAYER"])
+        await removeRole(userID, role_list()["PLAYER"])
+        return
+    isAllGold = ctgp7_server.database.get_console_status(cID, "allgold") == 1
+    if (isAllGold):
+        await applyRole(userID, role_list()["GOLD_PLAYER"])
+    await applyRole(userID, role_list()["PLAYER"])
+
+def queue_player_role_update(userID: str):
+    global player_role_applier_lock
+    global player_role_applier_pending
+    with player_role_applier_lock:
+        player_role_applier_pending.append(userID)
+
+async def process_pending_player_role_update(ctgp7_server: CTGP7ServerHandler):
+    global player_role_applier_lock
+    global player_role_applier_pending
+    with player_role_applier_lock:
+        for user in player_role_applier_pending:
+            await calc_player_role(ctgp7_server, user)
+        player_role_applier_pending.clear()
 
 def purge_player_name_symbols(line: str):
     toTranslate = dict.fromkeys(map(ord, '\n\r\u2705'), None)
@@ -507,15 +535,16 @@ async def server_bot_loop(ctgp7_server: CTGP7ServerHandler):
                 ctgp7_server.database.set_stats_dirty(False)
             await kick_message_logger(ctgp7_server)
             await server_message_logger(ctgp7_server)
+            await process_pending_player_role_update(ctgp7_server)
             server_bot_loop_dbcommit_cnt += 1
-            if (server_bot_loop_dbcommit_cnt >= 60 * 5 / 5): # Commit every 5 minutes
+            if (server_bot_loop_dbcommit_cnt >= (60 * 5) // 7): # Commit every 5 minutes
                 ctgp7_server.database.commit()
                 server_bot_loop_dbcommit_cnt = 0
             firstLoop = False
         except:
             traceback.print_exc()
             pass
-        await asyncio.sleep(7.5)
+        await asyncio.sleep(7)
 
 def get_user_info(userID):
     member = get_from_mention(userID)
@@ -868,17 +897,17 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             return
         
         if (ctgp7_server.database.get_discord_link_console(cID) is not None):
-            await message.reply("The specified console is already linked to another discord account. Ask one of the staff members to unlink the account.")
+            await message.reply("The specified console is linked to another discord account. Use `@RedYoshiBot server unlink` from the other account to unlink your console.")
             return
         
         if (ctgp7_server.database.get_discord_link_user(message.author.id) is not None):
-            await message.reply("The specified discord account is already linked to another console. Ask one of the staff members to unlink the console.")
+            await message.reply("Your discord account is already linked to another console. Use `@RedYoshiBot server unlink` to unlink the other console.")
             return
 
         ctgp7_server.database.set_discord_link_console(message.author.id, cID)
         del CTGP7Requests.pendingDiscordLinks[cID]
         await message.reply("Operation succeeded.")
-        await applyRole(message.author.id, role_list()["PLAYER"])
+        queue_player_role_update(message.author.id)
     elif bot_cmd == "getlink":
         if await staff_server_can_execute(message, bot_cmd):
             tag = get_server_bot_args(message.content)
@@ -916,7 +945,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             lastName = ctgp7_server.database.get_console_last_name(consoleID)
             await message.reply("`{:016X} {}` -> {}".format(consoleID, lastName, member.mention))
     elif bot_cmd == "unlink":
-        if await staff_server_can_execute(message, bot_cmd):
+        if await staff_server_can_execute(message, bot_cmd, True):
             tag = get_server_bot_args(message.content)
             if (len(tag) != 3):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + server_help_array()["unlink"] + "```")
@@ -945,7 +974,22 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply("Specified ID has no link established.")
                 return
 
+            if (discordID is None):
+                discordID = ctgp7_server.database.get_discord_link_console(consoleID)
             ctgp7_server.database.delete_discord_link_console(consoleID)
+            queue_player_role_update(discordID)
+            await message.reply("Operation succeeded.")
+        else:
+            tag = get_server_bot_args(message.content)
+            if (len(tag) != 2):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + server_help_array()["unlink"] + "```")
+                return
+            consoleID = ctgp7_server.database.get_discord_link_user(message.author.id)
+            if (consoleID is None):
+                await message.reply("There is no console linked with your account.")
+                return
+            ctgp7_server.database.delete_discord_link_console(consoleID)
+            queue_player_role_update(message.author.id)
             await message.reply("Operation succeeded.")
     elif bot_cmd == "manage_vr":
         if await staff_server_can_execute(message, bot_cmd):
@@ -1041,7 +1085,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 userID = ac[1]
                 member = get_from_mention(userID)
                 if (member is not None):
-                    await applyRole(member.id, role_list()["PLAYER"])
+                    queue_player_role_update(member.id)
                     curr += 1
                 total += 1
             await message.reply("Done! Success: {}, Fail: {}".format(curr, total - curr))

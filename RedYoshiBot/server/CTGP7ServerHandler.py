@@ -14,7 +14,7 @@ import subprocess
 from .CTGP7Requests import CTGP7Requests
 from .CTGP7ServerDatabase import CTGP7ServerDatabase
 from .CTGP7CtwwHandler import CTGP7CtwwHandler
-from .CTGP7ServerCritical import do_critical_operations
+from .CTGP7ServerCritical import do_critical_operations_in, do_critical_operations_out
 
 class CTGP7ServerHandler:
     
@@ -33,7 +33,7 @@ class CTGP7ServerHandler:
 
     class PostHandler(BaseHTTPRequestHandler):
         def do_POST(self):
-            if (not do_critical_operations(CTGP7ServerHandler.myself, self)):
+            if (not do_critical_operations_in(CTGP7ServerHandler.myself, self)):
                 return
             
             timeNow = datetime.datetime.now()
@@ -74,6 +74,9 @@ class CTGP7ServerHandler:
                 outputData["_CID"] = reqConsoleID
                 outputData["_seed"] = inputData["_seed"]
                 outputData["res"] = 0
+          
+                if (not do_critical_operations_out(CTGP7ServerHandler.myself, self, outputData)):
+                    return
 
             except Exception:
                 outputData["res"] = -1
