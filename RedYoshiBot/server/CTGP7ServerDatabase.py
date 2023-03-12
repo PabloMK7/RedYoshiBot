@@ -8,9 +8,7 @@ from ..CTGP7Defines import CTGP7Defines
 
 current_time_min = lambda: int(round(time.time() / 60))
 
-allowed_console_status = [
-    "allgold"
-]
+
 
 class ConsoleMessageType(Enum):
     SINGLE_MESSAGE = 0
@@ -19,6 +17,13 @@ class ConsoleMessageType(Enum):
     TIMED_KICKMESSAGE = 3
 
 class CTGP7ServerDatabase:
+    allowed_console_status = [
+        "allgold",
+        "all1star",
+        "all3star",
+        "all10pts",
+        "vr5000"
+    ]
     class VRInfos:
         def __init__(self):
             self.ctVR = 1000
@@ -512,7 +517,7 @@ class CTGP7ServerDatabase:
             c.execute("DELETE FROM mii_icon WHERE cID = ?", (int(cID),))
 
     def get_console_status(self, cID, status):
-        if (not status in allowed_console_status):
+        if (not status in CTGP7ServerDatabase.allowed_console_status):
             return None
         with self.lock:
             c = self.conn.cursor()
@@ -522,7 +527,7 @@ class CTGP7ServerDatabase:
             return None
     
     def set_console_status(self, cID, status, value):
-        if (not status in allowed_console_status):
+        if (not status in CTGP7ServerDatabase.allowed_console_status):
             return None
         with self.lock:
             c = self.conn.cursor()
@@ -531,6 +536,6 @@ class CTGP7ServerDatabase:
                 c.execute("UPDATE console_status SET {} = ? WHERE cID = ?".format(str(status)), (int(value), int(cID)))
                 return
             # Create entry
-            c.execute('INSERT INTO console_status VALUES (?,?)', (int(cID), int(0),))
+            c.execute('INSERT INTO console_status VALUES (?,?,?,?,?,?)', (int(cID), int(0), int(0), int(0), int(0), int(0),))
             # Update entry
             c.execute("UPDATE console_status SET {} = ? WHERE cID = ?".format(str(status)), (int(value), int(cID)))

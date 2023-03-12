@@ -44,10 +44,16 @@ class CTGP7Requests:
         self.cID = consoleID
 
     def handle_status(self, input):
-        prevGold = self.database.get_console_status(self.cID, "allgold") == 1
-        newGold = input.get("allgold", False)
-        if (not prevGold and newGold):
-            self.database.set_console_status(self.cID, "allgold", 1)
+        queue_update = False
+
+        for s in CTGP7ServerDatabase.allowed_console_status:
+            prev = self.database.get_console_status(self.cID, s) == 1
+            new = input.get(s, False)
+            if (not prev and new):
+                self.database.set_console_status(self.cID, s, 1)
+                queue_update = True
+
+        if (queue_update):
             discordID = self.database.get_discord_link_console(self.cID)
             if (discordID is not None):
                 CTGP7Requests.queue_player_role_update(discordID)

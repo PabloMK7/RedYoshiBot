@@ -22,11 +22,13 @@ class CTGP7ServerHandler:
     debug_mode = False
     myself = None
     loggerCallback = lambda x : x 
+    white_listed_consoleIDs = []
 
     @staticmethod
     def logMessageToFile(message):
         if (CTGP7ServerHandler.debug_mode):
-            print(message)
+            if (len(CTGP7ServerHandler.white_listed_consoleIDs) == 0 or any([(str(m) in message) for m in CTGP7ServerHandler.white_listed_consoleIDs])):
+                print(message)
         else:
             if (CTGP7ServerHandler.loggerCallback is not None):
                 CTGP7ServerHandler.loggerCallback(message)
@@ -109,8 +111,9 @@ class CTGP7ServerHandler:
                 CTGP7ServerHandler.logMessageToFile(logStr)
         
         def log_message(self, format, *args):
-            if (CTGP7ServerHandler.debug_mode):
-                BaseHTTPRequestHandler.log_message(self, format, *args)
+            # if (CTGP7ServerHandler.debug_mode):
+            #    BaseHTTPRequestHandler.log_message(self, format, *args)
+            pass
 
     class ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
         pass
@@ -119,6 +122,12 @@ class CTGP7ServerHandler:
 
         CTGP7ServerHandler.debug_mode = isDebugOn
         CTGP7ServerHandler.myself = self
+
+        try:
+            with open("debugConsoleID.txt", "r") as f:
+                CTGP7ServerHandler.white_listed_consoleIDs = f.read().strip().split(" ")
+        except:
+            pass
 
         self.database = CTGP7ServerDatabase()
         self.database.connect()

@@ -1,7 +1,7 @@
 from typing import Tuple
 from RedYoshiBot.server.CTGP7Requests import CTGP7Requests
 from .CTGP7ServerHandler import CTGP7ServerHandler
-from .CTGP7ServerDatabase import ConsoleMessageType
+from .CTGP7ServerDatabase import ConsoleMessageType, CTGP7ServerDatabase
 from ..RedYoshiBot import FakeMember, ch_list, is_channel, is_channel_private, get_role, parsetime, sendMultiMessage, escapeFormatting, role_list, get_from_mention, CreateFakeMember, applyRole, removeRole
 from ..CTGP7Defines import CTGP7Defines
 import discord
@@ -103,15 +103,18 @@ def get_server_bot_args(content: str, maxslplits=-1): # splits: amount of cuts a
 player_role_applier_lock = threading.Lock()
 player_role_applier_pending = []
 async def calc_player_role(ctgp7_server: CTGP7ServerHandler, userID: str):
+    role_names = ["PLAYER", "BRONZE_PLAYER", "SILVER_PLAYER", "GOLD_PLAYER", "DIAMOND_PLAYER", "RAINBOW_PLAYER"]
+    for r in role_names:
+        await removeRole(userID, role_list()[r])
     cID = ctgp7_server.database.get_discord_link_user(userID)
     if (cID is None):
-        await removeRole(userID, role_list()["GOLD_PLAYER"])
-        await removeRole(userID, role_list()["PLAYER"])
         return
-    isAllGold = ctgp7_server.database.get_console_status(cID, "allgold") == 1
-    if (isAllGold):
-        await applyRole(userID, role_list()["GOLD_PLAYER"])
-    await applyRole(userID, role_list()["PLAYER"])
+    count = 0
+    for s in CTGP7ServerDatabase.allowed_console_status:
+        if (ctgp7_server.database.get_console_status(cID, s) == 1): count += 1
+    if (count >= 1):
+        await applyRole(userID, role_list()[role_names[count]])
+    await applyRole(userID, role_list()[role_names[0]])
 
 def queue_player_role_update(userID: str):
     global player_role_applier_lock
