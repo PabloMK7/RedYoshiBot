@@ -539,3 +539,9 @@ class CTGP7ServerDatabase:
             c.execute('INSERT INTO console_status VALUES (?,?,?,?,?,?)', (int(cID), int(0), int(0), int(0), int(0), int(0),))
             # Update entry
             c.execute("UPDATE console_status SET {} = ? WHERE cID = ?".format(str(status)), (int(value), int(cID)))
+
+    def transfer_console_status(self, oldcID, newcID):
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute("DELETE FROM console_status WHERE cID = ?", (int(newcID),))
+            c.execute("UPDATE console_status SET cID = ? WHERE cID = ?", (int(newcID), int(oldcID)))

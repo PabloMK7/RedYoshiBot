@@ -243,6 +243,7 @@ async def update_graph_message(ctgp7_server: CTGP7ServerHandler):
     global graph_launches_message_id
     global last_graph_update_date
     DAYS_PAST = 30
+    #DAYS_PAST = (datetime.datetime.utcnow() - datetime.datetime(year=2021, month=6, day=15)).days
     today = datetime.datetime.utcnow().date()
     if (today == last_graph_update_date):
         return
@@ -252,10 +253,12 @@ async def update_graph_message(ctgp7_server: CTGP7ServerHandler):
     y2 = []
     for i in range(DAYS_PAST):
         date = today - datetime.timedelta(days=DAYS_PAST - i)
+        # x.append(date.strftime("%Y %b %-d"))
         x.append(date.strftime("%b %-d"))
         y1.append(ctgp7_server.database.get_daily_launches(date))
         y2.append(ctgp7_server.database.get_daily_unique_consoles(date))
     
+    # plt.rcParams["figure.figsize"] = (plt.rcParamsDefault["figure.figsize"][0] * 20, plt.rcParamsDefault["figure.figsize"][1])
     plt.rcParams["figure.figsize"] = (plt.rcParamsDefault["figure.figsize"][0] * 1.75, plt.rcParamsDefault["figure.figsize"][1])
     plt.plot(x, y1, color = "dodgerblue", label = "Launches", marker="o", markersize=3)
     plt.plot(x, y2, color = "lightskyblue", linestyle='dashed', label = "New Consoles", marker="o", markersize=3)
@@ -578,6 +581,7 @@ def transfer_console_data(ctgp7_server: CTGP7ServerHandler, srcCID: int, dstCID:
         if (discordID is not None):
             ctgp7_server.database.delete_discord_link_console(srcCID)
             ctgp7_server.database.set_discord_link_console(discordID, dstCID)
+        ctgp7_server.database.transfer_console_status(srcCID, dstCID)
         return ""
     except Exception as e:
         return str(e)
