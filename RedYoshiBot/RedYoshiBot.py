@@ -419,7 +419,8 @@ def staff_help_array():
         "cancel_schedule": ">@RedYoshiBot cancel_schedule (scheduleid)\nCancels the specified scheduled message. The schedule id can be obtained from the id of the message sent by the bot.",
         "emergency": "!emergency\nEnables emergency mode.",
         "emergency_off": "!emergency_off\nDisables emergency mode.", 
-        "talk": ">@RedYoshiBot talk (channel/user)\nSets the chat destination ID (don't specify an ID to clear the current one). Use `+` before a message to talk with the specified ID and `++` to talk and clear the destination ID afterwards."
+        "talk": ">@RedYoshiBot talk (channel/user)\nSets the chat destination ID (don't specify an ID to clear the current one). Use `+` before a message to talk with the specified ID and `++` to talk and clear the destination ID afterwards.",
+        "reply_miku": ">@RedYoshiBot reply_miku (channel) (message)\nReplies to the specified message in the specified channel with the miku joke."
     }
     
 def staff_command_level():
@@ -444,6 +445,7 @@ def staff_command_level():
         "cancel_schedule": 0,
         "emergency": 1,
         "talk": 0,
+        "reply_miku": 1,
         "help": 1,
         "showcookie": 1,
         "setcookie": 1,
@@ -995,7 +997,7 @@ async def checkCTGPMissSpell(message):
                 await message.reply("It's **CTGP** (Custom Tracks Grand Prix), not **{}** ({} {} {} {})!{}".format(ctgp.upper(), badctgp[0], badctgp[1], badctgp[2], badctgp[3], "\n(Please do not spam this feature outside <#324672297812099093>.)" if showSpam else ""))
                 return
 
-async def sendMikuMessage(message):
+async def sendMikuMessage(message, ignore_timeout):
     global db_mng
     global miku_last_message_time
     mikuem = client.get_emoji(MIKU_EMOJI_ID())
@@ -1003,7 +1005,7 @@ async def sendMikuMessage(message):
     numbTimes = await db_mng.get_MikuTimes()
     await db_mng.set_MikuTimes(numbTimes + 1)
     try:
-        if (datetime.datetime.utcnow() - miku_last_message_time > datetime.timedelta(seconds=5)):
+        if (datetime.datetime.utcnow() - miku_last_message_time > datetime.timedelta(seconds=5) or ignore_timeout):
             emb = discord.Embed(description="For the {} time,\nMiku's Birthday Spectacular\n**WILL NOT** be removed!!!!".format(ordinal(numbTimes)), colour=discord.Colour(0x00FFFF))
             emb.set_thumbnail(url=mikuem.url)
             await message.reply(embed=emb)
@@ -1744,6 +1746,30 @@ async def on_message(message):
                     except Exception as e:
                         await message.reply("Failed to get function name.")
                         raise e
+                elif bot_cmd == 'reply_miku':
+                    if await staff_can_execute(message, bot_cmd):
+                        tag = message.content.split(None)
+                        if (len(tag) != 4):
+                            await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()["reply_miku"] + "```")
+                            return
+                        chantosend = None
+                        try:
+                            chantosend = client.get_channel(int(tag[2]))
+                        except:
+                            pass
+                        if (chantosend is None):
+                            await message.reply("Specified channel not found")
+                            return
+                        replymsg = None
+                        try:
+                            replymsg = await chantosend.fetch_message(int(tag[3]))
+                        except:
+                            pass
+                        if (replymsg is None):
+                            await message.reply("Specified message not found")
+                            return
+                        await sendMikuMessage(replymsg, True)
+                        await message.reply("Operation succeeded")
                 elif bot_cmd == 'help':
                     if is_channel(message, ch_list()["BOTCHAT"]) or await staff_can_execute(message, bot_cmd, silent=True) or is_channel_private(message.channel):
                         tag = message.content.split()
@@ -1981,7 +2007,7 @@ async def on_message(message):
                 current_talk_id = ''
                 await message.reply( "Cleared chat destination.")
         elif (all(x in message.content.lower() for x in ["miku"]) or all(x in message.content.lower() for x in ["mbs"])) and itercount((x in message.content.lower() for x in ["remove", "replace", "delete"]), 1) and message.author != client.user:
-            await sendMikuMessage(message)
+            await sendMikuMessage(message, False)
         else:
             if (message.author != client.user):
                 await checkCTGPMissSpell(message)
