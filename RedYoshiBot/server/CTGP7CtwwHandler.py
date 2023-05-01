@@ -41,22 +41,22 @@ class RoomState(Enum):
     FINISHED = 3
 
 class StarGrade(Enum):
-    NONE = 0,
+    NONE = 0
     # Unused
-    C = 1,
-    B = 2,
-    A = 3,
+    C = 1
+    B = 2
+    A = 3
     # Used
-    STAR_1 = 4,
-    STAR_2 = 5,
-    STAR_3 = 6,
+    STAR_1 = 4
+    STAR_2 = 5
+    STAR_3 = 6
     # Custom
-    CUSTOM_PLAYER = 7,
-    CUSTOM_BRONZE = 8,
-    CUSTOM_SILVER = 9,
-    CUSTOM_GOLD = 10,
-    CUSTOM_DIAMOND = 11,
-    CUSTOM_RAINBOW = 12,
+    CUSTOM_PLAYER = 7
+    CUSTOM_BRONZE = 8
+    CUSTOM_SILVER = 9
+    CUSTOM_GOLD = 10
+    CUSTOM_DIAMOND = 11
+    CUSTOM_RAINBOW = 12
     # Invalid
     INVALID = 0xFF
 
