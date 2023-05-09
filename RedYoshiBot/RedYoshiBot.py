@@ -37,6 +37,7 @@ client = discord.Client(intents=intents)
 debug_mode = False
 current_talk_id = ''
 miku_last_message_time = datetime.datetime.utcnow()
+cached_member_count = None
 
 class ServerDatabase:
     global debug_mode
@@ -887,6 +888,12 @@ async def perform_game_change():
     await client.change_presence(activity=discord.Game(name))
     return name
 
+async def update_cached_member_count():
+    global cached_member_count
+    while True:
+        cached_member_count = (await client.fetch_guild(SERVER_ID())).approximate_member_count
+        await asyncio.sleep(60 * 60)
+
 async def change_game():
     while True:
         await perform_game_change()
@@ -1116,6 +1123,7 @@ async def on_ready():
     global SELF_BOT_MEMBER
     global debug_mode
     global on_ready_completed
+    global cached_member_count
     if (on_ready_completed):
         print("Skipping on_ready...")
         print('------\n')
@@ -1135,6 +1143,7 @@ async def on_ready():
     CTGP7Requests.queue_player_role_update = queue_player_role_update
     asyncio.ensure_future(muted_task())
     asyncio.ensure_future(change_game())
+    asyncio.ensure_future(update_cached_member_count())
     asyncio.ensure_future(check_version_list())
     handler_server_update_globals(SELF_BOT_MEMBER, SELF_BOT_SERVER)
     handler_server_init_loop(ctgp7_server)
@@ -1154,8 +1163,11 @@ async def on_member_join(member):
     global SELF_BOT_SERVER
     global client
     global db_mng
+    global cached_member_count
+    if (cached_member_count is not None):
+        cached_member_count += 1
     door_chan = SELF_BOT_SERVER.get_channel(ch_list()["DOORSTEP"])
-    await door_chan.send("Everybody welcome {} to the server! Make sure to check the rules in <#739808582979027025>.\nWe are now {} members.".format(member.mention, SELF_BOT_SERVER.member_count))
+    await door_chan.send("Everybody welcome {} to the server! Make sure to check the rules in <#739808582979027025>.\nWe are now {} members.".format(member.mention, cached_member_count))
     rows = await db_mng.mute_get()
     for row in rows:
         if (row[0] == int(member.id)):
@@ -1170,9 +1182,12 @@ async def on_member_remove(member):
     global db_mng
     global client
     global ctgp7_server
+    global cached_member_count
+    if (cached_member_count is not None):
+        cached_member_count -= 1
     await server_on_member_remove(ctgp7_server, member)
     door_chan = SELF_BOT_SERVER.get_channel(ch_list()["DOORSTEP"])
-    await door_chan.send("See ya **{}**. We are now {} members.".format(member.name, SELF_BOT_SERVER.member_count))
+    await door_chan.send("See ya **{}**. We are now {} members.".format(member.name, cached_member_count))
     
 @client.event
 async def on_message_delete(message):
@@ -1593,8 +1608,9 @@ async def on_message(message):
                     delay_time = now_dt - msg_time
                     await message.reply( "Pong! ({}s, {}ms)".format(delay_time.seconds, delay_time.microseconds / 1000))
                 elif bot_cmd == 'membercount':
+                    global cached_member_count
                     if not (is_channel_private(message.channel)):
-                        await message.reply( "We are now {} members.".format(SELF_BOT_SERVER.member_count))
+                        await message.reply( "We are now {} members.".format(cached_member_count))
                     else:
                         await message.reply( "This command cannot be used here.")
                 elif bot_cmd == 'fact':
