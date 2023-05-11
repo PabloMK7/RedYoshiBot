@@ -888,12 +888,6 @@ async def perform_game_change():
     await client.change_presence(activity=discord.Game(name))
     return name
 
-async def update_cached_member_count():
-    global cached_member_count
-    while True:
-        cached_member_count = (await client.fetch_guild(SERVER_ID())).approximate_member_count
-        await asyncio.sleep(60 * 60)
-
 async def change_game():
     while True:
         await perform_game_change()
@@ -1143,7 +1137,6 @@ async def on_ready():
     CTGP7Requests.queue_player_role_update = queue_player_role_update
     asyncio.ensure_future(muted_task())
     asyncio.ensure_future(change_game())
-    asyncio.ensure_future(update_cached_member_count())
     asyncio.ensure_future(check_version_list())
     handler_server_update_globals(SELF_BOT_MEMBER, SELF_BOT_SERVER)
     handler_server_init_loop(ctgp7_server)
@@ -1152,6 +1145,7 @@ async def on_ready():
     print('------\n')
     set_retry_times(0)
     on_ready_completed = True
+    cached_member_count = SELF_BOT_SERVER.member_count
 
 @client.event
 async def wait_until_login():
