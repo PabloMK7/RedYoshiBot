@@ -558,7 +558,8 @@ def get_user_info(userID):
         return None
     ret = {}
     ret["name"] = member.name
-    ret["discrim"] = str(member.discriminator)
+    if (member.discriminator is not None and member.discriminator != 0):
+        ret["discrim"] = str(member.discriminator)
     ret["nick"] = member.display_name
 
     contrRole = get_role(role_list()["CONTRIBUTOR"])
