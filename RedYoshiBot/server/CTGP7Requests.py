@@ -21,12 +21,12 @@ class CTGP7Requests:
 		"cd_races",
 		"online_coin_battles",
 		"online_balloon_battles",
-        "failed_mission",
-        "completed_mission",
-        "perfect_mission",
-        "custom_mission",
-        "grademean_mission",
-        "gradecount_mission",
+        "failed_mission#2",
+        "completed_mission#2",
+        "perfect_mission#2",
+        "custom_mission#2",
+        "grademean_mission#2",
+        "gradecount_mission#2",
         "race_points"
     }
 
@@ -79,7 +79,7 @@ class CTGP7Requests:
                     self.database.increment_today_launches()
                 for k in input:
                     if (k in CTGP7Requests.statsList):
-                        self.database.increment_general_stats(k, input[k])
+                        self.database.increment_general_stats(k.split("#", 1)[0], input[k])
                     elif (k == "played_tracks"):
                         for t in input[k]:
                             self.database.increment_track_frequency(t, input[k][t])
