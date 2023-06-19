@@ -1597,9 +1597,7 @@ async def on_message(message):
                     if (len(tag) != 2):
                         await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["ping"] + "```")
                         return
-                    msg_time = message.created_at
-                    now_dt = datetime.datetime.utcnow()
-                    delay_time = now_dt - msg_time
+                    delay_time = datetime.datetime.now(tz=message.created_at.tzinfo) - message.created_at
                     await message.reply( "Pong! ({}s, {}ms)".format(delay_time.seconds, delay_time.microseconds / 1000))
                 elif bot_cmd == 'membercount':
                     global cached_member_count

@@ -10,6 +10,7 @@ import threading
 import random
 import subprocess
 import sys
+from collections import deque
 
 current_time_min = lambda: int(round(time.time() / 60))
 
@@ -169,6 +170,7 @@ class OnlineRoom:
         self.isDisbanding = False
         self.logToStaff = False
         self.cpuRandomSeed = random.getrandbits(31)
+        self.trackHistory = deque()
 
     def joinPlayer(self, user: OnlineUser):
         self.players.add(user.cID)
@@ -269,6 +271,17 @@ class OnlineRoom:
             vrTot += vrData.ctVR if self.gamemode == 0 else vrData.cdVR
         vrTot //= len(self.players)
         return vrTot
+    
+    def appendToTrackHistory(self, szsName: str, database: CTGP7ServerDatabase):
+        amount = database.get_room_blocked_track_history_count()
+        if (szsName in self.trackHistory):
+            self.trackHistory.remove(szsName)
+        self.trackHistory.append(szsName)
+        while (len(self.trackHistory) > amount):
+            self.trackHistory.popleft()
+    
+    def getTrackHistory(self):
+        return "::".join(self.trackHistory)
 
 
 class CTGP7CtwwHandler:
@@ -484,6 +497,7 @@ class CTGP7CtwwHandler:
             retDict["cdvr"] = vrData.cdVR
             retDict["ctvrPos"] = vrData.ctPos
             retDict["cdvrPos"] = vrData.cdPos
+            retDict["trackHistory"] = room.getTrackHistory()
             user.setVRIncr(None)
 
             user.isAlive()
@@ -542,6 +556,7 @@ class CTGP7CtwwHandler:
             retDict["vrMean"] = room.getVRMean(self.database)
             retDict["rubberBMult"] = self.database.get_room_rubberbanding_config(False)
             retDict["rubberBOffset"] = self.database.get_room_rubberbanding_config(True)
+            retDict["delayDriftBlocked"] = self.database.get_blocked_delay_drift() != 0
 
             user.isAlive()
             
@@ -569,6 +584,7 @@ class CTGP7CtwwHandler:
             if (user.getState() == UserState.HOSTING.value):
                 room.setState(RoomState.RACING.value)
                 room.setRace(szsName)
+                room.appendToTrackHistory(szsName, self.database)
                 room.enableLog()
             
             user.isAlive()
@@ -582,6 +598,7 @@ class CTGP7CtwwHandler:
             token = input.get("token")
             ctvr = input.get("ctvr")
             cdvr = input.get("cdvr")
+            retDict = {}
 
             if (gID is None or token is None or ctvr is None or cdvr is None):
                 return (-1, {})
@@ -607,7 +624,9 @@ class CTGP7CtwwHandler:
 
             user.isAlive()
 
-            return (CTWWLoginStatus.SUCCESS.value, {})
+            retDict["trackHistory"] = room.getTrackHistory()
+
+            return (CTWWLoginStatus.SUCCESS.value, retDict)
 
     def handle_user_watch_room(self, input, cID):
         with self.lock:

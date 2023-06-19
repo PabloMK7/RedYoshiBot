@@ -51,7 +51,7 @@ def staff_server_help_array():
         "apply_player_role": ">@RedYoshiBot server apply_player_role\nVERY SLOW!!! Applies the Player role to all linked console accounts.",
         "purge_console_link": ">@RedYoshiBot server purge_console_link\nRemoved console links from users that are no longer in the server.",
         "get_mii_icon": ">@RedYoshiBot server get_mii_icon (consoleID)\nGets the mii icon of the specified user.",
-        "room_config": ">@RedYoshiBot server room_config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset) [newValue]\nGets or sets the config parameters for rooms."
+        "room_config": ">@RedYoshiBot server room_config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/blockDelayDrift) [newValue]\nGets or sets the config parameters for rooms."
     }
     
 def staff_server_command_level():
@@ -558,7 +558,7 @@ def get_user_info(userID):
         return None
     ret = {}
     ret["name"] = member.name
-    if (member.discriminator is not None and member.discriminator != 0):
+    if (member.discriminator is not None and str(member.discriminator) != "0"):
         ret["discrim"] = str(member.discriminator)
     ret["nick"] = member.display_name
 
@@ -1135,7 +1135,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["room_config"] + "```")
                 return
             mode = tag[2]
-            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset"]:
+            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset", "blockedTrackHistory", "blockDelayDrift"]:
                 await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()["room_config"] + "```")
                 return
             if (len(tag) == 3):
@@ -1148,11 +1148,15 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     amount = ctgp7_server.database.get_room_rubberbanding_config(False)
                 elif mode == "rubberBOffset":
                     amount = ctgp7_server.database.get_room_rubberbanding_config(True)
+                elif mode == "blockedTrackHistory":
+                    amount = ctgp7_server.database.get_room_blocked_track_history_count()
+                elif mode == "blockDelayDrift":
+                    amount = ctgp7_server.database.get_blocked_delay_drift()
                 await message.reply( "Config for \"{}\" is: {}".format(mode, amount))
                 return
             else:
                 try:
-                    if (mode == "ctCPUAmount" or mode == "cdCPUAmount"):
+                    if (mode == "ctCPUAmount" or mode == "cdCPUAmount" or mode == "blockedTrackHistory" or mode == "blockDelayDrift"):
                         amount = int(tag[3])
                     elif (mode == "rubberBMult" or mode == "rubberBOffset"):
                         amount = float(tag[3])
@@ -1167,6 +1171,10 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     ctgp7_server.database.set_room_rubberbanding_config(False, amount)
                 elif mode == "rubberBOffset":
                     ctgp7_server.database.set_room_rubberbanding_config(True, amount)
+                elif mode == "blockedTrackHistory":
+                    ctgp7_server.database.set_room_blocked_track_history_count(amount)
+                elif mode == "blockDelayDrift":
+                    ctgp7_server.database.set_blocked_delay_drift(amount)
                 await message.reply("Config for \"{}\" is: {}".format(mode, amount))
                 return
     else:
