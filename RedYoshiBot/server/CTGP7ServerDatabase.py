@@ -128,12 +128,6 @@ class CTGP7ServerDatabase:
     def set_room_blocked_track_history_count(self, value: int):
         self.set_database_config("blockTrackHistoryCount", int(value))
 
-    def get_blocked_delay_drift(self):
-        return int(self.get_database_config("blockDelayDrift"))
-    
-    def set_blocked_delay_drift(self, value: int):
-        self.set_database_config("blockDelayDrift", int(value))
-
     def get_most_played_tracks(self, course_type, amount):
         splitenabled = self.get_track_freq_split_enabled()
         currsplit = self.get_track_freq_split()

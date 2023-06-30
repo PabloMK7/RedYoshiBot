@@ -556,7 +556,6 @@ class CTGP7CtwwHandler:
             retDict["vrMean"] = room.getVRMean(self.database)
             retDict["rubberBMult"] = self.database.get_room_rubberbanding_config(False)
             retDict["rubberBOffset"] = self.database.get_room_rubberbanding_config(True)
-            retDict["delayDriftBlocked"] = self.database.get_blocked_delay_drift() != 0
 
             user.isAlive()
             
