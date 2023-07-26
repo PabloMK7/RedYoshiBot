@@ -1439,7 +1439,7 @@ async def on_message(message):
                             if(len(tag) == 3):
                                 warnreason = "No reason given."
                             else:
-                                warnreason = tag[3]
+                                warnreason = tag[3] if len(tag) <= 4 else tag[3] + " " + tag[4]
                         if(warn_member != None):
                             if (not checkCanPunish(warncount)):
                                 await message.reply("Operation Denied. Max amount of kick/bans in the last 4 hours reached.\nEnable emergency mode with `!emergency` and contact PabloMK7.")
