@@ -209,10 +209,7 @@ async def kick_message_logger(ctgp7_server: CTGP7ServerHandler):
             isSilent = m[4]
             if (isSilent or (messageType != ConsoleMessageType.SINGLE_KICKMESSAGE.value and messageType != ConsoleMessageType.TIMED_KICKMESSAGE.value) or cID == 0):
                 continue
-            publicCID = "0x\\*\\*\\*\\*\\*\\*\\*\\*\\*\\*\\*\\*\\*\\*{:04X}".format(cID & 0xFFFF)
-            embedPublic=discord.Embed(title="Kick Report", description="Console ID: {}".format(publicCID), color=0xff0000, timestamp=datetime.datetime.now())
             embedPrivate=discord.Embed(title="Kick Report", description="Console ID: 0x{:016X}".format(cID), color=0xff0000, timestamp=datetime.datetime.now())
-            embedPublic.add_field(name="Reason", value=message, inline=False)
             embedPrivate.add_field(name="Reason", value=message, inline=False)
             if (messageType == ConsoleMessageType.TIMED_KICKMESSAGE.value):
                 time = ""
@@ -223,11 +220,8 @@ async def kick_message_logger(ctgp7_server: CTGP7ServerHandler):
                     hours = int((amountMin // 60) % 24)
                     minutes = int((amountMin) % 60)
                     time = "{} days,  {} hours, {} minutes".format(days, hours, minutes)
-                embedPublic.add_field(name="Duration", value=time, inline=False)
                 embedPrivate.add_field(name="Duration", value=time, inline=False)
-            chPublic = SELF_BOT_SERVER.get_channel(ch_list()["KICKS"])
             chPrivate = SELF_BOT_SERVER.get_channel(ch_list()["STAFFKICKS"])
-            await chPublic.send(embed=embedPublic)
             await chPrivate.send(embed=embedPrivate)
         kick_message_logger_pending = []
             
