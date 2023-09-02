@@ -1,6 +1,7 @@
 import sqlite3
 import traceback
 import time
+import datetime
 import random
 
 from ..CTGP7Defines import CTGP7Defines
@@ -108,6 +109,13 @@ class CTGP7Requests:
             retVal["pointsPos"] = pts[1]
         return (ret[0], retVal)
 
+    def req_online_token(self, input):
+        if (not "password" in input):
+            return (-1, 0)
+        token = self.ctwwHandler.generate_password_token(str(input["password"]))
+        timenow = datetime.datetime.utcnow()
+        return (0, {"online_token": token, "server_time": int(timenow.strftime("%Y%m%d%H%M%S"))})
+
     def req_discord_info(self, input):
         discordLink = self.database.get_discord_link_console(self.cID)
         if (discordLink is None):
@@ -172,7 +180,8 @@ class CTGP7Requests:
         "betaver": get_beta_version,
         "login": server_login_handler,
         "logout": server_logout_handler,
-        "discordinfo": req_discord_info
+        "discordinfo": req_discord_info,
+        "onlinetoken": req_online_token
     }
 
     put_functions = {
@@ -189,7 +198,12 @@ class CTGP7Requests:
     }
 
     hide_logs_input = [
-        "miiicon"
+        "miiicon",
+        "onlinetoken"
+    ]
+
+    hide_logs_output = [
+        "onlinetoken"
     ]
 
     def solve(self):
@@ -213,6 +227,8 @@ class CTGP7Requests:
                     outData[k]["res"] = -1
                 if reqType in CTGP7Requests.hide_logs_input:
                     inData = "__HIDDEN__"
+                if reqType in CTGP7Requests.hide_logs_output:
+                    value = "__HIDDEN__"
                 requestList += "  " + k + "\n    in:\n      {}\n    res:\n      {}\n    out:\n      {}\n".format(inData, res, value)
             elif (len(k) > 4 and k.startswith("put_")):
                 putType = k[4:]
@@ -230,6 +246,8 @@ class CTGP7Requests:
                     outData[k]["res"] = -1
                 if putType in CTGP7Requests.hide_logs_input:
                     inData = "__HIDDEN__"
+                if putType in CTGP7Requests.hide_logs_output:
+                    value = "__HIDDEN__"
                 putList += "  " + k + "\n    in:\n      {}\n    res:\n      {}\n    out:\n      {}\n".format(inData, res, value)
         self.info = ""
         if (requestList != ""):

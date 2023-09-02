@@ -10,6 +10,10 @@ import datetime
 import os
 import traceback
 import subprocess
+import random
+import sys
+import ctypes
+import signal
 
 from .CTGP7Requests import CTGP7Requests
 from .CTGP7ServerDatabase import CTGP7ServerDatabase
@@ -33,7 +37,32 @@ class CTGP7ServerHandler:
             if (CTGP7ServerHandler.loggerCallback is not None):
                 CTGP7ServerHandler.loggerCallback(message)
 
-    class PostHandler(BaseHTTPRequestHandler):
+    class PostGetHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            what = ""
+            if (len(self.path) >= 3 and self.path[0] == "/" and self.path[2] == "/"):
+                what = self.path[1]
+            
+            if (what == "t"):
+                token = self.path[3:]
+                password = CTGP7ServerHandler.myself.ctwwHandler.get_password_from_token(token)
+
+                if password is None: # Generate random password
+                    password = ''.join(random.choices("0123456789ABCDEF", k=16))
+
+                self.send_response(200)
+                self.send_header("Content-type", "text/plain")
+                self.send_header("Content-length", len(password))
+                self.end_headers()
+                self.wfile.write(bytes(password, "ascii"))
+            else:
+                textret = "Not Found"
+                self.send_response(404)
+                self.send_header("Content-type", "text/plain")
+                self.send_header("Content-length", len(textret))
+                self.end_headers()
+                self.wfile.write(bytes(textret, "ascii"))
+
         def do_POST(self):
             if (not do_critical_operations_in(CTGP7ServerHandler.myself, self)):
                 return
@@ -138,7 +167,11 @@ class CTGP7ServerHandler:
         server_thread.daemon = True
         server_thread.start()
 
+        self.nex = None
+
     def terminate(self):
+        self.nex.terminate()
+        self.nex = None
         self.database.disconnect()
         self.database = None
         self.ctwwHandler = None
@@ -146,10 +179,18 @@ class CTGP7ServerHandler:
         print("CTGP-7 server terminated.")
     
     def server_start(self):
-        self.server = self.ThreadingSimpleServer(("", 64334), self.PostHandler)
+        self.server = self.ThreadingSimpleServer(("", 64334), self.PostGetHandler)
         context = ssl.SSLContext(protocol=ssl.PROTOCOL_TLSv1_1)
         context.options |= ssl.OP_NO_TLSv1_2
         context.load_cert_chain('RedYoshiBot/server/data/server.pem')
         self.server.socket = context.wrap_socket(self.server.socket, server_side=True)
+
+        libc = ctypes.CDLL("libc.so.6")
+        def set_pdeathsig(sig = signal.SIGTERM):
+            def callable():
+                return libc.prctl(1, sig)
+            return callable
+        self.nex = subprocess.Popen(["./mario-kart-7-secure"], stdout=subprocess.DEVNULL, preexec_fn=set_pdeathsig(signal.SIGTERM))
+
         print("CTGP-7 server started.")
         self.server.serve_forever()

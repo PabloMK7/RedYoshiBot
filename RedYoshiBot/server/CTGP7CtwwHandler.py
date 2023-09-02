@@ -8,6 +8,7 @@ import textwrap
 import uuid
 import threading
 import random
+import string
 import subprocess
 import sys
 from collections import deque
@@ -90,19 +91,19 @@ class OnlineUser:
         self.vr = [1000, 1000]
         self.vrIncr = None
         self.debug = False
-        self.pretendo = False
-
-    def setPretendo(self):
-        self.pretendo = True
-    
-    def isPretendo(self):
-        return self.pretendo
+        self.isctgp7network = False
 
     def setDebug(self):
         self.debug = True
 
     def isDebug(self):
         return self.debug
+    
+    def setCTGP7Network(self, isCTGP7Network: bool):
+        self.isctgp7network = isCTGP7Network
+    
+    def getCTGP7Network(self):
+        return self.isctgp7network
 
     def setVR(self, vr):
         self.vr = vr
@@ -201,11 +202,14 @@ class OnlineRoom:
         if (self.state == RoomState.SEARCHING.value):
             return "Waiting For Players"
         elif (self.state == RoomState.PREPARING_RACE.value):
-            return "Preparing Race"
+            action = "Round" if self.gamemode == 3 else "Race"
+            return "Preparing {}".format(action)
         elif (self.state == RoomState.RACING.value):
-            return "Racing ({})".format(CTGP7Defines.getTrackNameFromSzs(self.race))
+            action = "Battling" if self.gamemode == 3 else "Racing"
+            return "{} ({})".format(action, CTGP7Defines.getTrackNameFromSzs(self.race))
         elif (self.state == RoomState.FINISHED.value):
-            return "Race Finished"
+            action = "Round" if self.gamemode == 3 else "Race"
+            return "{} Finished".format(action)
         return ""
 
     def getModeName(self):
@@ -213,7 +217,22 @@ class OnlineRoom:
             return "Custom Tracks"
         elif (self.gamemode == 1):
             return "Countdown"
+        elif (self.gamemode == 2):
+            return "Original Tracks"
+        elif (self.gamemode == 3):
+            return "Battle"
         return ""
+    
+    def getRoomColor(self): # Returns RGB color
+        if (self.gamemode == 0):
+            return 0xFF0000
+        elif (self.gamemode == 1):
+            return 0xFFC000
+        elif (self.gamemode == 2):
+            return 0x0096FF
+        elif (self.gamemode == 3):
+            return 0xB500B5
+        return 0x000000
     
     def getMode(self):
         return self.gamemode
@@ -262,9 +281,13 @@ class OnlineRoom:
         return self.cpuRandomSeed
 
     def getMinPlayerAmount(self, database: CTGP7ServerDatabase):
+        if (self.gamemode > 1):
+            return 1
         return database.get_room_player_amount(self.gamemode == 1)
     
     def getVRMean(self, database: CTGP7ServerDatabase):
+        if self.gamemode > 1:
+            return 1000
         vrTot = 0
         for cID in self.players:
             vrData = database.get_console_vr(cID)
@@ -293,6 +316,22 @@ class CTGP7CtwwHandler:
         self.lock = threading.Lock()
         self.newLogins = 0
         self.newRooms = 0
+        self.tokenslock = threading.Lock()
+        self.onlinepasswords = {}
+
+    def get_password_from_token(self, token: str):
+        with self.tokenslock:
+            if (token in self.onlinepasswords):
+                password = self.onlinepasswords[token][1]
+                del self.onlinepasswords[token]
+                return password
+            return None
+    
+    def generate_password_token(self, password: str):
+        token = ''.join(random.choices(string.ascii_letters + string.digits, k=64))
+        with self.tokenslock:
+            self.onlinepasswords[token] = (datetime.datetime.utcnow(), password)
+            return token
 
     def get_console_message(self, user: OnlineUser):
         msg = self.database.get_console_message(user.cID, user.cID)
@@ -407,10 +446,13 @@ class CTGP7CtwwHandler:
             isRelogin = input.get("reLogin")
             miiName : str = input.get("miiName")
             isDebug = input.get("debugRegion")
-            isPretendo = input.get("pretendo")
             miiChecksum = input.get("miiIconChecksum")
+            isCTGP7Network = input.get("ctgp7network")
             retDict = {}
             
+            if (isCTGP7Network is None):
+                isCTGP7Network = False
+
             if (isRelogin is None or localver is None or miiName is None):
                 return (-1, {})
 
@@ -437,6 +479,7 @@ class CTGP7CtwwHandler:
                     retDict["loginMessage"] = consoleMsg[1]
                     return (CTWWLoginStatus.MESSAGEKICK.value, retDict)
             
+            user.setCTGP7Network(isCTGP7Network)
             self.remove_from_all_rooms(user)
             self.user_logout(user)
             self.user_login(user)
@@ -444,7 +487,6 @@ class CTGP7CtwwHandler:
             retDict["token"] = user.getToken()
             vrData = self.database.get_console_vr(cID)
             if (isDebug): user.setDebug()
-            if (isPretendo): user.setPretendo()
             user.setVR(list((vrData.ctVR, vrData.cdVR)))
             retDict["ctvr"] = vrData.ctVR
             retDict["cdvr"] = vrData.cdVR
@@ -554,8 +596,8 @@ class CTGP7CtwwHandler:
             retDict["neededPlayerAmount"] = room.getMinPlayerAmount(self.database)
             retDict["cpuRandomSeed"] = room.getCPURandomSeed()
             retDict["vrMean"] = room.getVRMean(self.database)
-            retDict["rubberBMult"] = self.database.get_room_rubberbanding_config(False)
-            retDict["rubberBOffset"] = self.database.get_room_rubberbanding_config(True)
+            retDict["rubberBMult"] = self.database.get_room_rubberbanding_config(False) if room.getMode() <= 1 else 1.0
+            retDict["rubberBOffset"] = self.database.get_room_rubberbanding_config(True) if room.getMode() <= 1 else 0.0
 
             user.isAlive()
             
@@ -587,7 +629,6 @@ class CTGP7CtwwHandler:
                 room.enableLog()
             
             user.isAlive()
-            #self.database.set_console_vr(cID, [ctvr, cdvr])
 
             return (CTWWLoginStatus.SUCCESS.value, {})
     
@@ -606,20 +647,22 @@ class CTGP7CtwwHandler:
             if (user is None): # User not logged in
                 return (CTWWLoginStatus.NOTLOGGED.value, {})
 
-            self.database.set_console_vr(cID, [ctvr, cdvr])
-
             room = self.activeRooms.get(gID)
             if (room is None or not room.hasPlayer(user)):
                 return (CTWWLoginStatus.FAILED.value, {})
+            
+            if room.getMode() <= 1:
+                self.database.set_console_vr(cID, [ctvr, cdvr])
             
             if (user.getState() == UserState.HOSTING.value):
                 self.database.set_stats_dirty(True)
                 room.setState(RoomState.FINISHED.value)
                 room.updateCPURandomSeed()
             
-            prevVr = user.getVR()[0 if room.getMode() == 0 else 1]
-            nowVR = ctvr if room.getMode() == 0 else cdvr
-            user.setVRIncr(nowVR - prevVr)
+            if room.getMode() <= 1:
+                prevVr = user.getVR()[0 if room.getMode() == 0 else 1]
+                nowVR = ctvr if room.getMode() == 0 else cdvr
+                user.setVRIncr(nowVR - prevVr)
 
             user.isAlive()
 
@@ -706,7 +749,18 @@ class CTGP7CtwwHandler:
                     candidates.append(user)
             for u in candidates:
                 self.user_logout(u)
-    
+
+    def purge_tokens(self, margin: datetime.timedelta):
+        with self.tokenslock:
+            timeNow = datetime.datetime.utcnow()
+            candidates = []
+            for k in self.onlinepasswords:
+                lasttime = self.onlinepasswords[k][0]
+                if (timeNow - lasttime > margin):
+                    candidates.append(k)
+            for k in candidates:
+                del self.onlinepasswords[k]
+
     def purge_rooms(self):
         with self.lock:
             candidates = []
@@ -735,24 +789,27 @@ class CTGP7CtwwHandler:
 
     def getSpecialRoomState(self, room: OnlineRoom):
         isDebug = False
-        isPretendo = False
         for u in room.getPlayers():
             user = self.loggedUsers.get(u)
             if (user is None):
                 continue
             if (user.isDebug()):
                 isDebug = True
-            if (user.isPretendo()):
-                isPretendo = True
         ret = ""
-        if (isPretendo): ret += " Pretendo"
         if (isDebug): ret += " (Debug)"
         return ret
 
     def fetch_state(self):
         with self.lock:
             ret = {}
-            ret["userCount"] = len(self.loggedUsers)
+            nnUsers = 0
+            ctgpUsers = 0
+            for u in self.loggedUsers:
+                if self.loggedUsers[u].getCTGP7Network():
+                    ctgpUsers += 1
+                else:
+                    nnUsers += 1
+            ret["userCount"] = (ctgpUsers, nnUsers)
             ret["roomCount"] = len(self.activeRooms)
             ret["newUserCount"] = self.newLogins
             ret["newRoomCount"] = self.newRooms
@@ -768,6 +825,7 @@ class CTGP7CtwwHandler:
                 roomInfo["gID"] = room.gID
                 roomInfo["playerCount"] = playerCount
                 roomInfo["state"] = room.getStateName()
+                roomInfo["color"] = room.getRoomColor()
                 roomInfo["gameMode"] = room.getModeName() + self.getSpecialRoomState(room)
                 roomInfo["fakeID"] = (room.getKeySeed(None) & 0xFFFFFF) | 0x03000000
                 roomInfo["messageID"] = room.getMessageID()
@@ -780,14 +838,19 @@ class CTGP7CtwwHandler:
                         continue
                     userInfo = {}
                     userInfo["name"] = user.getName()
-                    userInfo["vr"] = user.getVR()[0 if room.getMode() == 0 else 1]
-                    userInfo["vrIncr"] = user.getVRIncr()
+                    if (room.getMode() <= 1):
+                        userInfo["vr"] = user.getVR()[0 if room.getMode() == 0 else 1]
+                        userInfo["vrIncr"] = user.getVRIncr()
+                    else:
+                        userInfo["vr"] = None
+                        userInfo["vrIncr"] = None
                     userInfo["miiName"] = user.getMiiName()
                     userInfo["state"] = user.getStateName()
                     userInfo["cID"] = u
                     userInfo["verified"] = user.verified()
                     roomInfo["players"].append(userInfo)
-                roomInfo["players"].sort(key=lambda x:x["vr"], reverse=True)
+                if (room.getMode() <= 1):
+                    roomInfo["players"].sort(key=lambda x:x["vr"], reverse=True)
                 ret["rooms"].append(roomInfo)
                 room.resetUpdate()
             

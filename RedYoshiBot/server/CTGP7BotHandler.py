@@ -227,7 +227,7 @@ async def kick_message_logger(ctgp7_server: CTGP7ServerHandler):
             
 
 tried_edit_stats_message_times = 0
-stats_curr_online_users = 0
+stats_curr_online_users = (0, 0)
 stats_curr_online_rooms = 0
 stats_curr_online_stuff_changed = True
 stats_message_id = [0, 0]
@@ -345,8 +345,8 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
         embed2.add_field(name="Total Logins", value=str(genStats["total_logins"]), inline=True)
         embed2.add_field(name="Unique Logins", value=str(uniqueOnlineUsers), inline=True)
         embed2.add_field(name="Total Online Rooms", value=str(genStats["total_rooms"]), inline=True)
-        embed2.add_field(name="Current Users Online", value=str(stats_curr_online_users), inline=True)
-        embed2.add_field(name="Current Rooms Online", value=str(stats_curr_online_rooms), inline=True)
+        embed2.add_field(name="Current Network Users", value="CTGP-7: {}, Nintendo: {}".format(stats_curr_online_users[0], stats_curr_online_users[1]), inline=False)
+        embed2.add_field(name="Current Open Rooms", value=str(stats_curr_online_rooms), inline=True)
         embed2.add_field(name="** **", value="** **", inline=False)
         mostPlayedStr = "```\n"
         currTrack = 1
@@ -434,6 +434,7 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler):
     global stats_curr_online_users
     global stats_curr_online_rooms
     ctwwChan = SELF_BOT_SERVER.get_channel(ch_list()["CTWW"])
+    ctgp7_server.ctwwHandler.purge_tokens(datetime.timedelta(minutes=10))
     ctgp7_server.ctwwHandler.purge_users(datetime.timedelta(minutes=10))
     ctgp7_server.ctwwHandler.purge_rooms()
     serverInfo = ctgp7_server.ctwwHandler.fetch_state()
@@ -467,15 +468,18 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler):
                 if (not ctgp7_server.ctwwHandler.update_room_messageID(room["gID"], msgID)):
                     await msg.delete()
                     continue
-            embed=discord.Embed(title="{} Room".format(room["gameMode"]), description="State: {}\nID: 0x{:08X}".format(room["state"], room["fakeID"]), color=0xff0000, timestamp=datetime.datetime.now())
+            
+            bordercolor = room["color"]
+            embed=discord.Embed(title="{} Room".format(room["gameMode"]), description="State: {}\nID: 0x{:08X}".format(room["state"], room["fakeID"]), color=bordercolor, timestamp=datetime.datetime.now())
             playerString = "```\n"
             for player in room["players"]:
                 vrStr = ""
-                if (player["vrIncr"] is not None):
-                    vrStr = "{}({:+}) VR".format(player["vr"], player["vrIncr"])
-                else:
-                    vrStr = "{} VR".format(player["vr"])
-                playerString += "{}{} - {} - {}\n".format(purge_player_name_symbols(player["name"]), " \u2705" if player["verified"] else "", vrStr, player["state"])
+                if (player["vr"] is not None):
+                    if (player["vrIncr"] is not None):
+                        vrStr = " - {}({:+}) VR -".format(player["vr"], player["vrIncr"])
+                    else:
+                        vrStr = " - {} VR -".format(player["vr"])
+                playerString += "{}{}{} {}\n".format(purge_player_name_symbols(player["name"]), " \u2705" if player["verified"] else "", vrStr, player["state"])
             playerString += "```"
             if (playerString == "```\n```"):
                 playerString = "```\n- (None)\n```"
