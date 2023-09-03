@@ -51,7 +51,7 @@ def staff_server_help_array():
         "apply_player_role": ">@RedYoshiBot server apply_player_role\nVERY SLOW!!! Applies the Player role to all linked console accounts.",
         "purge_console_link": ">@RedYoshiBot server purge_console_link\nRemoved console links from users that are no longer in the server.",
         "get_mii_icon": ">@RedYoshiBot server get_mii_icon (consoleID)\nGets the mii icon of the specified user.",
-        "room_config": ">@RedYoshiBot server room_config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory) [newValue]\nGets or sets the config parameters for rooms."
+        "config": ">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr) [newValue]\nGets or sets the config parameters for online mode."
     }
     
 def staff_server_command_level():
@@ -77,7 +77,7 @@ def staff_server_command_level():
         "apply_player_role": 0,
         "purge_console_link": 0,
         "get_mii_icon": 1,
-        "room_config": 0
+        "config": 0
     }
 
 async def staff_server_can_execute(message, command, silent=False):
@@ -1128,15 +1128,15 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 miiIcon.save(image_binary, 'PNG')
                 image_binary.seek(0)
                 await message.reply("Mii for {}:".format(miiName), file=discord.File(fp=image_binary, filename='mii.png'))
-    elif bot_cmd == "room_config":
+    elif bot_cmd == "config":
         if await staff_server_can_execute(message, bot_cmd):
             tag = get_server_bot_args(message.content)
             if (len(tag) != 3 and len(tag) != 4):
-                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["room_config"] + "```")
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["config"] + "```")
                 return
             mode = tag[2]
-            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset", "blockedTrackHistory"]:
-                await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()["room_config"] + "```")
+            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset", "blockedTrackHistory", "serveraddr"]:
+                await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()["config"] + "```")
                 return
             if (len(tag) == 3):
                 version = -1
@@ -1150,6 +1150,8 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     amount = ctgp7_server.database.get_room_rubberbanding_config(True)
                 elif mode == "blockedTrackHistory":
                     amount = ctgp7_server.database.get_room_blocked_track_history_count()
+                elif mode == "serveraddr":
+                    amount = ctgp7_server.database.get_ctgp7_server_address()
                 await message.reply( "Config for \"{}\" is: {}".format(mode, amount))
                 return
             else:
@@ -1158,8 +1160,12 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                         amount = int(tag[3])
                     elif (mode == "rubberBMult" or mode == "rubberBOffset"):
                         amount = float(tag[3])
+                    elif (mode == "serveraddr"):
+                        amount = str(tag[3])
+                        if not ":" in amount:
+                            raise ValueError()
                 except ValueError:
-                    await message.reply( "Invalid number.")
+                    await message.reply("Invalid format.")
                     return
                 if mode == "ctCPUAmount":
                     ctgp7_server.database.set_room_player_amount(False, amount)
@@ -1171,6 +1177,8 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     ctgp7_server.database.set_room_rubberbanding_config(True, amount)
                 elif mode == "blockedTrackHistory":
                     ctgp7_server.database.set_room_blocked_track_history_count(amount)
+                elif mode == "serveraddr":
+                    ctgp7_server.database.set_ctgp7_server_address(amount)
                 await message.reply("Config for \"{}\" is: {}".format(mode, amount))
                 return
     else:

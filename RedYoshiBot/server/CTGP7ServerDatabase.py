@@ -128,6 +128,12 @@ class CTGP7ServerDatabase:
     def set_room_blocked_track_history_count(self, value: int):
         self.set_database_config("blockTrackHistoryCount", int(value))
 
+    def get_ctgp7_server_address(self):
+        return str(self.get_database_config("ctgp7serveraddress"))
+    
+    def set_ctgp7_server_address(self, addr: str):
+        self.set_database_config("ctgp7serveraddress", str(addr))
+
     def get_most_played_tracks(self, course_type, amount):
         splitenabled = self.get_track_freq_split_enabled()
         currsplit = self.get_track_freq_split()
