@@ -116,7 +116,8 @@ class CTGP7Requests:
         timenow = datetime.datetime.utcnow()
         server_addr = self.database.get_ctgp7_server_address()
         addrport = server_addr.split(":")
-        return (0, {"online_token": token, "server_time": int(timenow.strftime("%Y%m%d%H%M%S")), "address": str(addrport[0]), "port": int(addrport[1])})
+        serveravailable = self.database.get_ctgp7_server_available() != 0 or self.database.get_console_is_admin(self.cID)
+        return (0, {"online_token": token, "server_time": int(timenow.strftime("%Y%m%d%H%M%S")), "address": str(addrport[0]), "port": int(addrport[1]), "available": serveravailable})
 
     def req_discord_info(self, input):
         discordLink = self.database.get_discord_link_console(self.cID)
@@ -200,8 +201,7 @@ class CTGP7Requests:
     }
 
     hide_logs_input = [
-        "miiicon",
-        "onlinetoken"
+        "miiicon"
     ]
 
     hide_logs_output = [

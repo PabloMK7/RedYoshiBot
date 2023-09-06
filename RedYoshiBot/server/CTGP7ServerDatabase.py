@@ -134,6 +134,12 @@ class CTGP7ServerDatabase:
     def set_ctgp7_server_address(self, addr: str):
         self.set_database_config("ctgp7serveraddress", str(addr))
 
+    def get_ctgp7_server_available(self):
+        return int(self.get_database_config("ctgp7serveravailable"))
+    
+    def set_ctgp7_server_available(self, available: int):
+        self.set_database_config("ctgp7serveravailable", int(available))        
+
     def get_most_played_tracks(self, course_type, amount):
         splitenabled = self.get_track_freq_split_enabled()
         currsplit = self.get_track_freq_split()

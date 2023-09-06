@@ -51,7 +51,7 @@ def staff_server_help_array():
         "apply_player_role": ">@RedYoshiBot server apply_player_role\nVERY SLOW!!! Applies the Player role to all linked console accounts.",
         "purge_console_link": ">@RedYoshiBot server purge_console_link\nRemoved console links from users that are no longer in the server.",
         "get_mii_icon": ">@RedYoshiBot server get_mii_icon (consoleID)\nGets the mii icon of the specified user.",
-        "config": ">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr) [newValue]\nGets or sets the config parameters for online mode."
+        "config": ">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable) [newValue]\nGets or sets the config parameters for online mode."
     }
     
 def staff_server_command_level():
@@ -856,7 +856,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 if (consoleID == 0):
                     raise ValueError()
             except ValueError:
-                await message.reply( "Invalid console ID.")
+                await message.reply("Invalid console ID.")
                 return
             if mode not in ["get", "set", "clear"]:
                 await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()[bot_cmd] + "```")
@@ -1135,7 +1135,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["config"] + "```")
                 return
             mode = tag[2]
-            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset", "blockedTrackHistory", "serveraddr"]:
+            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset", "blockedTrackHistory", "serveraddr", "serveravailable"]:
                 await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()["config"] + "```")
                 return
             if (len(tag) == 3):
@@ -1152,11 +1152,13 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     amount = ctgp7_server.database.get_room_blocked_track_history_count()
                 elif mode == "serveraddr":
                     amount = ctgp7_server.database.get_ctgp7_server_address()
+                elif mode == "serveravailable":
+                    amount = ctgp7_server.database.get_ctgp7_server_available()
                 await message.reply( "Config for \"{}\" is: {}".format(mode, amount))
                 return
             else:
                 try:
-                    if (mode == "ctCPUAmount" or mode == "cdCPUAmount" or mode == "blockedTrackHistory"):
+                    if (mode == "ctCPUAmount" or mode == "cdCPUAmount" or mode == "blockedTrackHistory" or mode == "serveravailable"):
                         amount = int(tag[3])
                     elif (mode == "rubberBMult" or mode == "rubberBOffset"):
                         amount = float(tag[3])
@@ -1179,6 +1181,8 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     ctgp7_server.database.set_room_blocked_track_history_count(amount)
                 elif mode == "serveraddr":
                     ctgp7_server.database.set_ctgp7_server_address(amount)
+                elif mode == "serveravailable":
+                    ctgp7_server.database.set_ctgp7_server_available(amount)
                 await message.reply("Config for \"{}\" is: {}".format(mode, amount))
                 return
     else:
