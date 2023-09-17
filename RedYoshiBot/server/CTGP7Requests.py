@@ -79,6 +79,9 @@ class CTGP7Requests:
                 if (isFirstReport):
                     self.database.increment_today_launches()
                 for k in input:
+                    # Fix typo in the plugin
+                    if k == "completed_missionv#2":
+                        k = "completed_mission#2"
                     if (k in CTGP7Requests.statsList):
                         self.database.increment_general_stats(k.split("#", 1)[0], input[k])
                     elif (k == "played_tracks"):

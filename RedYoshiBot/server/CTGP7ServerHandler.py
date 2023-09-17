@@ -170,7 +170,7 @@ class CTGP7ServerHandler:
         self.nex = None
 
     def terminate(self):
-        #self.nex.terminate()
+        self.nex.terminate()
         self.nex = None
         self.database.disconnect()
         self.database = None
@@ -190,7 +190,7 @@ class CTGP7ServerHandler:
             def callable():
                 return libc.prctl(1, sig)
             return callable
-        #self.nex = subprocess.Popen(["./mario-kart-7-secure"], stdout=subprocess.DEVNULL, preexec_fn=set_pdeathsig(signal.SIGTERM))
+        self.nex = subprocess.Popen(["./mario-kart-7-secure"], stdout=subprocess.DEVNULL, preexec_fn=set_pdeathsig(signal.SIGTERM))
 
         print("CTGP-7 server started.")
         self.server.serve_forever()
