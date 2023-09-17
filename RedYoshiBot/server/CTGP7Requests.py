@@ -80,10 +80,11 @@ class CTGP7Requests:
                     self.database.increment_today_launches()
                 for k in input:
                     # Fix typo in the plugin
+                    namefixed = k
                     if k == "completed_missionv#2":
-                        k = "completed_mission#2"
-                    if (k in CTGP7Requests.statsList):
-                        self.database.increment_general_stats(k.split("#", 1)[0], input[k])
+                        namefixed = "completed_mission#2"
+                    if (namefixed in CTGP7Requests.statsList):
+                        self.database.increment_general_stats(namefixed.split("#", 1)[0], input[k])
                     elif (k == "played_tracks"):
                         for t in input[k]:
                             self.database.increment_track_frequency(t, input[k][t])
