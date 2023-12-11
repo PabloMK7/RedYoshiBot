@@ -140,6 +140,20 @@ class CTGP7ServerDatabase:
     def set_ctgp7_server_available(self, available: int):
         self.set_database_config("ctgp7serveravailable", int(available))        
 
+    def verify_console_legality(self, cID, cSH1, cSH2):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT cID FROM console_secure WHERE cSH1 = ? AND cSH2 = ?", (int(cSH1), int(cSH2)))
+            for row in rows:
+                if row[0] == 0:
+                    return False
+                if row[0] != int(cID):
+                    c.execute("UPDATE console_secure SET cID = ? WHERE cSH1 = ? AND cSH2 = ?", (0, int(cSH1), int(cSH2)))
+                    return False
+                return True
+            c.execute("INSERT INTO console_secure VALUES (?,?,?)", (int(cSH1), int(cSH2), int(cID)))
+            return True
+
     def get_most_played_tracks(self, course_type, amount):
         splitenabled = self.get_track_freq_split_enabled()
         currsplit = self.get_track_freq_split()

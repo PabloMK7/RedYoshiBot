@@ -95,8 +95,13 @@ class CTGP7ServerHandler:
                     raise Exception("Input is missing: cID: {}, seed: {}".format(not "_CID" in inputData, not "_seed" in inputData))
                 
                 reqConsoleID = inputData["_CID"]
-
                 logStr += "Console ID: 0x{:016X}\n".format(reqConsoleID)
+
+                if "_CSH1" in inputData and "_CSH2" in inputData:
+                    isLegal = CTGP7ServerHandler.myself.database.verify_console_legality(reqConsoleID, inputData["_CSH1"], inputData["_CSH2"])
+                    if not isLegal:
+                        skipExceptionPrint = True
+                        raise Exception("Illegal console detected")
 
                 solver = CTGP7Requests(CTGP7ServerHandler.myself.database, CTGP7ServerHandler.myself.ctwwHandler, inputData, CTGP7ServerHandler.debug_mode, reqConsoleID)
                 outputData.update(solver.solve())

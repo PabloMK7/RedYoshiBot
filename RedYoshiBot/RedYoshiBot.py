@@ -1216,7 +1216,7 @@ async def on_message(message):
         if (message.content == ""): return
         random.seed()
         bot_mtn = message.content.split()[0]
-        if (get_from_mention(bot_mtn) == client.user) and (message.author != client.user): #@RedYoshiBot
+        if (not is_channel_private(message.channel) and get_from_mention(bot_mtn) == client.user) and (message.author != client.user): #@RedYoshiBot
             try:
                 bot_cmd = message.content.split()[1]
                 if bot_cmd == 'mute':
@@ -1520,7 +1520,6 @@ async def on_message(message):
                         except:
                             await message.reply( "Invalid schedule id specified.")
                             return
-
                 elif bot_cmd == 'schedule':
                     if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split(None, 4)
@@ -1601,10 +1600,7 @@ async def on_message(message):
                     await message.reply( "Pong! ({}s, {}ms)".format(delay_time.seconds, delay_time.microseconds / 1000))
                 elif bot_cmd == 'membercount':
                     global cached_member_count
-                    if not (is_channel_private(message.channel)):
-                        await message.reply( "We are now {} members.".format(cached_member_count))
-                    else:
-                        await message.reply( "This command cannot be used here.")
+                    await message.reply( "We are now {} members.".format(cached_member_count))
                 elif bot_cmd == 'fact':
                     tag = message.content.split()
                     if not (len(tag) == 2 or len(tag) == 3):
@@ -1779,61 +1775,57 @@ async def on_message(message):
                         await sendMikuMessage(replymsg, True)
                         await message.reply("Operation succeeded")
                 elif bot_cmd == 'help':
-                    if is_channel(message, ch_list()["BOTCHAT"]) or await staff_can_execute(message, bot_cmd, silent=True) or is_channel_private(message.channel):
-                        tag = message.content.split()
-                        if (len(tag) > 2):
-                            if tag[2] == "game":
-                                if (len(tag) == 3):
-                                    help_str = "Here is the help for the specified command:\r\n```" + help_array()["game"] + "```"
-                                    help_str += "Here is a list of all the available game modes:\n\n"
-                                    for index, content in game_help_array().items():
+                    tag = message.content.split()
+                    if (len(tag) > 2):
+                        if tag[2] == "game":
+                            if (len(tag) == 3):
+                                help_str = "Here is the help for the specified command:\r\n```" + help_array()["game"] + "```"
+                                help_str += "Here is a list of all the available game modes:\n\n"
+                                for index, content in game_help_array().items():
+                                    help_str += "`" + index + "`, "
+                                help_str = help_str[:-2]
+                                help_str += "\n\nUse `@RedYoshiBot help game (gamemode)` to get help of a specific command."
+                                await message.reply( help_str)
+                                if await staff_can_execute(message, bot_cmd, silent=True):
+                                    help_str = "\nHere is a list of all the available game staff commands:\n\n"
+                                    for index, content in staff_game_help_array().items():
                                         help_str += "`" + index + "`, "
                                     help_str = help_str[:-2]
                                     help_str += "\n\nUse `@RedYoshiBot help game (gamemode)` to get help of a specific command."
                                     await message.reply( help_str)
-                                    if await staff_can_execute(message, bot_cmd, silent=True):
-                                        help_str = "\nHere is a list of all the available game staff commands:\n\n"
-                                        for index, content in staff_game_help_array().items():
-                                            help_str += "`" + index + "`, "
-                                        help_str = help_str[:-2]
-                                        help_str += "\n\nUse `@RedYoshiBot help game (gamemode)` to get help of a specific command."
-                                        await message.reply( help_str)
-                                    return
-                                else:
-                                    if await staff_can_execute(message, bot_cmd, silent=True):
-                                        if tag[3] in staff_game_help_array():
-                                            await message.reply( "Here is the help for the specified game mode:\r\n```" + staff_game_help_array()[tag[3]] + "```")
-                                            return
-                                    if tag[3] in game_help_array():
-                                        await message.reply( "Here is the help for the specified game mode:\r\n```" + game_help_array()[tag[3]] + "```")
-                                    else:
-                                        await message.reply( "Unknown game mode, use `@RedYoshiBot help game` to get a list of all the available game modes.")
-                                    return
-                            if await staff_can_execute(message, bot_cmd, silent=True):
-                                if tag[2] in staff_help_array():
-                                    await message.reply( "Here is the help for the specified command:\r\n```" + staff_help_array()[tag[2]] + "```")
-                                    return
-                            if tag[2] in help_array():
-                                await message.reply( "Here is the help for the specified command:\r\n```" + help_array()[tag[2]] + "```")
+                                return
                             else:
-                                await message.reply( "Unknown command, use `@RedYoshiBot help` to get a list of all the available commands.")
+                                if await staff_can_execute(message, bot_cmd, silent=True):
+                                    if tag[3] in staff_game_help_array():
+                                        await message.reply( "Here is the help for the specified game mode:\r\n```" + staff_game_help_array()[tag[3]] + "```")
+                                        return
+                                if tag[3] in game_help_array():
+                                    await message.reply( "Here is the help for the specified game mode:\r\n```" + game_help_array()[tag[3]] + "```")
+                                else:
+                                    await message.reply( "Unknown game mode, use `@RedYoshiBot help game` to get a list of all the available game modes.")
+                                return
+                        if await staff_can_execute(message, bot_cmd, silent=True):
+                            if tag[2] in staff_help_array():
+                                await message.reply( "Here is the help for the specified command:\r\n```" + staff_help_array()[tag[2]] + "```")
+                                return
+                        if tag[2] in help_array():
+                            await message.reply( "Here is the help for the specified command:\r\n```" + help_array()[tag[2]] + "```")
                         else:
-                            help_str = "Here is a list of all the available commands:\n\n"
-                            for index, content in help_array().items():
+                            await message.reply( "Unknown command, use `@RedYoshiBot help` to get a list of all the available commands.")
+                    else:
+                        help_str = "Here is a list of all the available commands:\n\n"
+                        for index, content in help_array().items():
+                            help_str += "`" + index + "`, "
+                        help_str = help_str[:-2]
+                        help_str += "\n\nUse `@RedYoshiBot help (command)` to get help of a specific command."
+                        await message.reply( help_str)
+                        if await staff_can_execute(message, bot_cmd, silent=True):
+                            help_str = "\nHere is a list of all the available staff commands:\n\n"
+                            for index, content in staff_help_array().items():
                                 help_str += "`" + index + "`, "
                             help_str = help_str[:-2]
                             help_str += "\n\nUse `@RedYoshiBot help (command)` to get help of a specific command."
                             await message.reply( help_str)
-                            if await staff_can_execute(message, bot_cmd, silent=True):
-                                help_str = "\nHere is a list of all the available staff commands:\n\n"
-                                for index, content in staff_help_array().items():
-                                    help_str += "`" + index + "`, "
-                                help_str = help_str[:-2]
-                                help_str += "\n\nUse `@RedYoshiBot help (command)` to get help of a specific command."
-                                await message.reply( help_str)
-                    else:
-                        await message.reply( "`@RedYoshiBot help` can only be used in <#324672297812099093> or DM.")
-                        return
                 elif bot_cmd == "game":
                     if (is_channel(message, ch_list()["BOTCHAT"]) or await staff_can_execute(message, bot_cmd, silent=True)):
                         tag = message.content.split()
@@ -1977,7 +1969,7 @@ async def on_message(message):
                     await handle_server_command(ctgp7_server, message)
                     return
                 else:
-                    await message.reply( 'Hi! :3\nTo get the list of all the available commands use `@RedYoshiBot help`')    
+                    await message.reply( 'Unknown command: `{}`\nTo get the list of all the available commands use `@RedYoshiBot help`'.format(bot_cmd))    
             except IndexError:
                 await message.reply( 'Hi! :3\nTo get the list of all the available commands use `@RedYoshiBot help`')
         elif (is_channel_private(message.channel) and not message.author == client.user):

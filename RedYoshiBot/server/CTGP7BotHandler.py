@@ -9,7 +9,6 @@ import asyncio
 import threading
 import traceback
 import datetime
-import profanity_check
 import matplotlib.pyplot as plt
 from PIL import Image
 import io
