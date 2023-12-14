@@ -1,6 +1,7 @@
 from PIL import Image
 from .CTGP7ServerDatabase import CTGP7ServerDatabase, ConsoleMessageType
 from ..CTGP7Defines import CTGP7Defines
+from better_profanity import profanity
 from enum import Enum
 import time
 import datetime
@@ -468,6 +469,10 @@ class CTGP7CtwwHandler:
 
             if "%" in miiName or "\\" in miiName or (nameValue is not None and ( "%" in nameValue or "\\" in nameValue)):
                 retDict["loginMessage"] = "Invalid name,\nplease change it."
+                return (CTWWLoginStatus.MESSAGEKICK.value, retDict)
+            
+            if profanity.contains_profanity(miiName) or (nameValue is not None and (profanity.contains_profanity(nameValue))):
+                retDict["loginMessage"] = "Inappropriate name,\nplease change it."
                 return (CTWWLoginStatus.MESSAGEKICK.value, retDict)
             
             user = OnlineUser(OnlineUserName(nameMode, nameValue, miiName), cID, self.database.get_console_is_verified(cID))
