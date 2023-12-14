@@ -489,7 +489,8 @@ def ch_list():
         "STAFFKICKS": 816640864994066434,
         "ONLINELOGS": 815663494945964072,
         "EMERGENCY": 839085550606614558,
-        "PHISING": 882574850688950322
+        "PHISING": 882574850688950322,
+        "DELETEEDITLOGS": 1184928816481706164,
     }
 
 def NUMBER_EMOJI():
@@ -658,6 +659,13 @@ def parsetime(timestr):
         return [basenum * 60 * 24 * 365, basenum, "years"]
     else:
         return [-1, -1, " "]
+
+def is_staff(user):
+    moderatorRole = get_role(role_list()["MODERATOR"])
+    adminRole = get_role(role_list()["ADMIN"])
+    hasMod = moderatorRole in user.roles
+    hasAdmin = (adminRole in user.roles) or user.id == SELF_BOT_SERVER.owner.id
+    return hasMod or hasAdmin
 
 async def staff_can_execute(message, command, silent=False):
     retVal = False
@@ -1185,18 +1193,34 @@ async def on_member_remove(member):
     
 @client.event
 async def on_message_delete(message):
-    staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["STAFF"])
-    if (message.channel != staff_chan and not message.author.bot and not is_channel_private(message.channel)):
+    staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["DELETEEDITLOGS"])
+    if (message.channel != staff_chan and not message.author.bot):
         parsedcontent = message.content.replace("@", "(at)")
-        await staff_chan.send("Message by {} ({}) was deleted in {}\n\n------------------------\n{}\n------------------------".format(message.author.name, message.author.id, message.channel.mention, parsedcontent))
+        try:
+            chanment = message.channel.mention
+        except AttributeError:
+            chanment = "DMs"
+        try:
+            usermention = message.author.name if is_staff(message.author) else message.author.mention
+        except AttributeError:
+            usermention = "NONE"
+        await staff_chan.send("Message by {} ({}) was deleted in {}\n\n------------------------\n{}\n------------------------".format(usermention, message.author.id, chanment, parsedcontent))
 
 @client.event
 async def on_message_edit(before, after):
-    if (len(before.mentions) > 0 or len(before.role_mentions) > 0) and not before.author.bot:
-        staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["STAFF"])
+    if not before.author.bot:
+        staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["DELETEEDITLOGS"])
         if (before.channel != staff_chan):
             parsedcontent = before.content.replace("@", "(at)")
-            await staff_chan.send("Message by {} ({}) was edited in {} at:\n`{} {}`\n\n------------------------\n{}\n------------------------".format(before.author.name, before.author.id, before.channel.mention, str(datetime.datetime.now()), time.tzname[time.localtime().tm_isdst], parsedcontent))
+            try:
+                chanment = before.channel.mention
+            except AttributeError:
+                chanment = "DMs"
+            try:
+                usermention = before.author.name if is_staff(before.author) else before.author.mention
+            except AttributeError:
+                usermention = "NONE"
+            await staff_chan.send("Message by {} ({}) was edited in {} at:\n`{} {}`\n\n------------------------\n{}\n------------------------".format(usermention, before.author.id, chanment, str(datetime.datetime.now()), time.tzname[time.localtime().tm_isdst], parsedcontent))
 
 @client.event
 async def on_message(message):
@@ -1973,7 +1997,7 @@ async def on_message(message):
             except IndexError:
                 await message.reply( 'Hi! :3\nTo get the list of all the available commands use `@RedYoshiBot help`')
         elif (is_channel_private(message.channel) and not message.author == client.user):
-            staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["STAFF"])
+            staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["DELETEEDITLOGS"])
             await staff_chan.send("{} sent me the following in a DM:\n```{}```".format(message.author.mention, message.content))
         elif (is_channel(message, ch_list()["BUGS"]) and (message.author != client.user) and bot_mtn == "!report"):
             tag = message.content.split(None, 1)
