@@ -9,7 +9,7 @@ class HomeMenuVersionList:
         self.versionlist = {}
         try:
             warnings.simplefilter("ignore", InsecureRequestWarning)
-            response = requests.get("https://tagaya-ctr.cdn.nintendo.net/tagaya/versionlist", verify=False)
+            response = requests.get("https://tagaya-ctr.cdn.nintendo.net/tagaya/versionlist", verify=False, timeout=7)
         except Exception:
             raise Exception("Failed to download version list")
         finally:

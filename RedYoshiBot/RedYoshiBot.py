@@ -920,7 +920,7 @@ async def check_version_list():
                     keepChecking = False
             except:
                 pass
-        await asyncio.sleep(60)
+        await asyncio.sleep(60 * 5)
 
 G_LAST_PUNISH_TIME = datetime.datetime(year=2000, month=1, day=1)
 G_LAST_PUNISH_AMOUNT = 0
