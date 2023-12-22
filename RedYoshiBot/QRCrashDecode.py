@@ -23,7 +23,7 @@ class QRCrashDecode:
             qrData = data
         elif (url != ""):
             try:
-                response = requests.get(url)
+                response = requests.get(url, timeout=7)
                 if (response.status_code != 200):
                     raise Exception()
             except:
