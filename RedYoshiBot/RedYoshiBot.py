@@ -394,7 +394,7 @@ def help_array():
         "bugcount": ">@RedYoshiBot bugcount\nShows the amount of open and closed bugs.",
         "getlang": ">@RedYoshiBot getlang (Language)\nGets the language file from the MK Translation Project spreadsheet. Can only be used by translators.",
         "parseqr": ">@RedYoshiBot parseqr [url]\nParses the CTGP-7 QR crash data from the image url. You can either specify the image url or attach the image to the message.",
-        "funcname": ">@RedYoshiBot funcname (address) (region) (version)\nFinds the Mario Kart 7 function name for a given address, region and version combination.\n- address: Address to find in hex.\n- region: Region of the game (1 - EUR, 2 - USA, 3 - JAP).\n- version: Version of the game (1 - rev0 v1.1, 2 - rev1).",
+        "funcname": ">@RedYoshiBot funcname (address) (region) (version)\nFinds the Mario Kart 7 function name for a given address, region and version combination.\n- address: Address to find in hex.\n- region: Region of the game (1 - EUR, 2 - USA, 3 - JAP).\n- version: Version of the game (1 - rev0 v1.1, 2 - rev1, 3 - rev2).",
 
         "server": ">@RedYoshiBot server (command) (options)\nRuns a server related command.\nUse \'@RedYoshiBot server help\' to get all the available server commands."
     }
@@ -1761,7 +1761,7 @@ async def on_message(message):
                         try:
                             region = int(tag[3])
                             version = int(tag[4])
-                            if (region < 1 or region > 3 or version < 1 or version > 2):
+                            if (region < 1 or region > 3 or version < 1 or version > 3):
                                 raise ValueError("Invalid region or version value.")
                         except:
                             await message.reply("`Invalid region or version.`\nCorrect usage:\r\n```" + help_array()["funcname"] + "```")

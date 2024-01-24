@@ -50,7 +50,8 @@ def staff_server_help_array():
         "apply_player_role": ">@RedYoshiBot server apply_player_role\nVERY SLOW!!! Applies the Player role to all linked console accounts.",
         "purge_console_link": ">@RedYoshiBot server purge_console_link\nRemoved console links from users that are no longer in the server.",
         "get_mii_icon": ">@RedYoshiBot server get_mii_icon (consoleID)\nGets the mii icon of the specified user.",
-        "config": ">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable) [newValue]\nGets or sets the config parameters for online mode."
+        "config": ">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable) [newValue]\nGets or sets the config parameters for online mode.",
+        "otplegality": ">@RedYoshiBot server otplegality (get/getall/set/clear) (consoleID)\nGets, sets or clear the otp legality of a specified console."
     }
     
 def staff_server_command_level():
@@ -76,7 +77,8 @@ def staff_server_command_level():
         "apply_player_role": 0,
         "purge_console_link": 0,
         "get_mii_icon": 1,
-        "config": 0
+        "config": 0,
+        "otplegality": 0,
     }
 
 async def staff_server_can_execute(message, command, silent=False):
@@ -1184,6 +1186,52 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     ctgp7_server.database.set_ctgp7_server_available(amount)
                 await message.reply("Config for \"{}\" is: {}".format(mode, amount))
                 return
+    elif bot_cmd == "otplegality":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content)
+            if (len(tag) != 4 and len(tag) != 3):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            mode = tag[2]
+            consoleID = None
+            if mode != "getall":
+                if (len(tag) != 4):
+                    await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                    return
+                consoleID = tag[3]
+                if (consoleID.startswith("0x")):
+                    consoleID = consoleID[2:]
+                try:
+                    consoleID = int(consoleID, 16)
+                    if (consoleID == 0):
+                        raise ValueError()
+                except ValueError:
+                    await message.reply("Invalid console ID.")
+                    return
+            else:
+                if (len(tag) != 3):
+                    await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                    return
+            if mode not in ["getall", "get", "set", "clear"]:
+                await message.reply( "Invalid option `{}`, correct usage:\r\n```".format(mode) + staff_server_help_array()[bot_cmd] + "```")
+                return
+            if (mode == "get"):
+                islegal = ctgp7_server.database.get_console_legality(consoleID)
+                await message.reply("Console is legal." if islegal else "Console is NOT legal.")
+            if (mode == "getall"):
+                allilegal = ctgp7_server.database.getall_console_legality()
+                info = ""
+                for e in allilegal: info += "0x{:016X}\n".format(e)
+                if len(info) == 0:
+                    info = " "
+                await sendMultiMessage(message.channel, info, "```\n---------------\n", "---------------\n```\n")
+            if (mode == "set"):
+                ctgp7_server.database.set_console_legality(consoleID)
+                await message.reply( "Operation succeeded.")
+            if (mode == "clear"):
+                ctgp7_server.database.clear_console_legality(consoleID)
+                await message.reply( "Operation succeeded.")
+
     else:
         await message.reply( "Invalid server command, use `@RedYoshiBot server help` to get all the available server commands.")
         

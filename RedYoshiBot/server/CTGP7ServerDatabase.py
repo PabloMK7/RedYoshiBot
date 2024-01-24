@@ -151,8 +151,36 @@ class CTGP7ServerDatabase:
                     c.execute("UPDATE console_secure SET cID = ? WHERE cSH1 = ? AND cSH2 = ?", (0, int(cSH1), int(cSH2)))
                     return False
                 return True
-            c.execute("INSERT INTO console_secure VALUES (?,?,?)", (int(cSH1), int(cSH2), int(cID)))
+            c.execute("INSERT INTO console_secure VALUES (?,?,?,?)", (int(cSH1), int(cSH2), int(cID), int(cID)))
             return True
+    
+    def get_console_legality(self, cID):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT cID FROM console_secure WHERE first_cID = ?", (int(cID),))
+            for row in rows:
+                if row[0] == 0:
+                    return False
+        return True
+
+    def getall_console_legality(self):
+        ret = []
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT first_cID FROM console_secure WHERE cID = 0")
+            for row in rows:
+                ret.append(row[0])
+        return ret
+
+    def clear_console_legality(self, cID):
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute("UPDATE console_secure SET cID = ? WHERE first_cID = ?", (int(cID), int(cID)))
+    
+    def set_console_legality(self, cID):
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute("UPDATE console_secure SET cID = ? WHERE first_cID = ?", (0, int(cID)))
 
     def get_most_played_tracks(self, course_type, amount):
         splitenabled = self.get_track_freq_split_enabled()
