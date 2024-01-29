@@ -31,18 +31,20 @@ class CTGP7ServerDatabase:
             self.ctPos = 0
             self.cdPos = 0
 
-    def __init__(self):
+    def __init__(self, path: str, isCitra: bool):
         self.isConn = False
         self.conn = None
         self.lock = threading.Lock()
         self.kickCallback = None
+        self.path = path
+        self.isCitra = isCitra
 
     def setKickLogCallback(self, callback):
         self.kickCallback = callback
 
     def connect(self):
         if not self.isConn:
-            self.conn = sqlite3.connect('RedYoshiBot/server/data/data.sqlite', check_same_thread=False)
+            self.conn = sqlite3.connect(self.path, check_same_thread=False)
             self.isConn = True
     
     def disconnect(self):
@@ -138,7 +140,12 @@ class CTGP7ServerDatabase:
         return int(self.get_database_config("ctgp7serveravailable"))
     
     def set_ctgp7_server_available(self, available: int):
-        self.set_database_config("ctgp7serveravailable", int(available))        
+        self.set_database_config("ctgp7serveravailable", int(available))
+
+    def fetch_unique_PID(self):
+        pid = int(self.get_database_config("currUniquePID"))
+        self.set_database_config("currUniquePID", pid + 1)
+        return pid
 
     def verify_console_legality(self, cID, cSH1, cSH2):
         with self.lock:
@@ -287,7 +294,7 @@ class CTGP7ServerDatabase:
             c.execute("DELETE FROM console_message WHERE cID = ?", (int(cID),))
             c.execute('INSERT INTO console_message VALUES (?,?,?,?,?)', (int(cID), str(message), int(messageType), currTime, amountMin))
         if (self.kickCallback):
-            self.kickCallback(cID, messageType, message, amountMin, isSilent)
+            self.kickCallback(cID, messageType, message, amountMin, isSilent, self.isCitra)
 
     def get_console_message(self, cID, realConsoleID): # Real console ID is to keep track if cID is 0
         ret = None

@@ -137,8 +137,8 @@ def purge_player_name_symbols(line: str):
     toTranslate = dict.fromkeys(map(ord, '\n\r\u2705'), None)
     return line.translate(toTranslate)
 
-def gen_course_usage_embed(ctgp7_server: CTGP7ServerHandler, course_type: int):
-    mostTracks = ctgp7_server.database.get_most_played_tracks(course_type, 10000)
+def gen_course_usage_embed(database: CTGP7ServerDatabase, course_type: int):
+    mostTracks = database.get_most_played_tracks(course_type, 10000)
     tName = ""
     if (course_type == 0):
         tName = "Original Tracks"
@@ -181,7 +181,7 @@ def server_message_logger_callback(text: str):
     with server_message_logger_lock:
         server_message_logger_pending += text
 
-async def server_message_logger(ctgp7_server: CTGP7ServerHandler):
+async def server_message_logger():
     global server_message_logger_lock
     global server_message_logger_pending
     with kick_message_logger_lock:
@@ -192,13 +192,13 @@ async def server_message_logger(ctgp7_server: CTGP7ServerHandler):
 
 kick_message_logger_lock = threading.Lock()
 kick_message_logger_pending = []
-def kick_message_callback(cID, messageType, message, amountMin, isSilent):
+def kick_message_callback(cID, messageType, message, amountMin, isSilent, isCitra):
     global kick_message_logger_lock
     global kick_message_logger_pending
     with kick_message_logger_lock:
-        kick_message_logger_pending.append([cID, messageType, message, amountMin, isSilent])
+        kick_message_logger_pending.append([cID, messageType, message, amountMin, isSilent, isCitra])
 
-async def kick_message_logger(ctgp7_server: CTGP7ServerHandler):
+async def kick_message_logger():
     global kick_message_logger_lock
     global kick_message_logger_pending
     with kick_message_logger_lock:
@@ -208,9 +208,10 @@ async def kick_message_logger(ctgp7_server: CTGP7ServerHandler):
             message = m[2]
             amountMin = m[3]
             isSilent = m[4]
+            isCitra = m[5]
             if (isSilent or (messageType != ConsoleMessageType.SINGLE_KICKMESSAGE.value and messageType != ConsoleMessageType.TIMED_KICKMESSAGE.value) or cID == 0):
                 continue
-            embedPrivate=discord.Embed(title="Kick Report", description="Console ID: 0x{:016X}".format(cID), color=0xff0000, timestamp=datetime.datetime.now())
+            embedPrivate=discord.Embed(title="{}Kick Report".format("Citra " if isCitra else ""), description="Console ID: 0x{:016X}".format(cID), color=0xff0000, timestamp=datetime.datetime.now())
             embedPrivate.add_field(name="Reason", value=message, inline=False)
             if (messageType == ConsoleMessageType.TIMED_KICKMESSAGE.value):
                 time = ""
@@ -248,20 +249,30 @@ async def update_graph_message(ctgp7_server: CTGP7ServerHandler):
     x = []
     y1 = []
     y2 = []
+    y3 = []
+    y4 = []
     for i in range(DAYS_PAST):
         date = today - datetime.timedelta(days=DAYS_PAST - i)
         # x.append(date.strftime("%Y %b %-d"))
         x.append(date.strftime("%b %-d"))
         y1.append(ctgp7_server.database.get_daily_launches(date))
         y2.append(ctgp7_server.database.get_daily_unique_consoles(date))
+        y3.append(ctgp7_server.citraDatabase.get_daily_launches(date))
+        y4.append(ctgp7_server.citraDatabase.get_daily_unique_consoles(date))
     
     # plt.rcParams["figure.figsize"] = (plt.rcParamsDefault["figure.figsize"][0] * 20, plt.rcParamsDefault["figure.figsize"][1])
     plt.rcParams["figure.figsize"] = (plt.rcParamsDefault["figure.figsize"][0] * 1.75, plt.rcParamsDefault["figure.figsize"][1])
     plt.plot(x, y1, color = "dodgerblue", label = "Launches", marker="o", markersize=3)
     plt.plot(x, y2, color = "lightskyblue", linestyle='dashed', label = "New Consoles", marker="o", markersize=3)
+    plt.plot(x, y3, color = "darkorange", label = "Citra Launches", marker="o", markersize=3)
+    plt.plot(x, y4, color = "gold", linestyle='dashed', label = "Citra New Consoles", marker="o", markersize=3)
     for i,j in zip(x,y1):
         plt.annotate(str(j),xy=(i,j), fontsize=8)
     for i,j in zip(x,y2):
+        plt.annotate(str(j),xy=(i,j), fontsize=8)
+    for i,j in zip(x,y3):
+        plt.annotate(str(j),xy=(i,j), fontsize=8)
+    for i,j in zip(x,y4):
         plt.annotate(str(j),xy=(i,j), fontsize=8)
     plt.xticks(rotation = 45)
     plt.subplots_adjust(bottom=0.15)
@@ -314,7 +325,7 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
         uniqueConsoles = ctgp7_server.database.get_unique_console_count()
         uniqueOnlineUsers = ctgp7_server.database.get_unique_console_vr_count()
 
-        embed=discord.Embed(title="CTGP-7 Statistics", description="Statistics from all CTGP-7 players!", color=0xff0000, timestamp=datetime.datetime.now())
+        embed=discord.Embed(title="CTGP-7 Statistics", description="Statistics from all CTGP-7 players! (Citra users not included)", color=0xff0000, timestamp=datetime.datetime.now())
         embed2=discord.Embed(color=0xff0000, timestamp=datetime.datetime.now())
         embed.set_thumbnail(url=str(SELF_BOT_SERVER.icon.url))
         embed.add_field(name="Total Launches", value=str(genStats["launches"]), inline=True)
@@ -429,30 +440,34 @@ async def prepare_server_channels(ctgp7_server: CTGP7ServerHandler):
     vr_message_id = mIds[3] if len(mIds) > 3 else (await statsChan.send("Loading...")).id
 
 all_prev_room_msg_ids = set()
-async def update_online_room_info(ctgp7_server: CTGP7ServerHandler):
+all_prev_room_msg_ids_citra = set()
+async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isCitra: bool):
+    currDatabase = ctgp7_server.citraDatabase if isCitra else ctgp7_server.database
+    currCtwwHandler = ctgp7_server.citraCtwwHandler if isCitra else ctgp7_server.ctwwHandler
     global all_prev_room_msg_ids
+    global all_prev_room_msg_ids_citra
     global stats_curr_online_stuff_changed
     global stats_curr_online_users
     global stats_curr_online_rooms
     ctwwChan = SELF_BOT_SERVER.get_channel(ch_list()["CTWW"])
-    ctgp7_server.ctwwHandler.purge_tokens(datetime.timedelta(minutes=10))
-    ctgp7_server.ctwwHandler.purge_users(datetime.timedelta(minutes=10))
-    ctgp7_server.ctwwHandler.purge_rooms()
-    serverInfo = ctgp7_server.ctwwHandler.fetch_state()
+    currCtwwHandler.purge_tokens(datetime.timedelta(minutes=10))
+    currCtwwHandler.purge_users(datetime.timedelta(minutes=10))
+    currCtwwHandler.purge_rooms()
+    serverInfo = currCtwwHandler.fetch_state()
     currUser = serverInfo["userCount"]
-    if (stats_curr_online_users != currUser):
+    if (not isCitra and stats_curr_online_users != currUser):
         stats_curr_online_users = currUser
         stats_curr_online_stuff_changed = True
     currRoom = serverInfo["roomCount"]
-    if (stats_curr_online_rooms != currRoom):
+    if (not isCitra and stats_curr_online_rooms != currRoom):
         stats_curr_online_rooms = currRoom
         stats_curr_online_stuff_changed = True
     nowUser = serverInfo["newUserCount"]
-    ctgp7_server.database.increment_general_stats("total_logins", nowUser)
+    currDatabase.increment_general_stats("total_logins", nowUser)
     nowRoom = serverInfo["newRoomCount"]
-    ctgp7_server.database.increment_general_stats("total_rooms", nowRoom)
+    currDatabase.increment_general_stats("total_rooms", nowRoom)
     if (nowUser != 0 or nowRoom != 0):
-        ctgp7_server.database.set_stats_dirty(True)
+        currDatabase.set_stats_dirty(True)
     currMsgIds = set()
     for room in serverInfo["rooms"]:
         msgID = room["messageID"]
@@ -466,12 +481,12 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler):
             if msgID == 0:
                 msg = await ctwwChan.send("Room is being created...")
                 msgID = msg.id
-                if (not ctgp7_server.ctwwHandler.update_room_messageID(room["gID"], msgID)):
+                if (not currCtwwHandler.update_room_messageID(room["gID"], msgID)):
                     await msg.delete()
                     continue
             
             bordercolor = room["color"]
-            embed=discord.Embed(title="{} Room".format(room["gameMode"]), description="State: {}\nID: 0x{:08X}".format(room["state"], room["fakeID"]), color=bordercolor, timestamp=datetime.datetime.now())
+            embed=discord.Embed(title="{}{} Room".format("Citra " if isCitra else "", room["gameMode"]), description="State: {}\nID: 0x{:08X}".format(room["state"], room["fakeID"]), color=bordercolor, timestamp=datetime.datetime.now())
             playerString = "```\n"
             for player in room["players"]:
                 vrStr = ""
@@ -486,19 +501,6 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler):
                 playerString = "```\n- (None)\n```"
             embed.add_field(name="Players", value=playerString, inline=False)
             msg = await msg.edit(embed=embed, content=None)
-            # profanityProb = profanity_check.predict_prob([playerString])[0]
-            if (False): # Disable this for now until I find a proper way to handle it
-                chPrivate = SELF_BOT_SERVER.get_channel(ch_list()["STAFFKICKS"])
-                embed1 = discord.Embed(title="Possible profanity.", description="Probability: {:02f}%".format(profanityProb * 100), color=0xff7f00, timestamp=datetime.datetime.now())
-                embed1.add_field(name="Players", value=playerString)
-                playerString = "```\n"
-                for player in room["players"]:
-                    playerString += "- 0x{:016X} ({})\n".format(player["cID"], player["miiName"])
-                playerString += "```"
-                if (playerString == "```\n```"):
-                    playerString = "```\n- (None)\n```"
-                embed1.add_field(name="Players IDs", value=playerString, inline=False)
-                await chPrivate.send(embed=embed1)
             if (room["log"]):
                 playerString = "```\n"
                 for player in room["players"]:
@@ -512,18 +514,25 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler):
                 await chPrivate.send(embed=embed)
             
         currMsgIds.add(msgID)
-    otherRooms = all_prev_room_msg_ids - currMsgIds
+    otherRooms = (all_prev_room_msg_ids_citra if isCitra else all_prev_room_msg_ids) - currMsgIds
     for mID in otherRooms:
         try:
            msg = await ctwwChan.fetch_message(mID)
            await msg.delete()
         except:
             pass
-    all_prev_room_msg_ids = currMsgIds
+    if (isCitra):
+        all_prev_room_msg_ids_citra = currMsgIds
+    else:
+        all_prev_room_msg_ids = currMsgIds
 
 async def server_on_member_remove(ctgp7_server: CTGP7ServerHandler, member: discord.Member):
     try:
         ctgp7_server.database.delete_discord_link_user(member.id)
+    except:
+        pass
+    try:
+        ctgp7_server.citraDatabase.delete_discord_link_user(member.id)
     except:
         pass
 
@@ -536,16 +545,18 @@ async def server_bot_loop(ctgp7_server: CTGP7ServerHandler):
         try:
             if (firstLoop):
                 await prepare_server_channels(ctgp7_server)
-            await update_online_room_info(ctgp7_server)
+            await update_online_room_info(ctgp7_server, False)
+            await update_online_room_info(ctgp7_server, True)
             if (firstLoop or ctgp7_server.database.get_stats_dirty() or stats_curr_online_stuff_changed):
                 await update_stats_message(ctgp7_server)
                 ctgp7_server.database.set_stats_dirty(False)
-            await kick_message_logger(ctgp7_server)
-            await server_message_logger(ctgp7_server)
+            await kick_message_logger()
+            await server_message_logger()
             await process_pending_player_role_update(ctgp7_server)
             server_bot_loop_dbcommit_cnt += 1
             if (server_bot_loop_dbcommit_cnt >= (60 * 5) // 7): # Commit every 5 minutes
                 ctgp7_server.database.commit()
+                ctgp7_server.citraDatabase.commit()
                 server_bot_loop_dbcommit_cnt = 0
             firstLoop = False
         except:
@@ -569,28 +580,32 @@ def get_user_info(userID):
     ret["canBeta"] = contrRole in member.roles or courseRole in member.roles or betaAccessRole in member.roles or member.premium_since is not None
     return ret
 
-def transfer_console_data(ctgp7_server: CTGP7ServerHandler, srcCID: int, dstCID: int):
+def transfer_console_data(ctgp7_server: CTGP7ServerHandler, srcCID: int, dstCID: int, isCitra: bool):
+    currDatabase = ctgp7_server.citraDatabase if isCitra else ctgp7_server.database
+    currCtwwHandler = ctgp7_server.citraCtwwHandler if isCitra else ctgp7_server.ctwwHandler
     try:
         # Transfer VR
-        srcVR = ctgp7_server.database.get_console_vr(srcCID)
-        srcPoints = ctgp7_server.database.get_console_points(srcCID)
-        ctgp7_server.database.set_console_vr(dstCID, (srcVR.ctVR, srcVR.cdVR))
-        ctgp7_server.database.set_console_points(dstCID, srcPoints[0])
-        ctgp7_server.database.set_console_vr(srcCID, (1000, 1000))
-        ctgp7_server.database.set_console_points(srcCID, 0)
+        srcVR = currDatabase.get_console_vr(srcCID)
+        srcPoints = currDatabase.get_console_points(srcCID)
+        currDatabase.set_console_vr(dstCID, (srcVR.ctVR, srcVR.cdVR))
+        currDatabase.set_console_points(dstCID, srcPoints[0])
+        currDatabase.set_console_vr(srcCID, (1000, 1000))
+        currDatabase.set_console_points(srcCID, 0)
         # Transfer discord link
-        discordID = ctgp7_server.database.get_discord_link_console(srcCID)
+        discordID = currDatabase.get_discord_link_console(srcCID)
         if (discordID is not None):
-            ctgp7_server.database.delete_discord_link_console(srcCID)
-            ctgp7_server.database.set_discord_link_console(discordID, dstCID)
-        ctgp7_server.database.transfer_console_status(srcCID, dstCID)
+            currDatabase.delete_discord_link_console(srcCID)
+            currDatabase.set_discord_link_console(discordID, dstCID)
+        currDatabase.transfer_console_status(srcCID, dstCID)
         return ""
     except Exception as e:
         return str(e)
 
 stats_command_last_exec = datetime.datetime.utcnow()
-async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: discord.Message):
+async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: discord.Message, isCitra: bool):
     global stats_command_last_exec
+    currDatabase = ctgp7_server.citraDatabase if isCitra else ctgp7_server.database
+    currCtwwHandler = ctgp7_server.citraCtwwHandler if isCitra else ctgp7_server.ctwwHandler
     try:
         bot_cmd = get_server_bot_args(message.content, 2)[1]
     except IndexError:
@@ -638,9 +653,9 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             if (len(tag) == 3):
                 version = -1
                 if mode == "ctww":
-                    version = ctgp7_server.database.get_ctww_version()
+                    version = currDatabase.get_ctww_version()
                 elif mode == "beta":
-                    version = ctgp7_server.database.get_beta_version()
+                    version = currDatabase.get_beta_version()
                 await message.reply( "Current {} version is: {}".format( mode, version))
                 return
             else:
@@ -650,9 +665,9 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     await message.reply( "Invalid number.")
                     return
                 if mode == "ctww":
-                    ctgp7_server.database.set_ctww_version(version)
+                    currDatabase.set_ctww_version(version)
                 elif mode == "beta":
-                    ctgp7_server.database.set_beta_version(version)
+                    currDatabase.set_beta_version(version)
                 await message.reply( "{} version set to: {}".format( mode, version))
                 return
     elif bot_cmd == "tracksplit":
@@ -662,13 +677,13 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["tracksplit"] + "```")
                 return
             if (len(tag) == 2):
-                split = ctgp7_server.database.get_track_freq_split()
-                isenabled = ctgp7_server.database.get_track_freq_split_enabled()
+                split = currDatabase.get_track_freq_split()
+                isenabled = currDatabase.get_track_freq_split_enabled()
                 await message.reply( "Current split value is: {} ({})".format(split, "enabled" if isenabled else "disabled"))
                 return
             else:
                 if (tag[2] == "enable" or tag[2] == "disable"):
-                    ctgp7_server.database.set_track_frew_split_enabled(tag[2] == "enable")
+                    currDatabase.set_track_frew_split_enabled(tag[2] == "enable")
                     await message.reply( "Operation succeeded")
                     return
                 try:
@@ -676,7 +691,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 except ValueError:
                     await message.reply( "Invalid number.")
                     return
-                ctgp7_server.database.set_track_freq_split(split)
+                currDatabase.set_track_freq_split(split)
                 await message.reply( "Split value set to: {}".format(split))
                 return
     elif bot_cmd == "region":
@@ -687,7 +702,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 return
             if (len(tag) == 2):
                 region = -1
-                region = ctgp7_server.database.get_online_region()
+                region = currDatabase.get_online_region()
                 await message.reply( "Current region is: {}".format(region))
                 return
             else:
@@ -696,7 +711,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 except ValueError:
                     await message.reply( "Invalid number.")
                     return
-                ctgp7_server.database.set_online_region(region)
+                currDatabase.set_online_region(region)
                 await message.reply( "Region set to: {}".format(region))
                 return
     elif bot_cmd == "kick" or bot_cmd == "skick":
@@ -722,7 +737,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             messageType = ConsoleMessageType.TIMED_KICKMESSAGE.value
             if (kickTime[0] == 0):
                 messageType = ConsoleMessageType.SINGLE_KICKMESSAGE.value
-            ctgp7_server.database.set_console_message(consoleID, messageType, tag[4], None if kickTime[0] == 0 else kickTime[0], bot_cmd == "skick")
+            currDatabase.set_console_message(consoleID, messageType, tag[4], None if kickTime[0] == 0 else kickTime[0], bot_cmd == "skick")
             await message.reply( "Operation succeeded.")
             return
     elif bot_cmd == "ban" or bot_cmd == "sban":
@@ -742,7 +757,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             if (consoleID == 0):
                 await message.reply( "**WARNING THIS OPERATION AFFECTS ALL CONSOLES.**")
             messageType = ConsoleMessageType.TIMED_KICKMESSAGE.value
-            ctgp7_server.database.set_console_message(consoleID, messageType, tag[3], None, bot_cmd == "sban")
+            currDatabase.set_console_message(consoleID, messageType, tag[3], None, bot_cmd == "sban")
             await message.reply( "Operation succeeded.")
             return
     elif bot_cmd == "message":
@@ -772,7 +787,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 messageTime = None
             elif (msgTime[0] >= parsetime("10y")[0]): # Permanent message
                 messageTime = None
-            ctgp7_server.database.set_console_message(consoleID, messageType, tag[4], messageTime)
+            currDatabase.set_console_message(consoleID, messageType, tag[4], messageTime)
             await message.reply( "Operation succeeded.")
             return
     elif bot_cmd == "clear":
@@ -792,7 +807,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             if (consoleID == 0):
                 await message.reply( "**WARNING THIS OPERATION AFFECTS ALL CONSOLES.**")
             
-            ctgp7_server.database.delete_console_message(consoleID)
+            currDatabase.delete_console_message(consoleID)
             await message.reply( "Operation succeeded.")
             return
     elif bot_cmd == "disband":
@@ -809,7 +824,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             except ValueError:
                 await message.reply( "Invalid room ID.")
                 return
-            if (ctgp7_server.ctwwHandler.disband_room(roomID)):
+            if (currCtwwHandler.disband_room(roomID)):
                 await message.reply( "Operation succeeded.")
             else:
                 await message.reply( "The specified room is not active.")
@@ -835,12 +850,12 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()[bot_cmd] + "```")
                 return
             if (mode == "get"):
-                if (ctgp7_server.database.get_console_is_verified(consoleID)):
+                if (currDatabase.get_console_is_verified(consoleID)):
                     await message.reply("The specified console ID is verified.")
                 else:
                     await message.reply("The specified console ID is not verified.")
             else:
-                ctgp7_server.database.set_console_is_verified(consoleID, mode == "set")
+                currDatabase.set_console_is_verified(consoleID, mode == "set")
                 await message.reply( "Operation succeeded.")
     elif bot_cmd == "console_admin":
         if await staff_server_can_execute(message, bot_cmd):
@@ -863,12 +878,12 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()[bot_cmd] + "```")
                 return
             if (mode == "get"):
-                if (ctgp7_server.database.get_console_is_admin(consoleID)):
+                if (currDatabase.get_console_is_admin(consoleID)):
                     await message.reply("The specified console ID is admin.")
                 else:
                     await message.reply("The specified console ID is not admin.")
             else:
-                ctgp7_server.database.set_console_is_admin(consoleID, mode == "set")
+                currDatabase.set_console_is_admin(consoleID, mode == "set")
                 await message.reply( "Operation succeeded.")
     elif bot_cmd == "stats":
         tag = get_server_bot_args(message.content)
@@ -889,9 +904,13 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             opt = 1
         elif (tag[2] == "ba"):
             opt = 2
-        embed = gen_course_usage_embed(ctgp7_server, opt)
+        embed = gen_course_usage_embed(currDatabase, opt)
         await message.reply(embed=embed)
     elif bot_cmd == "link":
+        if (isCitra):
+            await message.reply("Operation not supported with Citra.")
+            return
+        
         tag = get_server_bot_args(message.content)
         if (len(tag) != 3):
             await message.reply( "Invalid syntax, correct usage:\r\n```" + server_help_array()["link"] + "```")
@@ -905,15 +924,15 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             await message.reply("Invalid code provided.")
             return
         
-        if (ctgp7_server.database.get_discord_link_console(cID) is not None):
+        if (currDatabase.get_discord_link_console(cID) is not None):
             await message.reply("The specified console is linked to another discord account. Use `@RedYoshiBot server unlink` from the other account to unlink your console.")
             return
         
-        if (ctgp7_server.database.get_discord_link_user(message.author.id) is not None):
+        if (currDatabase.get_discord_link_user(message.author.id) is not None):
             await message.reply("Your discord account is already linked to another console. Use `@RedYoshiBot server unlink` to unlink the other console.")
             return
 
-        ctgp7_server.database.set_discord_link_console(message.author.id, cID)
+        currDatabase.set_discord_link_console(message.author.id, cID)
         del CTGP7Requests.pendingDiscordLinks[cID]
         await message.reply("Operation succeeded.")
         queue_player_role_update(message.author.id)
@@ -934,14 +953,14 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 except:
                     await message.reply("Invalid console ID provided.")
                     return
-                discordID = ctgp7_server.database.get_discord_link_console(consoleID)
+                discordID = currDatabase.get_discord_link_console(consoleID)
             else:
                 try:
                     discordID = get_from_mention(checkid).id
                 except:
                     await message.reply("Invalid discord ID provided.")
                     return
-                consoleID = ctgp7_server.database.get_discord_link_user(discordID)
+                consoleID = currDatabase.get_discord_link_user(discordID)
             
             if (consoleID is None or discordID is None):
                 await message.reply("Specified ID has no link established.")
@@ -951,7 +970,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             if (member is None):
                 member = CreateFakeMember(discordID)
             
-            lastName = ctgp7_server.database.get_console_last_name(consoleID)
+            lastName = currDatabase.get_console_last_name(consoleID)
             await message.reply("`{:016X} {}` -> {}".format(consoleID, lastName, member.mention))
     elif bot_cmd == "unlink":
         if await staff_server_can_execute(message, bot_cmd, True):
@@ -970,22 +989,22 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 except:
                     await message.reply("Invalid console ID provided.")
                     return
-                discordID = ctgp7_server.database.get_discord_link_console(consoleID)
+                discordID = currDatabase.get_discord_link_console(consoleID)
             else:
                 try:
                     discordID = get_from_mention(checkid).id
                 except:
                     await message.reply("Invalid discord ID provided.")
                     return
-                consoleID = ctgp7_server.database.get_discord_link_user(discordID)
+                consoleID = currDatabase.get_discord_link_user(discordID)
 
             if (consoleID is None or discordID is None):
                 await message.reply("Specified ID has no link established.")
                 return
 
             if (discordID is None):
-                discordID = ctgp7_server.database.get_discord_link_console(consoleID)
-            ctgp7_server.database.delete_discord_link_console(consoleID)
+                discordID = currDatabase.get_discord_link_console(consoleID)
+            currDatabase.delete_discord_link_console(consoleID)
             queue_player_role_update(discordID)
             await message.reply("Operation succeeded.")
         else:
@@ -993,11 +1012,11 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             if (len(tag) != 2):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + server_help_array()["unlink"] + "```")
                 return
-            consoleID = ctgp7_server.database.get_discord_link_user(message.author.id)
+            consoleID = currDatabase.get_discord_link_user(message.author.id)
             if (consoleID is None):
                 await message.reply("There is no console linked with your account.")
                 return
-            ctgp7_server.database.delete_discord_link_console(consoleID)
+            currDatabase.delete_discord_link_console(consoleID)
             queue_player_role_update(message.author.id)
             await message.reply("Operation succeeded.")
     elif bot_cmd == "manage_vr":
@@ -1026,12 +1045,12 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 return
             if (mode == "get"):
                 if (game == "ctww" or game == "cd"):
-                    vrData = ctgp7_server.database.get_console_vr(consoleID)
+                    vrData = currDatabase.get_console_vr(consoleID)
                     vr = vrData.ctVR if game == "ctww" else vrData.cdVR
                     vrPos = vrData.ctPos if game == "ctww" else vrData.cdPos
                     await message.reply("Console has {} VR (Position: {}) in {}".format(vr, vrPos, "Custom Tracks" if game == "ctww" else "Countdown"))
                 elif (game == "points"):
-                    pointData = ctgp7_server.database.get_console_points(consoleID)
+                    pointData = currDatabase.get_console_points(consoleID)
                     await message.reply("Console has {} Points (Position: {})".format(pointData[0], pointData[1]))
             else:
                 if (len(tag) != 6):
@@ -1046,12 +1065,12 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     await message.reply( "Invalid number.")
                     return
                 if (game == "ctww" or game == "cd"):
-                    vrData = ctgp7_server.database.get_console_vr(consoleID)
+                    vrData = currDatabase.get_console_vr(consoleID)
                     vrData = list((vrData.ctVR, vrData.cdVR))
                     vrData[0 if game == "ctww" else 1] = vr
-                    ctgp7_server.database.set_console_vr(consoleID, tuple(vrData))
+                    currDatabase.set_console_vr(consoleID, tuple(vrData))
                 elif (game == "points"):
-                    ctgp7_server.database.set_console_points(consoleID, vr)
+                    currDatabase.set_console_points(consoleID, vr)
                 await message.reply( "Operation succeeded.")
     elif bot_cmd == "transfer":
         if await staff_server_can_execute(message, bot_cmd):
@@ -1085,9 +1104,13 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             else:
                 await message.reply( "Operation failed:```{}```".format(res))
     elif bot_cmd == "apply_player_role":
+        if (isCitra):
+            await message.reply("Operation not supported with Citra.")
+            return
+
         if await staff_server_can_execute(message, bot_cmd):
             await message.channel.send("WARNING: This operation is slow and will take some time!")
-            allCons = ctgp7_server.database.get_all_discord_link()
+            allCons = currDatabase.get_all_discord_link()
             total = 0
             curr = 0
             for ac in allCons:
@@ -1099,14 +1122,18 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 total += 1
             await message.reply("Done! Success: {}, Fail: {}".format(curr, total - curr))
     elif bot_cmd == "purge_console_link":
+        if (isCitra):
+            await message.reply("Operation not supported with Citra.")
+            return
+        
         if await staff_server_can_execute(message, bot_cmd):
-            allCons = ctgp7_server.database.get_all_discord_link()
+            allCons = currDatabase.get_all_discord_link()
             total = 0
             for ac in allCons:
                 userID = ac[1]
                 member = get_from_mention(userID)
                 if (member is None):
-                    ctgp7_server.database.delete_discord_link_user(userID)
+                    currDatabase.delete_discord_link_user(userID)
                     total += 1
             await message.reply("Done! Purged {} users.".format(total))
     elif bot_cmd == "get_mii_icon":
@@ -1120,8 +1147,8 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             except:
                 await message.reply("Invalid console ID provided.")
                 return
-            miiIcon = ctgp7_server.ctwwHandler.getMiiIcon(consoleID)
-            miiName = ctgp7_server.database.get_console_last_name(consoleID)
+            miiIcon = currCtwwHandler.getMiiIcon(consoleID)
+            miiName = currDatabase.get_console_last_name(consoleID)
             if (miiIcon is None):
                 await message.reply("Specified ID has no mii icon.")
                 return
@@ -1142,19 +1169,19 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             if (len(tag) == 3):
                 version = -1
                 if mode == "ctCPUAmount":
-                    amount = ctgp7_server.database.get_room_player_amount(False)
+                    amount = currDatabase.get_room_player_amount(False)
                 elif mode == "cdCPUAmount":
-                    amount = ctgp7_server.database.get_room_player_amount(True)
+                    amount = currDatabase.get_room_player_amount(True)
                 elif mode == "rubberBMult":
-                    amount = ctgp7_server.database.get_room_rubberbanding_config(False)
+                    amount = currDatabase.get_room_rubberbanding_config(False)
                 elif mode == "rubberBOffset":
-                    amount = ctgp7_server.database.get_room_rubberbanding_config(True)
+                    amount = currDatabase.get_room_rubberbanding_config(True)
                 elif mode == "blockedTrackHistory":
-                    amount = ctgp7_server.database.get_room_blocked_track_history_count()
+                    amount = currDatabase.get_room_blocked_track_history_count()
                 elif mode == "serveraddr":
-                    amount = ctgp7_server.database.get_ctgp7_server_address()
+                    amount = currDatabase.get_ctgp7_server_address()
                 elif mode == "serveravailable":
-                    amount = ctgp7_server.database.get_ctgp7_server_available()
+                    amount = currDatabase.get_ctgp7_server_available()
                 await message.reply( "Config for \"{}\" is: {}".format(mode, amount))
                 return
             else:
@@ -1171,19 +1198,19 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     await message.reply("Invalid format.")
                     return
                 if mode == "ctCPUAmount":
-                    ctgp7_server.database.set_room_player_amount(False, amount)
+                    currDatabase.set_room_player_amount(False, amount)
                 elif mode == "cdCPUAmount":
-                    ctgp7_server.database.set_room_player_amount(True, amount)
+                    currDatabase.set_room_player_amount(True, amount)
                 elif mode == "rubberBMult":
-                    ctgp7_server.database.set_room_rubberbanding_config(False, amount)
+                    currDatabase.set_room_rubberbanding_config(False, amount)
                 elif mode == "rubberBOffset":
-                    ctgp7_server.database.set_room_rubberbanding_config(True, amount)
+                    currDatabase.set_room_rubberbanding_config(True, amount)
                 elif mode == "blockedTrackHistory":
-                    ctgp7_server.database.set_room_blocked_track_history_count(amount)
+                    currDatabase.set_room_blocked_track_history_count(amount)
                 elif mode == "serveraddr":
-                    ctgp7_server.database.set_ctgp7_server_address(amount)
+                    currDatabase.set_ctgp7_server_address(amount)
                 elif mode == "serveravailable":
-                    ctgp7_server.database.set_ctgp7_server_available(amount)
+                    currDatabase.set_ctgp7_server_available(amount)
                 await message.reply("Config for \"{}\" is: {}".format(mode, amount))
                 return
     elif bot_cmd == "otplegality":
@@ -1216,20 +1243,20 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Invalid option `{}`, correct usage:\r\n```".format(mode) + staff_server_help_array()[bot_cmd] + "```")
                 return
             if (mode == "get"):
-                islegal = ctgp7_server.database.get_console_legality(consoleID)
+                islegal = currDatabase.get_console_legality(consoleID)
                 await message.reply("Console is legal." if islegal else "Console is NOT legal.")
             if (mode == "getall"):
-                allilegal = ctgp7_server.database.getall_console_legality()
+                allilegal = currDatabase.getall_console_legality()
                 info = ""
                 for e in allilegal: info += "0x{:016X}\n".format(e)
                 if len(info) == 0:
                     info = " "
                 await sendMultiMessage(message.channel, info, "```\n---------------\n", "---------------\n```\n")
             if (mode == "set"):
-                ctgp7_server.database.set_console_legality(consoleID)
+                currDatabase.set_console_legality(consoleID)
                 await message.reply( "Operation succeeded.")
             if (mode == "clear"):
-                ctgp7_server.database.clear_console_legality(consoleID)
+                currDatabase.clear_console_legality(consoleID)
                 await message.reply( "Operation succeeded.")
 
     else:

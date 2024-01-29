@@ -46,6 +46,8 @@ class CTGP7ServerHandler:
             if (what == "t"):
                 token = self.path[3:]
                 password = CTGP7ServerHandler.myself.ctwwHandler.get_password_from_token(token)
+                if password is None:
+                    password = CTGP7ServerHandler.myself.citraCtwwHandler.get_password_from_token(token)
 
                 if password is None: # Generate random password
                     password = ''.join(random.choices("0123456789ABCDEF", k=16))
@@ -64,6 +66,7 @@ class CTGP7ServerHandler:
                 self.wfile.write(bytes(textret, "ascii"))
 
         def do_POST(self):
+            isCitra = "Citra" in self.headers
             if (not do_critical_operations_in(CTGP7ServerHandler.myself, self)):
                 return
             
@@ -75,11 +78,12 @@ class CTGP7ServerHandler:
             outputData = {}
             logStr = "--------------------\n"
             logStr += "Timestamp: {}\n".format(timeNow.isoformat())
+            logStr += "Citra: {}\n".format(isCitra)
 
             skipExceptionPrint = False
 
             try:
-                process = subprocess.Popen(["./encbsondocument", "d"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+                process = subprocess.Popen(["./encbsondocument", "d" + ("c" if isCitra else "h")], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
                 process.stdin.write(connData)
                 process.stdin.flush()
                 
@@ -90,20 +94,22 @@ class CTGP7ServerHandler:
                     raise Exception("Couldn't decrypt message: {}".format(process.returncode))
 
                 inputData = bson.loads(connData)
-                if not "_CID" in inputData or not "_seed" in inputData:
+                if not "_CID" in inputData or not "_seed" in inputData or not "_CSH1" in inputData or not "_CSH2" in inputData:
                     skipExceptionPrint = True
                     raise Exception("Input is missing: cID: {}, seed: {}".format(not "_CID" in inputData, not "_seed" in inputData))
                 
                 reqConsoleID = inputData["_CID"]
                 logStr += "Console ID: 0x{:016X}\n".format(reqConsoleID)
 
-                if "_CSH1" in inputData and "_CSH2" in inputData:
-                    isLegal = CTGP7ServerHandler.myself.database.verify_console_legality(reqConsoleID, inputData["_CSH1"], inputData["_CSH2"])
-                    if not isLegal:
-                        skipExceptionPrint = True
-                        raise Exception("Illegal console detected")
+                isLegal = CTGP7ServerHandler.myself.database.verify_console_legality(reqConsoleID, inputData["_CSH1"], inputData["_CSH2"])
+                if not isLegal:
+                    skipExceptionPrint = True
+                    raise Exception("Illegal console detected")
 
-                solver = CTGP7Requests(CTGP7ServerHandler.myself.database, CTGP7ServerHandler.myself.ctwwHandler, inputData, CTGP7ServerHandler.debug_mode, reqConsoleID)
+                solver = CTGP7Requests(
+                    CTGP7ServerHandler.myself.citraDatabase if isCitra else CTGP7ServerHandler.myself.database, 
+                    CTGP7ServerHandler.myself.citraCtwwHandler if isCitra else CTGP7ServerHandler.myself.ctwwHandler,
+                    inputData, CTGP7ServerHandler.debug_mode, reqConsoleID, isCitra)
                 outputData.update(solver.solve())
                 logStr += solver.info
 
@@ -118,7 +124,7 @@ class CTGP7ServerHandler:
                 outputData["res"] = -1
                 if not skipExceptionPrint: traceback.print_exc()
             
-            process = subprocess.Popen(["./encbsondocument", "e"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            process = subprocess.Popen(["./encbsondocument", "e" + ("c" if isCitra else "h")], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
             process.stdin.write(bson.dumps(outputData))
             process.stdin.flush()
 
@@ -163,10 +169,13 @@ class CTGP7ServerHandler:
         except:
             pass
 
-        self.database = CTGP7ServerDatabase()
+        self.database = CTGP7ServerDatabase('RedYoshiBot/server/data/data.sqlite', False)
         self.database.connect()
+        self.citraDatabase = CTGP7ServerDatabase('RedYoshiBot/server/data/data_citra.sqlite', True)
+        self.citraDatabase.connect()
 
         self.ctwwHandler = CTGP7CtwwHandler(self.database)
+        self.citraCtwwHandler = CTGP7CtwwHandler(self.citraDatabase)
 
         server_thread = threading.Thread(target=self.server_start)
         server_thread.daemon = True
@@ -178,8 +187,11 @@ class CTGP7ServerHandler:
         self.nex.terminate()
         self.nex = None
         self.database.disconnect()
+        self.citraDatabase.disconnect()
         self.database = None
+        self.citraDatabase = None
         self.ctwwHandler = None
+        self.citraCtwwHandler = None
         CTGP7ServerHandler.myself = None
         print("CTGP-7 server terminated.")
     

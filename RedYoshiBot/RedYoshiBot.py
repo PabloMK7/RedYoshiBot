@@ -396,7 +396,7 @@ def help_array():
         "parseqr": ">@RedYoshiBot parseqr [url]\nParses the CTGP-7 QR crash data from the image url. You can either specify the image url or attach the image to the message.",
         "funcname": ">@RedYoshiBot funcname (address) (region) (version)\nFinds the Mario Kart 7 function name for a given address, region and version combination.\n- address: Address to find in hex.\n- region: Region of the game (1 - EUR, 2 - USA, 3 - JAP).\n- version: Version of the game (1 - rev0 v1.1, 2 - rev1, 3 - rev2).",
 
-        "server": ">@RedYoshiBot server (command) (options)\nRuns a server related command.\nUse \'@RedYoshiBot server help\' to get all the available server commands."
+        "server": ">@RedYoshiBot server/citraserver/bothserver (command) (options)\nRuns a server related command.\nUse \'@RedYoshiBot server help\' to get all the available server commands."
     }
 def staff_help_array():
     return {
@@ -1140,6 +1140,7 @@ async def on_ready():
     atexit.register(db_mng.terminate)
     ctgp7_server = CTGP7ServerHandler(debug_mode)
     ctgp7_server.database.setKickLogCallback(kick_message_callback)
+    ctgp7_server.citraDatabase.setKickLogCallback(kick_message_callback)
     CTGP7ServerHandler.loggerCallback = server_message_logger_callback
     CTGP7Requests.get_user_info = get_user_info
     CTGP7Requests.queue_player_role_update = queue_player_role_update
@@ -1662,7 +1663,9 @@ async def on_message(message):
                         return
                     fact_text = await db_mng.fact_get(True)
                     factSend = []
+                    sendToStaff = False
                     if await staff_can_execute(message, bot_cmd, silent=True):
+                        sendToStaff = True
                         for row in fact_text:
                             member = get_from_mention(str(row[1]))
                             if (member is None):
@@ -1678,7 +1681,7 @@ async def on_message(message):
                             except:
                                 continue
                             factSend.append(str(row[0]) + " - " + text_isdyn +  " - " + final_text + "\n----------\n")
-                    await sendMultiMessage(message.author, factSend, "```\n----------\n", "```")
+                    await sendMultiMessage(message.channel if sendToStaff else message.author, factSend, "```\n----------\n", "```")
                 elif bot_cmd == 'delfact':
                     if await staff_can_execute(message, bot_cmd, silent=True):
                         tag = message.content.split()
@@ -1989,8 +1992,14 @@ async def on_message(message):
                     else:
                         await message.reply( "`@RedYoshiBot game` can only be used in <#324672297812099093>.")
                         return
-                elif bot_cmd == "server":
-                    await handle_server_command(ctgp7_server, message)
+                elif bot_cmd == "server" or bot_cmd == "citraserver" or bot_cmd == "bothserver":
+                    if bot_cmd == "bothserver":
+                        await message.reply( "Normal server:")
+                        await handle_server_command(ctgp7_server, message, False)
+                        await message.reply( "Citra server:")
+                        await handle_server_command(ctgp7_server, message, True)
+                    else:
+                        await handle_server_command(ctgp7_server, message, bot_cmd == "citraserver")
                     return
                 else:
                     await message.reply( 'Unknown command: `{}`\nTo get the list of all the available commands use `@RedYoshiBot help`'.format(bot_cmd))    

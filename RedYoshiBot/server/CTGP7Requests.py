@@ -36,26 +36,27 @@ class CTGP7Requests:
 
     pendingDiscordLinks = {}
 
-    def __init__(self, database: CTGP7ServerDatabase, ctwwHandler: CTGP7CtwwHandler, request: dict, debug: bool, consoleID: int):
+    def __init__(self, database: CTGP7ServerDatabase, ctwwHandler: CTGP7CtwwHandler, request: dict, debug: bool, consoleID: int, isCitra: bool):
         self.req = request
         self.info = ""
         self.debug = debug
-        self.database = database
-        self.ctwwHandler = ctwwHandler
+        self.currDatabase = database
+        self.currCtwwHandler = ctwwHandler
         self.cID = consoleID
+        self.isCitra = isCitra
 
     def handle_status(self, input):
         queue_update = False
 
         for s in CTGP7ServerDatabase.allowed_console_status:
-            prev = self.database.get_console_status(self.cID, s) == 1
+            prev = self.currDatabase.get_console_status(self.cID, s) == 1
             new = input.get(s, False)
             if (not prev and new):
-                self.database.set_console_status(self.cID, s, 1)
+                self.currDatabase.set_console_status(self.cID, s, 1)
                 queue_update = True
 
         if (queue_update):
-            discordID = self.database.get_discord_link_console(self.cID)
+            discordID = self.currDatabase.get_discord_link_console(self.cID)
             if (discordID is not None):
                 CTGP7Requests.queue_player_role_update(discordID)
 
@@ -67,35 +68,35 @@ class CTGP7Requests:
         isFirstReport = input.get("firstReport", False)
         if (len(input) == 1):
             if (msgSeqID == 0): # Request sequence ID
-                seqID = self.database.get_stats_seqid(self.cID)
+                seqID = self.currDatabase.get_stats_seqid(self.cID)
                 if (seqID == 0):
-                    self.database.increment_today_unique_consoles()
-                    seqID = self.database.fetch_stats_seqid(self.cID)
+                    self.currDatabase.increment_today_unique_consoles()
+                    seqID = self.currDatabase.fetch_stats_seqid(self.cID)
                 return (1, seqID)
             else:
                 return (-1, 0)
         else:
-            if (msgSeqID != 0 and msgSeqID == self.database.get_stats_seqid(self.cID)): # Sequence ID is valid
+            if (msgSeqID != 0 and msgSeqID == self.currDatabase.get_stats_seqid(self.cID)): # Sequence ID is valid
                 if (isFirstReport):
-                    self.database.increment_today_launches()
+                    self.currDatabase.increment_today_launches()
                 for k in input:
                     # Fix typo in the plugin
                     namefixed = k
                     if k == "completed_missionv#2":
                         namefixed = "completed_mission#2"
                     if (namefixed in CTGP7Requests.statsList):
-                        self.database.increment_general_stats(namefixed.split("#", 1)[0], input[k])
+                        self.currDatabase.increment_general_stats(namefixed.split("#", 1)[0], input[k])
                     elif (k == "played_tracks"):
                         for t in input[k]:
-                            self.database.increment_track_frequency(t, input[k][t])
+                            self.currDatabase.increment_track_frequency(t, input[k][t])
                     elif (k == "status"):
                         self.handle_status(input[k])
-                self.database.set_stats_dirty(True)
-                return (0, self.database.fetch_stats_seqid(self.cID))
+                self.currDatabase.set_stats_dirty(True)
+                return (0, self.currDatabase.fetch_stats_seqid(self.cID))
             else: # Sequence ID is invalid
-                seqID = self.database.get_stats_seqid(self.cID)
+                seqID = self.currDatabase.get_stats_seqid(self.cID)
                 if (seqID == 0):
-                    seqID = self.database.fetch_stats_seqid(self.cID)
+                    seqID = self.currDatabase.fetch_stats_seqid(self.cID)
                 return (2, seqID)
     
     def put_statsv2(self, input):
@@ -105,10 +106,10 @@ class CTGP7Requests:
         if (ret[0] == 0):
             pts = ()
             if ("race_points" in input):
-                pts = self.database.add_console_points(self.cID, input["race_points"])
-                self.database.set_stats_dirty(True)
+                pts = self.currDatabase.add_console_points(self.cID, input["race_points"])
+                self.currDatabase.set_stats_dirty(True)
             else:
-                pts = self.database.get_console_points(self.cID)
+                pts = self.currDatabase.get_console_points(self.cID)
             retVal["points"] = pts[0]
             retVal["pointsPos"] = pts[1]
         return (ret[0], retVal)
@@ -116,15 +117,20 @@ class CTGP7Requests:
     def req_online_token(self, input):
         if (not "password" in input):
             return (-1, 0)
-        token = self.ctwwHandler.generate_password_token(str(input["password"]))
+        token = self.currCtwwHandler.generate_password_token(str(input["password"]))
         timenow = datetime.datetime.utcnow()
-        server_addr = self.database.get_ctgp7_server_address()
+        server_addr = self.currDatabase.get_ctgp7_server_address()
         addrport = server_addr.split(":")
-        serveravailable = self.database.get_ctgp7_server_available() != 0 or self.database.get_console_is_admin(self.cID)
+        serveravailable = self.currDatabase.get_ctgp7_server_available() != 0 or self.currDatabase.get_console_is_admin(self.cID)
         return (0, {"online_token": token, "server_time": int(timenow.strftime("%Y%m%d%H%M%S")), "address": str(addrport[0]), "port": int(addrport[1]), "available": serveravailable})
 
+    def req_unique_pid(self, input):
+        return (0, {"unique_pid": self.currDatabase.fetch_unique_PID()})
+    
     def req_discord_info(self, input):
-        discordLink = self.database.get_discord_link_console(self.cID)
+        if (self.isCitra):
+            return (-1, 0)
+        discordLink = self.currDatabase.get_discord_link_console(self.cID)
         if (discordLink is None):
             if ("request" in input and input["request"]):
                 if (not self.cID in CTGP7Requests.pendingDiscordLinks):
@@ -137,7 +143,7 @@ class CTGP7Requests:
                 del CTGP7Requests.pendingDiscordLinks[self.cID]
             usrInfo = CTGP7Requests.get_user_info(discordLink)
             if (usrInfo is None):
-                self.database.delete_discord_link_console(self.cID)
+                self.currDatabase.delete_discord_link_console(self.cID)
                 return self.req_discord_info(input)
             return (0, usrInfo)
 
@@ -146,41 +152,41 @@ class CTGP7Requests:
         if (type(input) is not int):
             return (-1, 0)
 
-        return (0 if self.database.get_beta_version() == input else 1, 0)
+        return (0 if self.currDatabase.get_beta_version() == input else 1, 0)
 
     def server_login_handler(self, input):
-        return self.ctwwHandler.handle_user_login(input, self.cID)
+        return self.currCtwwHandler.handle_user_login(input, self.cID)
 
     def server_logout_handler(self, input):
-        return self.ctwwHandler.handle_user_logout(input, self.cID)
+        return self.currCtwwHandler.handle_user_logout(input, self.cID)
 
     def server_user_room_join_handler(self, input):
-        return self.ctwwHandler.handle_user_room_join(input, self.cID)
+        return self.currCtwwHandler.handle_user_room_join(input, self.cID)
 
     def server_user_room_prepare_handler(self, input):
-        return self.ctwwHandler.handle_user_prepare_room(input, self.cID)
+        return self.currCtwwHandler.handle_user_prepare_room(input, self.cID)
 
     def server_user_room_racestart_handler(self, input):
-        return self.ctwwHandler.handle_user_racestart_room(input, self.cID)
+        return self.currCtwwHandler.handle_user_racestart_room(input, self.cID)
 
     def server_user_room_racefinish_handler(self, input):
-        return self.ctwwHandler.handle_user_racefinish_room(input, self.cID)
+        return self.currCtwwHandler.handle_user_racefinish_room(input, self.cID)
 
     def server_user_room_watch_handler(self, input):
-        return self.ctwwHandler.handle_user_watch_room(input, self.cID)
+        return self.currCtwwHandler.handle_user_watch_room(input, self.cID)
     
     def server_user_room_leave_handler(self, input):
-        return self.ctwwHandler.handle_user_leave_room(input, self.cID)
+        return self.currCtwwHandler.handle_user_leave_room(input, self.cID)
 
     def server_user_heartbeat(self, input):
-        return self.ctwwHandler.handle_user_heartbeat(input, self.cID)
+        return self.currCtwwHandler.handle_user_heartbeat(input, self.cID)
     
     def put_mii_icon(self, input):
         miiIcon = input.get("miiIcon")
         miiIconChecksum = input.get("miiIconChecksum")
         if (miiIcon is None or miiIconChecksum is None):
             return (-1, 0)
-        self.database.set_mii_icon(self.cID, miiIcon, miiIconChecksum)
+        self.currDatabase.set_mii_icon(self.cID, miiIcon, miiIconChecksum)
         return (0, 0)
 
     request_functions = {
@@ -188,11 +194,11 @@ class CTGP7Requests:
         "login": server_login_handler,
         "logout": server_logout_handler,
         "discordinfo": req_discord_info,
-        "onlinetoken": req_online_token
+        "onlinetoken": req_online_token,
+        "uniquepid": req_unique_pid
     }
 
     put_functions = {
-        "generalstats": put_stats,
         "generalstatsv2": put_statsv2,
         "onlsearch": server_user_room_join_handler,
         "onlprepare": server_user_room_prepare_handler,
