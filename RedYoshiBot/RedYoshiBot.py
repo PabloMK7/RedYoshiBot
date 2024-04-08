@@ -222,7 +222,31 @@ class ServerDatabase:
             c.execute("UPDATE miku_remove SET valuetimes = ? WHERE dummyid = ?", (int(value), 0))
             return
         c.execute('INSERT INTO miku_remove VALUES (?,?)', (0, int(value)))
-    
+    async def set_customcommand(self, command, response):
+        c = self.conn.cursor()
+        rows = c.execute("SELECT * FROM commands WHERE command = ?", (command,))
+        for row in rows:
+            c.execute("UPDATE commands SET response = ? WHERE command = ?", (response, command))
+            return
+        c.execute('INSERT INTO commands VALUES (?,?)', (command, response))
+    async def get_customcommand(self, command):
+        c = self.conn.cursor()
+        rows = c.execute("SELECT * FROM commands WHERE command = ?", (command,))
+        for row in rows:
+            return str(row[1])
+        return None
+    async def list_customcommand(self):
+        c = self.conn.cursor()
+        rows = c.execute("SELECT * FROM commands")
+        ret = []
+        for row in rows:
+            ret += [row[0]]
+        return ret
+    async def delete_customcommand(self, command):
+        c = self.conn.cursor()
+        c.execute('DELETE FROM commands WHERE command = ?', (command,))
+        return
+
 
 class FakeMember:
     def __init__(self, memberID):
@@ -395,6 +419,7 @@ def help_array():
         "getlang": ">@RedYoshiBot getlang (Language)\nGets the language file from the MK Translation Project spreadsheet. Can only be used by translators.",
         "parseqr": ">@RedYoshiBot parseqr [url]\nParses the CTGP-7 QR crash data from the image url. You can either specify the image url or attach the image to the message.",
         "funcname": ">@RedYoshiBot funcname (address) (region) (version)\nFinds the Mario Kart 7 function name for a given address, region and version combination.\n- address: Address to find in hex.\n- region: Region of the game (1 - EUR, 2 - USA, 3 - JAP).\n- version: Version of the game (1 - rev0 v1.1, 2 - rev1, 3 - rev2).",
+        "listcmd": ">@RedYoshiBot listcmd\nLists alls custom exclamantion commands",
 
         "server": ">@RedYoshiBot server/citraserver/bothserver (command) (options)\nRuns a server related command.\nUse \'@RedYoshiBot server help\' to get all the available server commands."
     }
@@ -421,7 +446,10 @@ def staff_help_array():
         "emergency": "!emergency\nEnables emergency mode.",
         "emergency_off": "!emergency_off\nDisables emergency mode.", 
         "talk": ">@RedYoshiBot talk (channel/user)\nSets the chat destination ID (don't specify an ID to clear the current one). Use `+` before a message to talk with the specified ID and `++` to talk and clear the destination ID afterwards.",
-        "reply_miku": ">@RedYoshiBot reply_miku (channel) (message)\nReplies to the specified message in the specified channel with the miku joke."
+        "reply_miku": ">@RedYoshiBot reply_miku (channel) (message)\nReplies to the specified message in the specified channel with the miku joke.",
+        "massban": ">@RedYoshiBot massban (user IDs)\nBans all the specified user IDs",
+        "addcmd": ">@RedYoshiBot addcmd (command) (text)\nAdds custom exclamation command",
+        "delcmd": ">@RedYoshiBot delcmd (command)\nDeletes custom exclamation command",
     }
     
 def staff_command_level():
@@ -452,7 +480,10 @@ def staff_command_level():
         "setcookie": 1,
         "listfact": 1,
         "addfact": 1,
-        "game": 1
+        "game": 1,
+        "massban": -1,
+        "addcmd": 0,
+        "delcmd": 0,
     }
     
 def game_help_array():
@@ -513,8 +544,9 @@ def role_list():
         "BRONZE_PLAYER": 1080603479640383639,
         "SILVER_PLAYER": 1084265237303267451,
         "GOLD_PLAYER": 1084265591055073431,
-        "DIAMOND_PLAYER": 1084266021696852028,
-        "RAINBOW_PLAYER": 1084266363385819136
+        "EMERALD_PLAYER": 1084266021696852028,
+        "DIAMOND_PLAYER": 1084266363385819136,
+        "RAINBOW_PLAYER": 1222582695754989608,
     }
 
 def SERVER_ID():
@@ -989,6 +1021,18 @@ async def disableEmergency():
     staffchn = client.get_channel(ch_list()["STAFF"])
     await staffchn.send("Emergency mode has been disabled.")
 
+async def handleExclamantion(message):
+    first_word = message.content.split()[0]
+    if  ((first_word == "!emergency" or  first_word == "!emergency_off") and await staff_can_execute(message, "emergency", silent=True) and (message.author != client.user)):
+        if (first_word == "!emergency"):
+            await enableEmergency()
+        else:
+            await disableEmergency()
+    else:
+        response = await db_mng.get_customcommand(first_word[1:])
+        if (response is not None):
+            await message.reply(response)
+
 lastsentctgpmisspell = datetime.datetime.now()
 async def checkCTGPMissSpell(message):
     global lastsentctgpmisspell
@@ -1015,7 +1059,7 @@ async def sendMikuMessage(message, ignore_timeout):
     await db_mng.set_MikuTimes(numbTimes + 1)
     try:
         if (datetime.datetime.utcnow() - miku_last_message_time > datetime.timedelta(seconds=5) or ignore_timeout):
-            emb = discord.Embed(description="For the {} time,\nMiku's Birthday Spectacular\n**WILL NOT** be removed!!!!".format(ordinal(numbTimes)), colour=discord.Colour(0x00FFFF))
+            emb = discord.Embed(description="For the {} time,\nMiku's Birthday Spectacular 2\n**WILL NOT** be removed!!!!".format(ordinal(numbTimes - 38825)), colour=discord.Colour(0x00FFFF))
             emb.set_thumbnail(url=mikuem.url)
             await message.reply(embed=emb)
             miku_last_message_time = datetime.datetime.utcnow()
@@ -1072,8 +1116,8 @@ checkNitroScam_data = {}
 
 async def checkNitroScam(message):
     global checkNitroScam_data
-    contents = message.content
-    phisingScore = sum([contents.count("@everyone") * 2, contents.count("nitro") * 2, contents.count("free"), contents.count("CS:GO"), contents.count("claim"), contents.count("steam"), contents.count("gift")])
+    contents = message.content.lower()
+    phisingScore = sum([contents.count("@everyone") * 2, contents.count("@here") * 2, contents.count("ctpk") * 2, contents.count("nitro") * 2, contents.count("free"), contents.count("cs:go"), contents.count("claim"), contents.count("steam"), contents.count("gift")])
     if (phisingScore == 0): return
     urlCount = 0
     for url in getURLs(contents):
@@ -1853,6 +1897,53 @@ async def on_message(message):
                             help_str = help_str[:-2]
                             help_str += "\n\nUse `@RedYoshiBot help (command)` to get help of a specific command."
                             await message.reply( help_str)
+                elif bot_cmd == "massban":
+                    if await staff_can_execute(message, bot_cmd):
+                        tag = message.content.split()
+                        if (len(tag) <= 2):
+                            await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()["massban"] + "```")
+                            return
+                        tobebanned = tag[2:]
+                        await message.reply("{} members will be banned in 120 seconds".format(len(tobebanned)))
+                        await asyncio.sleep(120)
+                        failures = []
+                        for user in tobebanned:
+                            try:
+                                u = get_from_mention(user)
+                                await u.ban(delete_message_seconds=7*24*60*60)
+                            except:
+                                failures += [user]
+                        await sendMultiMessage(message.channel, "Done, failed to ban {} members: {}".format(len(failures), str(failures)), "", "")
+                elif bot_cmd == "listcmd":
+                    tag = message.content.split()
+                    if len(tag) != 2:
+                        await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["listcmd"] + "```")
+                        return
+                    cmdlist = await db_mng.list_customcommand()
+                    cmdlist_str = "Here is a list of all the available exclamation commands:\n\n"
+                    for cmd in cmdlist:
+                        cmdlist_str += "`" + cmd + "`, "
+                    cmdlist_str = cmdlist_str[:-2]
+                    await message.reply(cmdlist_str)
+                elif bot_cmd == "addcmd":
+                    if await staff_can_execute(message, bot_cmd):
+                        tag = message.content.split(None, 3)
+                        if len(tag) != 4:
+                            await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()["addcmd"] + "```")
+                            return
+                        await db_mng.set_customcommand(tag[2], tag[3])
+                        await message.reply("Operation succeeded")
+                elif bot_cmd == "delcmd":
+                    if await staff_can_execute(message, bot_cmd):
+                        tag = message.content.split()
+                        if len(tag) != 3:
+                            await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()["delcmd"] + "```")
+                            return
+                        if (await db_mng.get_customcommand(tag[2]) is not None):
+                            await db_mng.delete_customcommand(tag[2])
+                            await message.reply("Operation succeeeded")
+                        else:
+                            await message.reply("Specified command does not exist")
                 elif bot_cmd == "game":
                     if (is_channel(message, ch_list()["BOTCHAT"]) or await staff_can_execute(message, bot_cmd, silent=True)):
                         tag = message.content.split()
@@ -2021,12 +2112,9 @@ async def on_message(message):
                 else:
                     notif_msg = await notif_msg.edit(content="{}, adding your bug report: ```{}```**Fail**".format(message.author.name, tag[1]))
             else:
-                await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["report"] + "```")            
-        elif ((bot_mtn == "!emergency" or  bot_mtn == "!emergency_off") and await staff_can_execute(message, "emergency", silent=True) and (message.author != client.user)):
-            if ( bot_mtn == "!emergency"):
-                await enableEmergency()
-            else:
-                await disableEmergency()
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["report"] + "```")
+        elif (bot_mtn[0] == "!"):
+            await handleExclamantion(message)
         elif (await staff_can_execute(message, "talk", silent=True) and (message.author != client.user) and message.content[0] == '+' and len(message.content) > 2):
             if (message.content[1] == '+'):
                 subsindex = 2

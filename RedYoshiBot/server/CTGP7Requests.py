@@ -46,6 +46,12 @@ class CTGP7Requests:
         self.isCitra = isCitra
 
     def handle_status(self, input):
+        STATUS_VERSION = 0
+        
+        version = input.get("version")
+        if version is None or version != STATUS_VERSION:
+            return
+
         queue_update = False
 
         for s in CTGP7ServerDatabase.allowed_console_status:
@@ -181,6 +187,9 @@ class CTGP7Requests:
     def server_user_heartbeat(self, input):
         return self.currCtwwHandler.handle_user_heartbeat(input, self.cID)
     
+    def server_get_room_charids(self, input):
+        return self.currCtwwHandler.handle_get_room_char_ids(input.get("gatherID"))
+
     def put_mii_icon(self, input):
         miiIcon = input.get("miiIcon")
         miiIconChecksum = input.get("miiIconChecksum")
@@ -195,7 +204,8 @@ class CTGP7Requests:
         "logout": server_logout_handler,
         "discordinfo": req_discord_info,
         "onlinetoken": req_online_token,
-        "uniquepid": req_unique_pid
+        "uniquepid": req_unique_pid,
+        "roomcharids": server_get_room_charids,
     }
 
     put_functions = {

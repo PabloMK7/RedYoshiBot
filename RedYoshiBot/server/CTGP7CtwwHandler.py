@@ -1,3 +1,4 @@
+from typing import List
 from PIL import Image
 from .CTGP7ServerDatabase import CTGP7ServerDatabase, ConsoleMessageType
 from ..CTGP7Defines import CTGP7Defines
@@ -93,6 +94,8 @@ class OnlineUser:
         self.vrIncr = None
         self.debug = False
         self.isctgp7network = False
+        self.playerID = -1
+        self.customCharID = 0
 
     def setDebug(self):
         self.debug = True
@@ -141,7 +144,7 @@ class OnlineUser:
         elif (self.state == UserState.HOSTING.value):
             return "(Host)"
         elif(self.state == UserState.CLIENT.value):
-            return "(Client)"
+            return ""
         return ""
 
     def getMiiName(self):
@@ -152,6 +155,12 @@ class OnlineUser:
     
     def verified(self):
         return self.isVerified
+    
+    def setPlayerID(self, id: int):
+        self.playerID = id
+
+    def setCustomCharacter(self, charID: int):
+        self.customCharID = charID
 
     def __hash__(self):
         return hash(self.cID)
@@ -307,7 +316,6 @@ class OnlineRoom:
     def getTrackHistory(self):
         return "::".join(self.trackHistory)
 
-
 class CTGP7CtwwHandler:
     
     def __init__(self, database: CTGP7ServerDatabase):
@@ -406,14 +414,14 @@ class CTGP7CtwwHandler:
             elif (cID is not None):
                 room.removePlayer(cID=cID)
 
-    def getUser(self, cID: int, token: int):
+    def getUser(self, cID: int, token: int) -> OnlineUser:
         user = self.loggedUsers.get(cID)
         if (user is not None and user.getToken() == token):
             return user
         else:
             return None
     
-    def getMiiIconData(self, cID):
+    def getMiiIconData(self, cID) -> bytes:
         miiIcon = self.database.get_mii_icon(cID)
         if miiIcon is None:
             return None
@@ -427,7 +435,7 @@ class CTGP7CtwwHandler:
             return None
         return uncompData
 
-    def getMiiIcon(self, cID):
+    def getMiiIcon(self, cID) -> Image:
         miiIcon = self.getMiiIconData(cID)
         if (miiIcon is None):
             return None
@@ -437,6 +445,32 @@ class CTGP7CtwwHandler:
         im = Image.new("RGBA", (64, 64))
         im.putdata(decoder.ToRGBA8888())
         return im
+
+    def handle_get_room_char_ids(self, gID: int):
+        if gID is None:
+            return (-1, {})
+        with self.lock:
+            room: OnlineRoom = self.activeRooms.get(gID)
+            if room is None:
+                return (-1, {})
+            users: List[OnlineUser] = [None] * 8
+            for i in range(8):
+                for cID in room.players:
+                    u: OnlineUser = self.loggedUsers.get(cID)
+                    if u is None or u.playerID != i: continue
+                    if users[i] is None or users[i].lastActive() < u.lastActive():
+                        users[i] = u
+            charIDs = [(u.customCharID if u is not None else 0) for u in users]
+            retDoc = {}
+            for i in range(8):
+                retDoc[str(i)] = charIDs[i]
+            return (0, {"charIDs": retDoc})
+        
+    def resetRoomPlayerIDs(self, room: OnlineRoom):
+        for cID in room.players:
+            u: OnlineUser = self.loggedUsers.get(cID)
+            if u is None: continue
+            u.setPlayerID(-1)
 
     def handle_user_login(self, input: dict, cID: int):
         with self.lock:
@@ -538,6 +572,7 @@ class CTGP7CtwwHandler:
             room.joinPlayer(user)
             retDict["roomKeySeed"] = room.getKeySeed(user)
             user.setState(UserState.SEARCHING.value)
+            user.setPlayerID(-1)
             vrData = self.database.get_console_vr(cID)
             user.setVR(list((vrData.ctVR, vrData.cdVR)))
             retDict["ctvr"] = vrData.ctVR
@@ -558,6 +593,8 @@ class CTGP7CtwwHandler:
             localver = input.get("localVer")
             betaVer = input.get("localBetaVer")
             token = input.get("token")
+            playerID = input.get("myPlayerID"); playerID = -1 if playerID is None else playerID
+            charID = input.get("customCharID"); charID = 0 if charID is None else charID
             retDict = {}
 
             if (localver is None):
@@ -576,6 +613,8 @@ class CTGP7CtwwHandler:
             vrData = self.database.get_console_vr(cID)
             user.setVR(list((vrData.ctVR, vrData.cdVR)))
             user.setVRIncr(None)
+            user.setPlayerID(playerID)
+            user.setCustomCharacter(charID)
 
             room = self.activeRooms.get(gID)
             if (room is None or not room.hasPlayer(user)):
@@ -663,6 +702,7 @@ class CTGP7CtwwHandler:
                 self.database.set_stats_dirty(True)
                 room.setState(RoomState.FINISHED.value)
                 room.updateCPURandomSeed()
+                self.resetRoomPlayerIDs(room)
             
             if room.getMode() <= 1:
                 prevVr = user.getVR()[0 if room.getMode() == 0 else 1]
@@ -712,6 +752,7 @@ class CTGP7CtwwHandler:
             self.remove_from_all_rooms(user)
 
             user.setState(UserState.IDLE.value)
+            user.setPlayerID(-1)
 
             user.isAlive()
 

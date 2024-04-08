@@ -88,7 +88,7 @@ class CTGP7Defines(object):
             81: "GBA Luigi Circuit",
             82: "SMO RC Challenge",
             83: "GBA Bowser Castle 4",
-            84: "SNES Donut Plains 1",
+            84: "RMX Donut Plains 1",
             85: "Secret Slide",
             86: "DS Wario Stadium",
             87: "Ermii Circuit",
@@ -101,7 +101,7 @@ class CTGP7Defines(object):
             94: "Doge Desert",
             95: "N64 Banshee Boardwalk",
             96: "GCN Mario Circuit",
-            73: "Miku's Birthday Spec.",
+            73: "Miku's Birthday Spec. 2",
             70: "N64 Rainbow Road",
             71: "GBA Rainbow Road",
             72: "GCN Bowser Castle",
@@ -129,7 +129,15 @@ class CTGP7Defines(object):
             118: "RMX Vanilla Lake 1",
             119: "Cliffside Circuit",
             120: "Interstellar Laboratory",
-            121: "Dark Matter Fortress"
+            121: "Dark Matter Fortress",
+            122: "SNES Donut Plains 2",
+            123: "Soaring Skyway",
+            124: "N64 Bowser Castle",
+            125: "Wii DK Summit",
+            126: "Paint Swamp Raceway",
+            127: "Roulette Road",
+            128: "Orbital Outpost",
+            129: "DS Rainbow Road",
         }
     }
 
@@ -211,7 +219,7 @@ class CTGP7Defines(object):
             "Ctgp_N64RainbowR": 70,
             "Gagb_RainbowRoad": 71,
             "Ctgp_GCBowserCastle": 72,
-            "Ctgp_MikuBirtSpe": 73,
+            "Ctgp_MikuBirtSpe2": 73,
             "Ctgp_SandCastle": 74,
             "Ctgp_MarioCircuit": 75,
             "Gcn_LuigiCircuit": 76,
@@ -222,7 +230,7 @@ class CTGP7Defines(object):
             "Ctgp_GBALuigiCirc": 81,
             "Ctgp_SMORCChallen": 82,
             "Gagb_BowserCastle4": 83,
-            "Gsfc_DonutPlainsThree": 84,
+            "Ctgp_RMXDP1": 84,
             "Gn64_SecretSl": 85,
             "Gds_WarioStad": 86,
             "Ctgp_ErmiiCir": 87,
@@ -259,7 +267,15 @@ class CTGP7Defines(object):
             "Ctgp_VaLkO": 118,
             "Ctgp_CliffCircuit": 119,
             "Ctgp_InterstellarLabb": 120,
-            "Ctgp_DarkMatterFortress": 121
+            "Ctgp_DarkMatterFortress": 121,
+            "Ctgp_SNESDonutPlains2": 122,
+            "Ctgp_SoaringSkyway": 123,
+            "Ctgp_N64BowserCastle": 124,
+            "Ctgp_WiiDKSummit": 125,
+            "Ctgp_PaintSwpRC": 126,
+            "Ctgp_RouletteRoad": 127,
+            "Ctgp_OrbitalOutpost": 128,
+            "Ctgp_DsRainbowRoad": 129,
         }
     }
 

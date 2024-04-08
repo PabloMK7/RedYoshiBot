@@ -22,7 +22,8 @@ class CTGP7ServerDatabase:
         "all1star",
         "all3star",
         "all10pts",
-        "vr5000"
+        "vr5000",
+        "bluecoin",
     ]
     class VRInfos:
         def __init__(self):
@@ -603,7 +604,7 @@ class CTGP7ServerDatabase:
                 c.execute("UPDATE console_status SET {} = ? WHERE cID = ?".format(str(status)), (int(value), int(cID)))
                 return
             # Create entry
-            c.execute('INSERT INTO console_status VALUES (?,?,?,?,?,?)', (int(cID), int(0), int(0), int(0), int(0), int(0),))
+            c.execute('INSERT INTO console_status VALUES (?,?,?,?,?,?,?)', (int(cID), int(0), int(0), int(0), int(0), int(0), int(0),))
             # Update entry
             c.execute("UPDATE console_status SET {} = ? WHERE cID = ?".format(str(status)), (int(value), int(cID)))
 

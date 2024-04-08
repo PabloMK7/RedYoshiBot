@@ -104,7 +104,7 @@ def get_server_bot_args(content: str, maxslplits=-1): # splits: amount of cuts a
 player_role_applier_lock = threading.Lock()
 player_role_applier_pending = []
 async def calc_player_role(ctgp7_server: CTGP7ServerHandler, userID: str):
-    role_names = ["PLAYER", "BRONZE_PLAYER", "SILVER_PLAYER", "GOLD_PLAYER", "DIAMOND_PLAYER", "RAINBOW_PLAYER"]
+    role_names = ["PLAYER", "BRONZE_PLAYER", "SILVER_PLAYER", "GOLD_PLAYER", "EMERALD_PLAYER", "DIAMOND_PLAYER", "RAINBOW_PLAYER"]
     for r in role_names:
         await removeRole(userID, role_list()[r])
     cID = ctgp7_server.database.get_discord_link_user(userID)
@@ -492,10 +492,13 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isCitra: boo
                 vrStr = ""
                 if (player["vr"] is not None):
                     if (player["vrIncr"] is not None):
-                        vrStr = " - {}({:+}) VR -".format(player["vr"], player["vrIncr"])
+                        vrStr = " - {}({:+}) VR".format(player["vr"], player["vrIncr"])
                     else:
-                        vrStr = " - {} VR -".format(player["vr"])
-                playerString += "{}{}{} {}\n".format(purge_player_name_symbols(player["name"]), " \u2705" if player["verified"] else "", vrStr, player["state"])
+                        vrStr = " - {} VR".format(player["vr"])
+                stat = ""
+                if (player["state"] != ""):
+                    stat = " - " + player["state"]
+                playerString += "{}{}{}{}\n".format(purge_player_name_symbols(player["name"]), " \u2705" if player["verified"] else "", vrStr, stat)
             playerString += "```"
             if (playerString == "```\n```"):
                 playerString = "```\n- (None)\n```"
@@ -1098,7 +1101,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             except ValueError:
                 await message.reply( "Invalid destination console ID.")
                 return
-            res = transfer_console_data(ctgp7_server, srcConsoleID, dstConsoleID)
+            res = transfer_console_data(ctgp7_server, srcConsoleID, dstConsoleID, isCitra)
             if (res == ""):
                 await message.reply( "Operation succeeded.")
             else:
