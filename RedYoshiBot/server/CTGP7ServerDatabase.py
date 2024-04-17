@@ -613,3 +613,26 @@ class CTGP7ServerDatabase:
             c = self.conn.cursor()
             c.execute("DELETE FROM console_status WHERE cID = ?", (int(newcID),))
             c.execute("UPDATE console_status SET cID = ? WHERE cID = ?", (int(newcID), int(oldcID)))
+
+    def get_console_unique_server_address(self, cID):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT serveraddr FROM server_address WHERE cID = ?", (int(cID),))
+            for row in rows:
+                return row[0]
+        return None
+    
+    def clear_console_unique_server_address(self, cID):
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute("DELETE FROM server_address WHERE cID = ?", (int(cID),))
+    
+    def set_console_unique_server_address(self, cID, value: str):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT cID FROM server_address WHERE cID = ?", (int(cID),))
+            for row in rows:
+                c.execute("UPDATE server_address SET serveraddr = ? WHERE cID = ?", (str(value), int(cID)))
+                return
+            # Create entry
+            c.execute('INSERT INTO server_address VALUES (?,?)', (int(cID), str(value)))

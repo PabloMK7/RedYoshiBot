@@ -83,10 +83,11 @@ class OnlineUserName:
                 return self.name.replace("`", "'")
 
 class OnlineUser:
-    def __init__(self, name: OnlineUserName, consoleID: int, isVerified: bool):
+    def __init__(self, name: OnlineUserName, consoleID: int, isVerified: bool, pid: int):
         self.lastActivity = datetime.datetime.utcnow()
         self.name = name
         self.cID = consoleID
+        self.pid = pid
         self.state = UserState.IDLE.value
         self.token = uuid.uuid1().int>>64
         self.isVerified = isVerified
@@ -478,20 +479,20 @@ class CTGP7CtwwHandler:
             nameValue = input.get("nameValue")
             localver = input.get("localVer")
             betaVer = input.get("localBetaVer")
-            isRelogin = input.get("reLogin")
             miiName : str = input.get("miiName")
             isDebug = input.get("debugRegion")
             miiChecksum = input.get("miiIconChecksum")
             isCTGP7Network = input.get("ctgp7network")
+            pid = input.get("pid")
             retDict = {}
             
             if (isCTGP7Network is None):
                 isCTGP7Network = False
 
-            if (isRelogin is None or localver is None or miiName is None):
+            if (pid is None or pid == 0 or localver is None or miiName is None):
                 return (-1, {})
 
-            if (not isRelogin and (self.database.get_ctww_version() != localver or (betaVer is not None and self.database.get_beta_version() != betaVer))):
+            if ((self.database.get_ctww_version() != localver or (betaVer is not None and self.database.get_beta_version() != betaVer))):
                 return (CTWWLoginStatus.VERMISMATCH.value, retDict)
 
             if (nameMode is None):
@@ -509,14 +510,12 @@ class CTGP7CtwwHandler:
                 retDict["loginMessage"] = "Inappropriate name,\nplease change it."
                 return (CTWWLoginStatus.MESSAGEKICK.value, retDict)
             
-            user = OnlineUser(OnlineUserName(nameMode, nameValue, miiName), cID, self.database.get_console_is_verified(cID))
+            user = OnlineUser(OnlineUserName(nameMode, nameValue, miiName), cID, self.database.get_console_is_verified(cID), pid)
 
-            consoleMsg = None
-            if (not isRelogin):
-                consoleMsg = self.get_console_message(user)
-                if (consoleMsg is not None and consoleMsg[0] == CTWWLoginStatus.MESSAGEKICK.value):
-                    retDict["loginMessage"] = consoleMsg[1]
-                    return (CTWWLoginStatus.MESSAGEKICK.value, retDict)
+            consoleMsg = self.get_console_message(user)
+            if (consoleMsg is not None and consoleMsg[0] == CTWWLoginStatus.MESSAGEKICK.value):
+                retDict["loginMessage"] = consoleMsg[1]
+                return (CTWWLoginStatus.MESSAGEKICK.value, retDict)
             
             user.setCTGP7Network(isCTGP7Network)
             self.remove_from_all_rooms(user)
@@ -566,6 +565,7 @@ class CTGP7CtwwHandler:
             room = self.activeRooms.get(gID)
             if (room is None): # Create room if it doesn't exist
                 room = OnlineRoom(gID, gMode)
+                room.enableLog()
                 self.activeRooms[gID] = room
                 self.newRooms += 1
             

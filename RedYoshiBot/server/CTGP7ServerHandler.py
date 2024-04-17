@@ -181,11 +181,11 @@ class CTGP7ServerHandler:
         server_thread.daemon = True
         server_thread.start()
 
-        self.nex = None
+        #self.nex = None
 
     def terminate(self):
-        self.nex.terminate()
-        self.nex = None
+        #self.nex.terminate()
+        #self.nex = None
         self.database.disconnect()
         self.citraDatabase.disconnect()
         self.database = None
@@ -197,17 +197,18 @@ class CTGP7ServerHandler:
     
     def server_start(self):
         self.server = self.ThreadingSimpleServer(("", 64334), self.PostGetHandler)
-        context = ssl.SSLContext(protocol=ssl.PROTOCOL_TLSv1_1)
-        context.options |= ssl.OP_NO_TLSv1_2
+        context = ssl.SSLContext(protocol=ssl.PROTOCOL_TLS_SERVER)
+        # context.options |= ssl.OP_NO_TLSv1_2
         context.load_cert_chain('RedYoshiBot/server/data/server.pem')
         self.server.socket = context.wrap_socket(self.server.socket, server_side=True)
 
+        """
         libc = ctypes.CDLL("libc.so.6")
         def set_pdeathsig(sig = signal.SIGTERM):
             def callable():
                 return libc.prctl(1, sig)
             return callable
         self.nex = subprocess.Popen(["./mario-kart-7-secure"], stdout=subprocess.DEVNULL, preexec_fn=set_pdeathsig(signal.SIGTERM))
-
+        """
         print("CTGP-7 server started.")
         self.server.serve_forever()

@@ -125,7 +125,9 @@ class CTGP7Requests:
             return (-1, 0)
         token = self.currCtwwHandler.generate_password_token(str(input["password"]))
         timenow = datetime.datetime.utcnow()
-        server_addr = self.currDatabase.get_ctgp7_server_address()
+        server_addr = self.currDatabase.get_console_unique_server_address(self.cID)
+        if server_addr is None:
+            server_addr = self.currDatabase.get_ctgp7_server_address()
         addrport = server_addr.split(":")
         serveravailable = self.currDatabase.get_ctgp7_server_available() != 0 or self.currDatabase.get_console_is_admin(self.cID)
         return (0, {"online_token": token, "server_time": int(timenow.strftime("%Y%m%d%H%M%S")), "address": str(addrport[0]), "port": int(addrport[1]), "available": serveravailable})

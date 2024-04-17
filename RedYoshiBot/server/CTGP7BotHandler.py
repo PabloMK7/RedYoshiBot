@@ -51,7 +51,8 @@ def staff_server_help_array():
         "purge_console_link": ">@RedYoshiBot server purge_console_link\nRemoved console links from users that are no longer in the server.",
         "get_mii_icon": ">@RedYoshiBot server get_mii_icon (consoleID)\nGets the mii icon of the specified user.",
         "config": ">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable) [newValue]\nGets or sets the config parameters for online mode.",
-        "otplegality": ">@RedYoshiBot server otplegality (get/getall/set/clear) (consoleID)\nGets, sets or clear the otp legality of a specified console."
+        "otplegality": ">@RedYoshiBot server otplegality (get/getall/set/clear) (consoleID)\nGets, sets or clear the otp legality of a specified console.",
+        "consoleserver": ">@RedYoshiBot server consoleserver (get/set/clear)\nSets a NEX server address to the specified console."
     }
     
 def staff_server_command_level():
@@ -79,6 +80,7 @@ def staff_server_command_level():
         "get_mii_icon": 1,
         "config": 0,
         "otplegality": 0,
+        "consoleserver": 0,
     }
 
 async def staff_server_can_execute(message, command, silent=False):
@@ -450,8 +452,8 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isCitra: boo
     global stats_curr_online_users
     global stats_curr_online_rooms
     ctwwChan = SELF_BOT_SERVER.get_channel(ch_list()["CTWW"])
-    currCtwwHandler.purge_tokens(datetime.timedelta(minutes=10))
-    currCtwwHandler.purge_users(datetime.timedelta(minutes=10))
+    currCtwwHandler.purge_tokens(datetime.timedelta(minutes=5))
+    currCtwwHandler.purge_users(datetime.timedelta(minutes=5))
     currCtwwHandler.purge_rooms()
     serverInfo = currCtwwHandler.fetch_state()
     currUser = serverInfo["userCount"]
@@ -1260,6 +1262,42 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Operation succeeded.")
             if (mode == "clear"):
                 currDatabase.clear_console_legality(consoleID)
+                await message.reply( "Operation succeeded.")
+    elif bot_cmd == "consoleserver":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content, 4)
+            if (len(tag) != 4 and len(tag) != 5):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            mode = tag[2]
+            consoleID = tag[3]
+            if (consoleID.startswith("0x")):
+                consoleID = consoleID[2:]
+            try:
+                consoleID = int(consoleID, 16)
+                if (consoleID == 0):
+                    raise ValueError()
+            except ValueError:
+                await message.reply( "Invalid console ID.")
+                return
+            if mode not in ["get", "set", "clear"]:
+                await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()[bot_cmd] + "```")
+                return
+            if (mode == "get"):
+                serveraddr = currDatabase.get_console_unique_server_address(consoleID)
+                if serveraddr is None:
+                    await message.reply("Specified console has no unique server address.")
+                else:
+                    await message.reply("Server address for specified console is `{}`".format(serveraddr))
+            elif (mode == "set"):
+                if (len(tag) != 5):
+                    await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                    return
+                serveraddr = tag[4]
+                currDatabase.set_console_unique_server_address(consoleID, serveraddr)
+                await message.reply( "Operation succeeded.")
+            elif (mode == "clear"):
+                currDatabase.clear_console_unique_server_address(consoleID)
                 await message.reply( "Operation succeeded.")
 
     else:
