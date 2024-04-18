@@ -231,7 +231,7 @@ async def kick_message_logger():
             
 
 tried_edit_stats_message_times = 0
-stats_curr_online_users = (0, 0)
+stats_curr_online_users = 0
 stats_curr_online_rooms = 0
 stats_curr_online_stuff_changed = True
 stats_message_id = [0, 0]
@@ -359,7 +359,7 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
         embed2.add_field(name="Total Logins", value=str(genStats["total_logins"]), inline=True)
         embed2.add_field(name="Unique Logins", value=str(uniqueOnlineUsers), inline=True)
         embed2.add_field(name="Total Online Rooms", value=str(genStats["total_rooms"]), inline=True)
-        embed2.add_field(name="Current Network Users", value="CTGP-7: {}, Nintendo: {}".format(stats_curr_online_users[0], stats_curr_online_users[1]), inline=False)
+        embed2.add_field(name="Current Network Users", value="{}".format(stats_curr_online_users), inline=False)
         embed2.add_field(name="Current Open Rooms", value=str(stats_curr_online_rooms), inline=True)
         embed2.add_field(name="** **", value="** **", inline=False)
         mostPlayedStr = "```\n"
@@ -722,7 +722,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
     elif bot_cmd == "kick" or bot_cmd == "skick":
         if await staff_server_can_execute(message, bot_cmd):
             tag = get_server_bot_args(message.content, 4)
-            if (len(tag) != 5):
+            if (len(tag) < 2):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
             consoleID = tag[2]
@@ -731,18 +731,34 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             try:
                 consoleID = int(consoleID, 16)
             except ValueError:
-                await message.reply( "Invalid console ID.")
-                return
+                users, names = currCtwwHandler.get_users_from_name(consoleID)
+                if len(users) == 0:
+                    await message.reply( "Invalid console ID or display name.")
+                    return
+                elif len(users) == 1:
+                    await message.reply( "Found user {} with ID 0x{:016X}".format(names[0], users[0]))
+                    consoleID = users[0]
+                elif len(users) >= 2:
+                    userlist = "```"
+                    i = 0
+                    for u in names:
+                        userlist += "{} (0x{:016X})\n".format(u, users[i])
+                        i += 1
+                    userlist += "```\n"
+                    await message.reply("Error, name matches with multiple users:\n{}".format(userlist))
+                    return
             if (consoleID == 0):
                 await message.reply( "**WARNING THIS OPERATION AFFECTS ALL CONSOLES.**")
-            kickTime = parsetime(tag[3])
+            kickTime = [0, 0, "minutes"] if len(tag) <= 3 else parsetime(tag[3])
             if kickTime[0] == -1:
                 await message.reply( "Invalid time specified.")
                 return
             messageType = ConsoleMessageType.TIMED_KICKMESSAGE.value
             if (kickTime[0] == 0):
                 messageType = ConsoleMessageType.SINGLE_KICKMESSAGE.value
-            currDatabase.set_console_message(consoleID, messageType, tag[4], None if kickTime[0] == 0 else kickTime[0], bot_cmd == "skick")
+            reason = "No reason provided" if len(tag) <= 4 else tag[4]
+            currDatabase.set_console_message(consoleID, messageType, reason, None if kickTime[0] == 0 else kickTime[0], bot_cmd == "skick")
+            currCtwwHandler.kick_user(consoleID)
             await message.reply( "Operation succeeded.")
             return
     elif bot_cmd == "ban" or bot_cmd == "sban":

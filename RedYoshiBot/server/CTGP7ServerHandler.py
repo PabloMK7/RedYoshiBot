@@ -18,6 +18,7 @@ import signal
 from .CTGP7Requests import CTGP7Requests
 from .CTGP7ServerDatabase import CTGP7ServerDatabase
 from .CTGP7CtwwHandler import CTGP7CtwwHandler
+from .CTGP7NEXHTTPHandler import CTGP7NEXHTTPHandler
 from .CTGP7ServerCritical import do_critical_operations_in, do_critical_operations_out
 
 class CTGP7ServerHandler:
@@ -174,18 +175,23 @@ class CTGP7ServerHandler:
         self.citraDatabase = CTGP7ServerDatabase('RedYoshiBot/server/data/data_citra.sqlite', True)
         self.citraDatabase.connect()
 
-        self.ctwwHandler = CTGP7CtwwHandler(self.database)
-        self.citraCtwwHandler = CTGP7CtwwHandler(self.citraDatabase)
+        self.nexhttp = CTGP7NEXHTTPHandler(self.database)
+        self.ctwwHandler = CTGP7CtwwHandler(self.database, self.nexhttp)
+        self.citraCtwwHandler = CTGP7CtwwHandler(self.citraDatabase, self.nexhttp)
 
         server_thread = threading.Thread(target=self.server_start)
         server_thread.daemon = True
         server_thread.start()
+        nexhttp_thread = threading.Thread(target=self.nexhttp.fetch_http_stats)
+        nexhttp_thread.daemon = True
+        nexhttp_thread.start()
 
         #self.nex = None
 
     def terminate(self):
         #self.nex.terminate()
         #self.nex = None
+        self.nexhttp.terminate()
         self.database.disconnect()
         self.citraDatabase.disconnect()
         self.database = None

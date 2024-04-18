@@ -1,6 +1,7 @@
-from typing import List
+from typing import List, Dict
 from PIL import Image
 from .CTGP7ServerDatabase import CTGP7ServerDatabase, ConsoleMessageType
+from .CTGP7NEXHTTPHandler import CTGP7NEXHTTPHandler
 from ..CTGP7Defines import CTGP7Defines
 from better_profanity import profanity
 from enum import Enum
@@ -319,10 +320,11 @@ class OnlineRoom:
 
 class CTGP7CtwwHandler:
     
-    def __init__(self, database: CTGP7ServerDatabase):
+    def __init__(self, database: CTGP7ServerDatabase, nexhttp: CTGP7NEXHTTPHandler):
         self.database = database
-        self.loggedUsers = {}
-        self.activeRooms = {}
+        self.nexhttp = nexhttp
+        self.loggedUsers: Dict[int, OnlineUser] = {}
+        self.activeRooms: Dict[int, OnlineRoom] = {}
         self.lock = threading.Lock()
         self.newLogins = 0
         self.newRooms = 0
@@ -832,6 +834,24 @@ class CTGP7CtwwHandler:
                 room.disband()
                 return True
             return False
+        
+    def kick_user(self, cID):
+        if cID == 0:
+            self.nexhttp.kick_users(all_users=True)
+        else:
+            user = self.loggedUsers.get(cID)
+            if user is not None:
+                self.nexhttp.kick_users(only_users=[user])
+
+    def get_users_from_name(self, name: str):
+        ret = []
+        ret2 = []
+        for u in self.loggedUsers:
+            user = self.loggedUsers.get(u)
+            if user.getName().find(name) != -1:
+                ret.append(u)
+                ret2.append(user.getName())
+        return (ret, ret2)
 
     def getSpecialRoomState(self, room: OnlineRoom):
         isDebug = False
@@ -847,16 +867,9 @@ class CTGP7CtwwHandler:
 
     def fetch_state(self):
         with self.lock:
-            ret = {}
-            nnUsers = 0
-            ctgpUsers = 0
-            for u in self.loggedUsers:
-                if self.loggedUsers[u].getCTGP7Network():
-                    ctgpUsers += 1
-                else:
-                    nnUsers += 1
-            ret["userCount"] = (ctgpUsers, nnUsers)
-            ret["roomCount"] = len(self.activeRooms)
+            ret = {}            
+            ret["userCount"] = self.nexhttp.get_total_users()
+            ret["roomCount"] = self.nexhttp.get_total_rooms()
             ret["newUserCount"] = self.newLogins
             ret["newRoomCount"] = self.newRooms
             ret["rooms"] = []
@@ -864,6 +877,8 @@ class CTGP7CtwwHandler:
             self.newRooms = 0
             for k in self.activeRooms:
                 room = self.activeRooms[k]
+                if not self.nexhttp.is_room_registered(room):
+                    continue
                 playerCount = room.playerCount()
                 if (playerCount == 0):
                     continue
@@ -881,6 +896,8 @@ class CTGP7CtwwHandler:
                 for u in room.getPlayers():
                     user = self.loggedUsers.get(u)
                     if (user is None):
+                        continue
+                    if not self.nexhttp.is_user_in_room(user, room):
                         continue
                     userInfo = {}
                     userInfo["name"] = user.getName()

@@ -147,6 +147,12 @@ class CTGP7ServerDatabase:
         pid = int(self.get_database_config("currUniquePID"))
         self.set_database_config("currUniquePID", pid + 1)
         return pid
+    
+    def get_nex_aes_key(self):
+        return str(self.get_database_config("nexaeskey"))
+    
+    def get_nex_http_server(self):
+        return str(self.get_database_config("nexhttpserver"))
 
     def verify_console_legality(self, cID, cSH1, cSH2):
         with self.lock:
