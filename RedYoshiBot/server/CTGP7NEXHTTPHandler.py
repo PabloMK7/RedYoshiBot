@@ -4,7 +4,7 @@ import threading
 import requests
 import json
 import time
-from typing import List
+from typing import List, Tuple
 import traceback
 
 class CTGP7NEXHTTPHandler:
@@ -13,7 +13,8 @@ class CTGP7NEXHTTPHandler:
             def __init__(self, json: dict):
                 self.pid: int = json["PID"]
                 self.cid: int = json["CID"]
-                self.natreport: List[int] = json["NatReport"]["Results"]
+                self.natreportothers: List[int] = json["NatReportOthers"]["Results"]
+                self.natreportmyself: List[int] = json["NatReportMyself"]["Results"]
 
         class HTTPStatsSessionInfo:
             def __init__(self, json: dict):
@@ -61,6 +62,7 @@ class CTGP7NEXHTTPHandler:
         self.httpsessionlock = threading.Lock()
         self.httpsession = requests.Session()
         self.terminated = False
+        self.kick_all_pending = True
         pass
 
     def encrypt(self, plaintext: bytes) -> bytes:
@@ -108,6 +110,10 @@ class CTGP7NEXHTTPHandler:
 
             with self.lock:
                 self.stats = CTGP7NEXHTTPHandler.HTTPStats(js)
+
+            if (self.kick_all_pending):
+                self.kick_all_pending = False
+                self.kick_users(all_users=True)
     
     def get_stats(self) -> HTTPStats:
         # return copy reference
@@ -154,6 +160,26 @@ class CTGP7NEXHTTPHandler:
                 return True
         return False
     
+    def get_user_nat_status_quality(self, user) -> Tuple[float, float] | None: # Myself, Others
+        u = self.get_user_from_pid(user.pid)
+        if u is None:
+            return None
+        
+        resultsmyself = [x for x in u.natreportmyself if x != 0]
+        if len(resultsmyself) == 0:
+            retmy = None
+        else:
+            goodmyself = [x for x in resultsmyself if x == 2]
+            retmy = float(len(goodmyself)) / float(len(resultsmyself))
+
+        resultsother = [x for x in u.natreportothers if x != 0]
+        if len(resultsother) == 0:
+            retot = None
+        else:
+            goodother = [x for x in resultsother if x == 2]
+            retot = float(len(goodother)) / float(len(resultsother))
+
+        return (retmy, retot)
 
     def kick_users(self, only_users = [], all_users: bool | None = None):
         users_to_kick: List[int] = []
@@ -173,13 +199,10 @@ class CTGP7NEXHTTPHandler:
         js = json.dumps({"Connections": users_to_kick})
         body = self.encrypt(js.encode())
 
-        for i in range(0, 10):
-            try:
-                with self.httpsessionlock:
-                    r = self.httpsession.post(self.httpaddr + "/kick", body, timeout=10)
-                if (r.status_code != 200 or r.content.decode() != "ACK"):
-                    raise Exception()
-                break
-            except:
-                time.sleep(3)
-                pass
+        try:
+            with self.httpsessionlock:
+                r = self.httpsession.post(self.httpaddr + "/kick", body, timeout=10)
+            if (r.status_code != 200 or r.content.decode() != "ACK"):
+                raise Exception()
+        except:
+            pass

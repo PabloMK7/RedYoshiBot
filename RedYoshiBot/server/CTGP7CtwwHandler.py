@@ -98,6 +98,7 @@ class OnlineUser:
         self.isctgp7network = False
         self.playerID = -1
         self.customCharID = 0
+        self.lobby = 0
 
     def setDebug(self):
         self.debug = True
@@ -184,6 +185,7 @@ class OnlineRoom:
         self.logToStaff = False
         self.cpuRandomSeed = random.getrandbits(31)
         self.trackHistory = deque()
+        self.lobby = 0
 
     def joinPlayer(self, user: OnlineUser):
         self.players.add(user.cID)
@@ -330,6 +332,8 @@ class CTGP7CtwwHandler:
         self.newRooms = 0
         self.tokenslock = threading.Lock()
         self.onlinepasswords = {}
+        self.privateroomid = random.randint(1000, 2 ** 31) & ~1
+        self.privateroommap = {}
 
     def get_password_from_token(self, token: str):
         with self.tokenslock:
@@ -345,8 +349,8 @@ class CTGP7CtwwHandler:
             self.onlinepasswords[token] = (datetime.datetime.utcnow(), password)
             return token
 
-    def get_console_message(self, user: OnlineUser):
-        msg = self.database.get_console_message(user.cID, user.cID)
+    def get_console_message(self, userCID: int):
+        msg = self.database.get_console_message(userCID, userCID)
         if msg is None:
             return None
         typeStr = ""
@@ -475,6 +479,24 @@ class CTGP7CtwwHandler:
             if u is None: continue
             u.setPlayerID(-1)
 
+    def lobbyToRegionID(self, lobby):
+        if lobby in self.privateroommap:
+            return self.privateroommap[lobby]
+        
+        newregion = self.privateroomid
+        self.privateroomid += 2
+        self.privateroommap[lobby] = newregion
+        return newregion
+
+    def checkProfanity(self, names):
+        for name in names:
+            if profanity.contains_profanity(name):
+                return True
+            additional_banned = ['\u534D', '\u5350']
+            if any(x in name for x in additional_banned):
+                return True
+        return False
+
     def handle_user_login(self, input: dict, cID: int):
         with self.lock:
             nameMode = input.get("nameMode")
@@ -486,10 +508,13 @@ class CTGP7CtwwHandler:
             miiChecksum = input.get("miiIconChecksum")
             isCTGP7Network = input.get("ctgp7network")
             pid = input.get("pid")
+            lobby = input.get("lobby")
             retDict = {}
             
             if (isCTGP7Network is None):
                 isCTGP7Network = False
+            if (lobby is None):
+                lobby = 0
 
             if (pid is None or pid == 0 or localver is None or miiName is None):
                 return (-1, {})
@@ -508,13 +533,16 @@ class CTGP7CtwwHandler:
                 retDict["loginMessage"] = "Invalid name,\nplease change it."
                 return (CTWWLoginStatus.MESSAGEKICK.value, retDict)
             
-            if profanity.contains_profanity(miiName) or (nameValue is not None and (profanity.contains_profanity(nameValue))):
+            tocheck = [miiName]
+            if nameValue is not None:
+                tocheck.append(nameValue)
+            if self.checkProfanity(tocheck):
                 retDict["loginMessage"] = "Inappropriate name,\nplease change it."
                 return (CTWWLoginStatus.MESSAGEKICK.value, retDict)
             
             user = OnlineUser(OnlineUserName(nameMode, nameValue, miiName), cID, self.database.get_console_is_verified(cID), pid)
 
-            consoleMsg = self.get_console_message(user)
+            consoleMsg = self.get_console_message(user.cID)
             if (consoleMsg is not None and consoleMsg[0] == CTWWLoginStatus.MESSAGEKICK.value):
                 retDict["loginMessage"] = consoleMsg[1]
                 return (CTWWLoginStatus.MESSAGEKICK.value, retDict)
@@ -523,6 +551,7 @@ class CTGP7CtwwHandler:
             self.remove_from_all_rooms(user)
             self.user_logout(user)
             self.user_login(user)
+            user.lobby = lobby
             self.newLogins += 1
             retDict["token"] = user.getToken()
             vrData = self.database.get_console_vr(cID)
@@ -532,7 +561,7 @@ class CTGP7CtwwHandler:
             retDict["cdvr"] = vrData.cdVR
             retDict["ctvrPos"] = vrData.ctPos
             retDict["cdvrPos"] = vrData.cdPos
-            retDict["regionID"] = self.database.get_debugonline_region() if isDebug else self.database.get_online_region()
+            retDict["regionID"] = self.lobbyToRegionID(lobby) if lobby != 0 else (self.database.get_debugonline_region() if isDebug else self.database.get_online_region())
             gradeCount = 0
             for s in CTGP7ServerDatabase.allowed_console_status:
                 if (self.database.get_console_status(cID, s) == 1): gradeCount += 1
@@ -568,8 +597,13 @@ class CTGP7CtwwHandler:
             if (room is None): # Create room if it doesn't exist
                 room = OnlineRoom(gID, gMode)
                 room.enableLog()
+                room.lobby = user.lobby
                 self.activeRooms[gID] = room
                 self.newRooms += 1
+            
+            if (user.lobby != room.lobby):
+                # Internal error
+                return (-1, {})
             
             room.joinPlayer(user)
             retDict["roomKeySeed"] = room.getKeySeed(user)
@@ -622,7 +656,7 @@ class CTGP7CtwwHandler:
             if (room is None or not room.hasPlayer(user)):
                 return (CTWWLoginStatus.FAILED.value, {})
             
-            consoleMsg = self.get_console_message(user)
+            consoleMsg = self.get_console_message(user.cID)
             if (consoleMsg is not None and consoleMsg[0] == CTWWLoginStatus.MESSAGEKICK.value):
                 retDict = {}
                 retDict["loginMessage"] = consoleMsg[1]
@@ -697,7 +731,7 @@ class CTGP7CtwwHandler:
             if (room is None or not room.hasPlayer(user)):
                 return (CTWWLoginStatus.FAILED.value, {})
             
-            if room.getMode() <= 1:
+            if room.getMode() <= 1 and user.lobby == 0:
                 self.database.set_console_vr(cID, [ctvr, cdvr])
             
             if (user.getState() == UserState.HOSTING.value):
@@ -867,12 +901,13 @@ class CTGP7CtwwHandler:
 
     def fetch_state(self):
         with self.lock:
-            ret = {}            
+            ret = {}
             ret["userCount"] = self.nexhttp.get_total_users()
-            ret["roomCount"] = self.nexhttp.get_total_rooms()
             ret["newUserCount"] = self.newLogins
             ret["newRoomCount"] = self.newRooms
             ret["rooms"] = []
+            privRooms = 0
+            pubRooms = 0
             self.newLogins = 0
             self.newRooms = 0
             for k in self.activeRooms:
@@ -882,6 +917,10 @@ class CTGP7CtwwHandler:
                 playerCount = room.playerCount()
                 if (playerCount == 0):
                     continue
+                if (room.lobby != 0):
+                    privRooms += 1
+                    continue
+                pubRooms += 1
                 roomInfo = {}
                 roomInfo["gID"] = room.gID
                 roomInfo["playerCount"] = playerCount
@@ -901,6 +940,9 @@ class CTGP7CtwwHandler:
                         continue
                     userInfo = {}
                     userInfo["name"] = user.getName()
+                    nat_quality = self.nexhttp.get_user_nat_status_quality(user)
+                    userInfo["badnatmyself"] = nat_quality[0] is not None and nat_quality[0] < 0.5
+                    userInfo["badnatother"] = nat_quality[1] is not None and nat_quality[1] < 0.5
                     if (room.getMode() <= 1):
                         userInfo["vr"] = user.getVR()[0 if room.getMode() == 0 else 1]
                         userInfo["vrIncr"] = user.getVRIncr()
@@ -914,9 +956,11 @@ class CTGP7CtwwHandler:
                     roomInfo["players"].append(userInfo)
                 if (room.getMode() <= 1):
                     roomInfo["players"].sort(key=lambda x:x["vr"], reverse=True)
-                ret["rooms"].append(roomInfo)
+                if (len(roomInfo["players"]) != 0):
+                    ret["rooms"].append(roomInfo)
                 room.resetUpdate()
-            
+            ret["pubRoomCount"] = pubRooms
+            ret["priRoomCount"] = privRooms
             return ret
 
 

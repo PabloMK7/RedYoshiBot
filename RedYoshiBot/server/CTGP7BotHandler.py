@@ -136,7 +136,7 @@ async def process_pending_player_role_update(ctgp7_server: CTGP7ServerHandler):
         await calc_player_role(ctgp7_server, user)
 
 def purge_player_name_symbols(line: str):
-    toTranslate = dict.fromkeys(map(ord, '\n\r\u2705'), None)
+    toTranslate = dict.fromkeys(map(ord, '\n\r\u2705\u2757\u2755'), None)
     return line.translate(toTranslate)
 
 def gen_course_usage_embed(database: CTGP7ServerDatabase, course_type: int):
@@ -232,7 +232,8 @@ async def kick_message_logger():
 
 tried_edit_stats_message_times = 0
 stats_curr_online_users = 0
-stats_curr_online_rooms = 0
+stats_curr_pub_online_rooms = 0
+stats_curr_pri_online_rooms = 0
 stats_curr_online_stuff_changed = True
 stats_message_id = [0, 0]
 vr_message_id = 0
@@ -240,6 +241,56 @@ graph_launches_message_id = 0
 last_graph_update_date = None
 
 async def update_graph_message(ctgp7_server: CTGP7ServerHandler):
+    def generate_graph(today, days_past, database: CTGP7ServerDatabase, isCitra: bool) -> io.BytesIO | None:
+        x = []
+        y1 = []
+        y2 = []
+        for i in range(days_past):
+            date = today - datetime.timedelta(days=days_past - i)
+            # x.append(date.strftime("%Y %b %-d"))
+            x.append(date.strftime("%b %-d"))
+            y1.append(database.get_daily_launches(date))
+            y2.append(database.get_daily_unique_consoles(date))
+        
+        # plt.rcParams["figure.figsize"] = (plt.rcParamsDefault["figure.figsize"][0] * 20, plt.rcParamsDefault["figure.figsize"][1])
+        plt.rcParams["figure.figsize"] = (plt.rcParamsDefault["figure.figsize"][0] * 1.75, plt.rcParamsDefault["figure.figsize"][1])
+        if not isCitra:
+            plt.plot(x, y1, color = "dodgerblue", label = "Launches", marker="o", markersize=3)
+            plt.plot(x, y2, color = "lightskyblue", linestyle='dashed', label = "New Consoles", marker="o", markersize=3)
+        else:
+            plt.plot(x, y1, color = "darkorange", label = "Citra Launches", marker="o", markersize=3)
+            plt.plot(x, y2, color = "gold", linestyle='dashed', label = "Citra New Consoles", marker="o", markersize=3)
+        for i,j in zip(x,y1):
+            plt.annotate(str(j),xy=(i,j), fontsize=8)
+        for i,j in zip(x,y2):
+            plt.annotate(str(j),xy=(i,j), fontsize=8)
+        plt.xticks(rotation = 45)
+        plt.subplots_adjust(bottom=0.15)
+        plt.grid()
+        plt.legend()
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', bbox_inches='tight')
+        plt.clf()
+        plt.rcParams["figure.figsize"] = plt.rcParamsDefault["figure.figsize"]
+        buf.seek(0)
+        return buf
+
+    def get_concat_v_resize(im1: Image.Image, im2: Image.Image, resample=Image.BICUBIC, resize_big_image=True):
+        if im1.width == im2.width:
+            _im1 = im1
+            _im2 = im2
+        elif (((im1.width > im2.width) and resize_big_image) or
+            ((im1.width < im2.width) and not resize_big_image)):
+            _im1 = im1.resize((im2.width, int(im1.height * im2.width / im1.width)), resample=resample)
+            _im2 = im2
+        else:
+            _im1 = im1
+            _im2 = im2.resize((im1.width, int(im2.height * im1.width / im2.width)), resample=resample)
+        dst = Image.new('RGB', (_im1.width, _im1.height + _im2.height))
+        dst.paste(_im1, (0, 0))
+        dst.paste(_im2, (0, _im1.height))
+        return dst
+    
     global graph_launches_message_id
     global last_graph_update_date
     DAYS_PAST = 30
@@ -248,42 +299,16 @@ async def update_graph_message(ctgp7_server: CTGP7ServerHandler):
     if (today == last_graph_update_date):
         return
     last_graph_update_date = today
-    x = []
-    y1 = []
-    y2 = []
-    y3 = []
-    y4 = []
-    for i in range(DAYS_PAST):
-        date = today - datetime.timedelta(days=DAYS_PAST - i)
-        # x.append(date.strftime("%Y %b %-d"))
-        x.append(date.strftime("%b %-d"))
-        y1.append(ctgp7_server.database.get_daily_launches(date))
-        y2.append(ctgp7_server.database.get_daily_unique_consoles(date))
-        y3.append(ctgp7_server.citraDatabase.get_daily_launches(date))
-        y4.append(ctgp7_server.citraDatabase.get_daily_unique_consoles(date))
-    
-    # plt.rcParams["figure.figsize"] = (plt.rcParamsDefault["figure.figsize"][0] * 20, plt.rcParamsDefault["figure.figsize"][1])
-    plt.rcParams["figure.figsize"] = (plt.rcParamsDefault["figure.figsize"][0] * 1.75, plt.rcParamsDefault["figure.figsize"][1])
-    plt.plot(x, y1, color = "dodgerblue", label = "Launches", marker="o", markersize=3)
-    plt.plot(x, y2, color = "lightskyblue", linestyle='dashed', label = "New Consoles", marker="o", markersize=3)
-    plt.plot(x, y3, color = "darkorange", label = "Citra Launches", marker="o", markersize=3)
-    plt.plot(x, y4, color = "gold", linestyle='dashed', label = "Citra New Consoles", marker="o", markersize=3)
-    for i,j in zip(x,y1):
-        plt.annotate(str(j),xy=(i,j), fontsize=8)
-    for i,j in zip(x,y2):
-        plt.annotate(str(j),xy=(i,j), fontsize=8)
-    for i,j in zip(x,y3):
-        plt.annotate(str(j),xy=(i,j), fontsize=8)
-    for i,j in zip(x,y4):
-        plt.annotate(str(j),xy=(i,j), fontsize=8)
-    plt.xticks(rotation = 45)
-    plt.subplots_adjust(bottom=0.15)
-    plt.grid()
-    plt.legend()
+
+    bufNormal = generate_graph(today, DAYS_PAST, ctgp7_server.database, False)
+    bufCitra = generate_graph(today, DAYS_PAST, ctgp7_server.citraDatabase, True)
+
+    imNormal = Image.open(bufNormal)
+    imCitra =  Image.open(bufCitra)
+
+    imFinal = get_concat_v_resize(imNormal, imCitra, resize_big_image=False)
     buf = io.BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight')
-    plt.clf()
-    plt.rcParams["figure.figsize"] = plt.rcParamsDefault["figure.figsize"]
+    imFinal.save(buf, format="png")
     buf.seek(0)
 
     file = discord.File(fp=buf, filename="image.png")
@@ -296,13 +321,19 @@ async def update_graph_message(ctgp7_server: CTGP7ServerHandler):
     msg = await ch.fetch_message(graph_launches_message_id)
     msg = await msg.edit(embed=embed, content=None)
     await asyncio.sleep(1.5)
+    imNormal.close()
+    imCitra.close()
+    imFinal.close()
     buf.close()
+    bufNormal.close()
+    bufCitra.close()
 
 async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
     global tried_edit_stats_message_times
     global stats_curr_online_stuff_changed
     global stats_curr_online_users
-    global stats_curr_online_rooms
+    global stats_curr_pub_online_rooms
+    global stats_curr_pri_online_rooms
     global stats_message_id
     global vr_message_id
     stats_curr_online_stuff_changed = False
@@ -360,7 +391,8 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
         embed2.add_field(name="Unique Logins", value=str(uniqueOnlineUsers), inline=True)
         embed2.add_field(name="Total Online Rooms", value=str(genStats["total_rooms"]), inline=True)
         embed2.add_field(name="Current Network Users", value="{}".format(stats_curr_online_users), inline=False)
-        embed2.add_field(name="Current Open Rooms", value=str(stats_curr_online_rooms), inline=True)
+        embed2.add_field(name="Current Public Rooms", value=str(stats_curr_pub_online_rooms), inline=True)
+        embed2.add_field(name="Current Private Rooms", value=str(stats_curr_pri_online_rooms), inline=True)
         embed2.add_field(name="** **", value="** **", inline=False)
         mostPlayedStr = "```\n"
         currTrack = 1
@@ -450,7 +482,8 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isCitra: boo
     global all_prev_room_msg_ids_citra
     global stats_curr_online_stuff_changed
     global stats_curr_online_users
-    global stats_curr_online_rooms
+    global stats_curr_pub_online_rooms
+    global stats_curr_pri_online_rooms
     ctwwChan = SELF_BOT_SERVER.get_channel(ch_list()["CTWW"])
     currCtwwHandler.purge_tokens(datetime.timedelta(minutes=5))
     currCtwwHandler.purge_users(datetime.timedelta(minutes=5))
@@ -460,9 +493,11 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isCitra: boo
     if (not isCitra and stats_curr_online_users != currUser):
         stats_curr_online_users = currUser
         stats_curr_online_stuff_changed = True
-    currRoom = serverInfo["roomCount"]
-    if (not isCitra and stats_curr_online_rooms != currRoom):
-        stats_curr_online_rooms = currRoom
+    pubCurrRoom = serverInfo["pubRoomCount"]
+    priCurrRoom = serverInfo["priRoomCount"]
+    if (not isCitra and (stats_curr_pub_online_rooms != pubCurrRoom or stats_curr_pri_online_rooms != priCurrRoom)):
+        stats_curr_pub_online_rooms = pubCurrRoom
+        stats_curr_pri_online_rooms = priCurrRoom
         stats_curr_online_stuff_changed = True
     nowUser = serverInfo["newUserCount"]
     currDatabase.increment_general_stats("total_logins", nowUser)
@@ -500,7 +535,12 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isCitra: boo
                 stat = ""
                 if (player["state"] != ""):
                     stat = " - " + player["state"]
-                playerString += "{}{}{}{}\n".format(purge_player_name_symbols(player["name"]), " \u2705" if player["verified"] else "", vrStr, stat)
+                symbolstring = "\u2705" if player["verified"] else ""
+                symbolstring += "\u2755" if player["badnatmyself"] else ""
+                symbolstring += "\u2757" if player["badnatother"] else ""
+                if len(symbolstring) != 0:
+                    symbolstring = " " + symbolstring
+                playerString += "{}{}{}{}\n".format(purge_player_name_symbols(player["name"]), symbolstring, vrStr, stat)
             playerString += "```"
             if (playerString == "```\n```"):
                 playerString = "```\n- (None)\n```"

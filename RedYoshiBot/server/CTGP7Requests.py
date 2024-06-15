@@ -191,6 +191,14 @@ class CTGP7Requests:
     
     def server_get_room_charids(self, input):
         return self.currCtwwHandler.handle_get_room_char_ids(input.get("gatherID"))
+    
+    def server_get_console_message(self, input):
+        message = self.currCtwwHandler.get_console_message(self.cID)
+        if message is None:
+            return (0, {})
+        retDict = {}
+        retDict["loginMessage"] = message[1]
+        return (message[0], retDict)
 
     def put_mii_icon(self, input):
         miiIcon = input.get("miiIcon")
@@ -208,6 +216,7 @@ class CTGP7Requests:
         "onlinetoken": req_online_token,
         "uniquepid": req_unique_pid,
         "roomcharids": server_get_room_charids,
+        "message": server_get_console_message
     }
 
     put_functions = {
