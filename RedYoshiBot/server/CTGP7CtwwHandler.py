@@ -400,7 +400,6 @@ class CTGP7CtwwHandler:
 
     def user_login(self, user: OnlineUser):
         self.loggedUsers[user.cID] = user
-        self.database.set_console_last_name(user.cID, user.getName())
 
     def user_logout(self, user: OnlineUser=None, cID=None):
         cidRem = None
@@ -533,6 +532,8 @@ class CTGP7CtwwHandler:
                 retDict["loginMessage"] = "Invalid name,\nplease change it."
                 return (CTWWLoginStatus.MESSAGEKICK.value, retDict)
             
+            self.database.set_console_last_name(cID, str(OnlineUserName(nameMode, nameValue, miiName)))
+
             tocheck = [miiName]
             if nameValue is not None:
                 tocheck.append(nameValue)

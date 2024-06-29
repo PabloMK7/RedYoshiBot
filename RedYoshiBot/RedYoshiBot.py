@@ -1102,10 +1102,10 @@ async def sendMultiMessage(channel, message, startStr, endStr):
     for m in messageList:
         await channel.send(startStr + m + endStr)
 
-async def bulkDeleteUserMessages(member, afterDateTime):
+async def bulkDeleteUserMessages(member):
     for ch in SELF_BOT_SERVER.channels:
         if isinstance(ch, discord.TextChannel):
-            await ch.purge(limit=25, check=lambda m: m.author.id == member.id, after=afterDateTime)
+            await ch.purge(limit=25, check=lambda m: m.author.id == member.id)
 
 def getURLs(s: str):
     regex = r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))"
@@ -1148,13 +1148,29 @@ async def checkNitroScam(message):
             phisChn = client.get_channel(ch_list()["PHISING"])
             await sendMultiMessage(phisChn, "User: {} ({})\nScore: {}\nContents:\n--------------\n{}\n--------------".format(message.author.name, message.author.id, data["score"], contents.replace("@", "(at)")), "", "")
         if (data["score"] > 5):
-            await mute_user(message.author.id, 3*24*60)
-            await bulkDeleteUserMessages(message.author, message.created_at - datetime.timedelta(hours=1))
+            try:
+                # Do timeout first, which is quicker
+                await message.author.timeout(datetime.timedelta(hours=1))
+            except:
+                traceback.print_exc()
             try:
                 await message.author.send("**CTGP-7 server:** Suspicious phising activity has been detected.\nYou have been kicked and muted for 3 days.\nPlease contact a staff member if you think this is a mistake.")
             except:
                 pass
-            await message.author.kick()
+            
+            # Ban, wait a bit, then unban then mute
+            try:
+                await message.author.ban(delete_message_seconds=60 * 60 * 24)
+            except:
+                traceback.print_exc()
+
+            await asyncio.sleep(120)
+            
+            try:
+                await message.author.unban()
+                await mute_user(message.author.id, 3 * 60 * 24)
+            except:
+                pass
             
 
 from .server.CTGP7BotHandler import queue_player_role_update, get_user_info, handle_server_command, handler_server_init_loop, handler_server_update_globals, kick_message_callback, server_message_logger_callback, server_on_member_remove

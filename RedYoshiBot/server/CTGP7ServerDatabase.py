@@ -373,22 +373,38 @@ class CTGP7ServerDatabase:
             return False
     
     def set_console_last_name(self, cID, lastName):
+        now = int(datetime.datetime.utcnow().timestamp())
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM console_name WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT * FROM console_name WHERE cID = ? ORDER BY timestamp DESC", (int(cID),))
+            counter = 0
+            insert = True
             for row in rows:
-                c.execute("UPDATE console_name SET name = ? WHERE cID = ?", (str(lastName), int(cID)))
-                return
-            c.execute('INSERT INTO console_name VALUES (?,?)', (int(cID), str(lastName)))
+                if counter == 0 and str(row[1]) == lastName:
+                    insert = False
+                if (counter >= 19):
+                    c.execute("DELETE FROM console_name WHERE cID = ? AND timestamp = ?", (int(cID), int(row[2])))
+                counter += 1
+            if insert:
+                c.execute('INSERT INTO console_name VALUES (?,?,?)', (int(cID), str(lastName), int(now)))
 
 
     def get_console_last_name(self, cID, default="(Unknown)"):
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM console_name WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT * FROM console_name WHERE cID = ? ORDER BY timestamp DESC", (int(cID),))
             for row in rows:
                 return str(row[1])
             return default
+        
+    def get_console_name_history(self, cID):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM console_name WHERE cID = ? ORDER BY timestamp DESC", (int(cID),))
+            ret = []
+            for row in rows:
+                ret.append([str(row[1]), int(row[2])])
+            return ret
     
     def set_console_vr(self, cID, vr):
         with self.lock:

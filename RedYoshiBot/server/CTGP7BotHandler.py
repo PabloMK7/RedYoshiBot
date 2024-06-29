@@ -50,6 +50,7 @@ def staff_server_help_array():
         "apply_player_role": ">@RedYoshiBot server apply_player_role\nVERY SLOW!!! Applies the Player role to all linked console accounts.",
         "purge_console_link": ">@RedYoshiBot server purge_console_link\nRemoved console links from users that are no longer in the server.",
         "get_mii_icon": ">@RedYoshiBot server get_mii_icon (consoleID)\nGets the mii icon of the specified user.",
+        "name_history": ">@RedYoshiBot server name_history (consoleID)\nGets the name history of the specified user.",
         "config": ">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable) [newValue]\nGets or sets the config parameters for online mode.",
         "otplegality": ">@RedYoshiBot server otplegality (get/getall/set/clear) (consoleID)\nGets, sets or clear the otp legality of a specified console.",
         "consoleserver": ">@RedYoshiBot server consoleserver (get/set/clear)\nSets a NEX server address to the specified console."
@@ -78,6 +79,7 @@ def staff_server_command_level():
         "apply_player_role": 0,
         "purge_console_link": 0,
         "get_mii_icon": 1,
+        "name_history": 1,
         "config": 0,
         "otplegality": 0,
         "consoleserver": 0,
@@ -186,11 +188,15 @@ def server_message_logger_callback(text: str):
 async def server_message_logger():
     global server_message_logger_lock
     global server_message_logger_pending
-    with kick_message_logger_lock:
-        if (len(server_message_logger_pending) > 1800): # Reduces the amount of messages sent to discord api
-            chPrivate = SELF_BOT_SERVER.get_channel(ch_list()["ONLINELOGS"])
-            await sendMultiMessage(chPrivate, escapeFormatting(server_message_logger_pending, True), "```\n", "```")
-            server_message_logger_pending = ""
+    text = ""
+    with server_message_logger_lock:
+        if (len(server_message_logger_pending) <= 1800): # Reduces the amount of messages sent to discord api
+            return
+        text = server_message_logger_pending
+        server_message_logger_pending = ""
+        
+    chPrivate = SELF_BOT_SERVER.get_channel(ch_list()["ONLINELOGS"])
+    await sendMultiMessage(chPrivate, escapeFormatting(text, True), "```\n", "```")
 
 kick_message_logger_lock = threading.Lock()
 kick_message_logger_pending = []
@@ -203,31 +209,33 @@ def kick_message_callback(cID, messageType, message, amountMin, isSilent, isCitr
 async def kick_message_logger():
     global kick_message_logger_lock
     global kick_message_logger_pending
+    pending = []
     with kick_message_logger_lock:
-        for m in kick_message_logger_pending:
-            cID = m[0]
-            messageType = m[1]
-            message = m[2]
-            amountMin = m[3]
-            isSilent = m[4]
-            isCitra = m[5]
-            if (isSilent or (messageType != ConsoleMessageType.SINGLE_KICKMESSAGE.value and messageType != ConsoleMessageType.TIMED_KICKMESSAGE.value) or cID == 0):
-                continue
-            embedPrivate=discord.Embed(title="{}Kick Report".format("Citra " if isCitra else ""), description="Console ID: 0x{:016X}".format(cID), color=0xff0000, timestamp=datetime.datetime.now())
-            embedPrivate.add_field(name="Reason", value=message, inline=False)
-            if (messageType == ConsoleMessageType.TIMED_KICKMESSAGE.value):
-                time = ""
-                if amountMin is None:
-                    time = "Permanent"
-                else:
-                    days = int(amountMin // (60 * 24))
-                    hours = int((amountMin // 60) % 24)
-                    minutes = int((amountMin) % 60)
-                    time = "{} days,  {} hours, {} minutes".format(days, hours, minutes)
-                embedPrivate.add_field(name="Duration", value=time, inline=False)
-            chPrivate = SELF_BOT_SERVER.get_channel(ch_list()["STAFFKICKS"])
-            await chPrivate.send(embed=embedPrivate)
-        kick_message_logger_pending = []
+        pending = kick_message_logger_pending.copy()
+        kick_message_logger_pending.clear()
+    for m in kick_message_logger_pending:
+        cID = m[0]
+        messageType = m[1]
+        message = m[2]
+        amountMin = m[3]
+        isSilent = m[4]
+        isCitra = m[5]
+        if (isSilent or (messageType != ConsoleMessageType.SINGLE_KICKMESSAGE.value and messageType != ConsoleMessageType.TIMED_KICKMESSAGE.value) or cID == 0):
+            continue
+        embedPrivate=discord.Embed(title="{}Kick Report".format("Citra " if isCitra else ""), description="Console ID: 0x{:016X}".format(cID), color=0xff0000, timestamp=datetime.datetime.now())
+        embedPrivate.add_field(name="Reason", value=message, inline=False)
+        if (messageType == ConsoleMessageType.TIMED_KICKMESSAGE.value):
+            time = ""
+            if amountMin is None:
+                time = "Permanent"
+            else:
+                days = int(amountMin // (60 * 24))
+                hours = int((amountMin // 60) % 24)
+                minutes = int((amountMin) % 60)
+                time = "{} days,  {} hours, {} minutes".format(days, hours, minutes)
+            embedPrivate.add_field(name="Duration", value=time, inline=False)
+        chPrivate = SELF_BOT_SERVER.get_channel(ch_list()["STAFFKICKS"])
+        await chPrivate.send(embed=embedPrivate)
             
 
 tried_edit_stats_message_times = 0
@@ -1217,6 +1225,23 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 miiIcon.save(image_binary, 'PNG')
                 image_binary.seek(0)
                 await message.reply("Mii for {}:".format(miiName), file=discord.File(fp=image_binary, filename='mii.png'))
+    elif bot_cmd == "name_history":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content)
+            if (len(tag) != 3):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["name_history"] + "```")
+                return
+            try:
+                consoleID = int(tag[2], 16)
+            except:
+                await message.reply("Invalid console ID provided.")
+                return
+            name_list = currDatabase.get_console_name_history(consoleID)
+            msg = "Name history for specified ID: ```\n"
+            for name in name_list:
+                msg += "{} ({})\n".format(name[0], str(datetime.datetime.fromtimestamp(float(name[1]))))
+            msg += "```"
+            await message.reply(msg)
     elif bot_cmd == "config":
         if await staff_server_can_execute(message, bot_cmd):
             tag = get_server_bot_args(message.content)
