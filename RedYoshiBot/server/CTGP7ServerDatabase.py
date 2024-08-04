@@ -143,6 +143,24 @@ class CTGP7ServerDatabase:
     def set_ctgp7_server_available(self, available: int):
         self.set_database_config("ctgp7serveravailable", int(available))
 
+    def get_vr_multiplier(self) -> float:
+        return float(self.get_database_config("vrMultiplier"))
+
+    def set_vr_multiplier(self, multiplier: float):
+        self.set_database_config("vrMultiplier", float(multiplier))
+
+    def get_allowed_characters(self) -> str:
+        return str(self.get_database_config("allowedCharacters"))
+    
+    def set_allowed_characters(self, l: str):
+        self.set_database_config("allowedCharacters", str(l))
+
+    def get_allowed_tracks(self) -> str:
+        return str(self.get_database_config("allowedTracks"))
+    
+    def set_allowed_tracks(self, l: str):
+        self.set_database_config("allowedTracks", str(l))
+
     def fetch_unique_PID(self):
         pid = int(self.get_database_config("currUniquePID"))
         self.set_database_config("currUniquePID", pid + 1)

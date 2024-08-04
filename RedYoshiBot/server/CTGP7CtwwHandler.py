@@ -568,6 +568,10 @@ class CTGP7CtwwHandler:
                 if (self.database.get_console_status(cID, s) == 1): gradeCount += 1
             retDict["myStarGrade"] = 0 if gradeCount == 0 else gradeCount + StarGrade.CUSTOM_PLAYER.value
 
+            allowedChars = self.database.get_allowed_characters()
+            if allowedChars != "":
+                retDict["allowedCharacters"] = allowedChars
+
             if (miiChecksum is not None):
                 storedChecksum = self.database.get_mii_icon_checksum(cID)
                 retDict["needsMiiUpload"] = storedChecksum is None or storedChecksum != miiChecksum
@@ -617,6 +621,10 @@ class CTGP7CtwwHandler:
             retDict["ctvrPos"] = vrData.ctPos
             retDict["cdvrPos"] = vrData.cdPos
             retDict["trackHistory"] = room.getTrackHistory()
+            retDict["vrMultiplier"] = int(self.database.get_vr_multiplier() * 1000)
+            allowedTracks = self.database.get_allowed_tracks()
+            if (allowedTracks != ""):
+                retDict["allowedTracks"] = allowedTracks
             user.setVRIncr(None)
 
             user.isAlive()
