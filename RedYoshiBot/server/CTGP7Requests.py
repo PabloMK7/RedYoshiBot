@@ -5,8 +5,8 @@ import datetime
 import random
 
 from ..CTGP7Defines import CTGP7Defines
-from .CTGP7ServerDatabase import CTGP7ServerDatabase
-from .CTGP7CtwwHandler import CTGP7CtwwHandler
+from .CTGP7ServerDatabase import CTGP7ServerDatabase, ConsoleMessageType
+from .CTGP7CtwwHandler import CTGP7CtwwHandler, CTWWLoginStatus
 
 class CTGP7Requests:
 
@@ -193,6 +193,10 @@ class CTGP7Requests:
         return self.currCtwwHandler.handle_get_room_char_ids(input.get("gatherID"))
     
     def server_get_console_message(self, input):
+        localver = input.get("localVer")
+        if localver is None: localver = -1
+        if (self.currDatabase.get_ctww_version() != localver):
+            return (CTWWLoginStatus.VERMISMATCH.value, {})
         message = self.currCtwwHandler.get_console_message(self.cID)
         if message is None:
             return (0, {})
@@ -206,6 +210,13 @@ class CTGP7Requests:
         if (miiIcon is None or miiIconChecksum is None):
             return (-1, 0)
         self.currDatabase.set_mii_icon(self.cID, miiIcon, miiIconChecksum)
+        return (0, 0)
+    
+    def put_ultra_shortcut(self, input):
+        with self.currCtwwHandler.lock:
+            if not self.cID in self.currCtwwHandler.loggedUsers: return
+        self.currDatabase.set_console_message(self.cID, ConsoleMessageType.TIMED_KICKMESSAGE.value, "Use of ultrashortcut", 60)
+        self.currCtwwHandler.kick_user(self.cID)
         return (0, 0)
 
     request_functions = {
@@ -228,7 +239,8 @@ class CTGP7Requests:
         "onlwatch": server_user_room_watch_handler,
         "onlleaveroom": server_user_room_leave_handler,
         "hrtbt": server_user_heartbeat,
-        "miiicon": put_mii_icon
+        "miiicon": put_mii_icon,
+        "ultrashortcut": put_ultra_shortcut,
     }
 
     hide_logs_input = [

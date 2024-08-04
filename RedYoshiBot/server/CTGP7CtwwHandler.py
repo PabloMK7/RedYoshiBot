@@ -711,7 +711,17 @@ class CTGP7CtwwHandler:
             
             user.isAlive()
 
-            return (CTWWLoginStatus.SUCCESS.value, {})
+            retdict = {}
+            scs = self.database.get_track_banned_ultrasc(szsName)
+            if (len(scs) != 0):
+                scstring = ""
+                for item in scs:
+                    for entry in item:
+                        scstring += "{:.4f}::".format(entry)
+                scstring = scstring[:-2]
+                retdict["bannedUltraSC"] = scstring
+
+            return (CTWWLoginStatus.SUCCESS.value, retdict)
     
     def handle_user_racefinish_room(self, input, cID):
         with self.lock:
@@ -937,9 +947,9 @@ class CTGP7CtwwHandler:
                     user = self.loggedUsers.get(u)
                     if (user is None):
                         continue
+                    userInfo = {}
                     if not self.nexhttp.is_user_in_room(user, room):
                         continue
-                    userInfo = {}
                     userInfo["name"] = user.getName()
                     nat_quality = self.nexhttp.get_user_nat_status_quality(user)
                     userInfo["badnatmyself"] = nat_quality[0] is not None and nat_quality[0] < 0.5

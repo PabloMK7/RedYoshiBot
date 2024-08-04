@@ -658,3 +658,22 @@ class CTGP7ServerDatabase:
                 return
             # Create entry
             c.execute('INSERT INTO server_address VALUES (?,?)', (int(cID), str(value)))
+
+    def set_track_banned_ultrasc(self, szsname, from_min, from_max, to_min, to_max, trigger):
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute('INSERT INTO banned_ultrasc VALUES (?,?,?,?,?,?)', (str(szsname), float(from_min), float(from_max), float(to_min), float(to_max), float(trigger)))
+    
+    def clear_track_banned_ultrasc(self, szsname):
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute("DELETE FROM banned_ultrasc WHERE szsname = ?", (str(szsname),))
+
+    def get_track_banned_ultrasc(self, szsname):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM banned_ultrasc WHERE szsname = ?", (str(szsname),))
+            ret = []
+            for row in rows:
+                ret.append([float(row[1]), float(row[2]), float(row[3]), float(row[4]), float(row[5])])
+        return ret

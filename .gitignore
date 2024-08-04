@@ -4,3 +4,4 @@ RedYoshiBot/code_sections/
 RedYoshiBot/script/
 MKTranslationDownload.py
 **/*.sqlite
+localUtils/

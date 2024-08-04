@@ -53,7 +53,8 @@ def staff_server_help_array():
         "name_history": ">@RedYoshiBot server name_history (consoleID)\nGets the name history of the specified user.",
         "config": ">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable) [newValue]\nGets or sets the config parameters for online mode.",
         "otplegality": ">@RedYoshiBot server otplegality (get/getall/set/clear) (consoleID)\nGets, sets or clear the otp legality of a specified console.",
-        "consoleserver": ">@RedYoshiBot server consoleserver (get/set/clear)\nSets a NEX server address to the specified console."
+        "consoleserver": ">@RedYoshiBot server consoleserver (get/set/clear)\nSets a NEX server address to the specified console.",
+        "banned_ultra_shortcut": ">@RedYoshiBot server banned_ultra_shortcut (get/set/clear) (szsName) [from_min] [from_max] [to_min] [to_max] [trigger]\nManages the banned ultra shortcuts for the specified track.",
     }
     
 def staff_server_command_level():
@@ -83,6 +84,7 @@ def staff_server_command_level():
         "config": 0,
         "otplegality": 0,
         "consoleserver": 0,
+        "banned_ultra_shortcut": 0,
     }
 
 async def staff_server_can_execute(message, command, silent=False):
@@ -213,7 +215,7 @@ async def kick_message_logger():
     with kick_message_logger_lock:
         pending = kick_message_logger_pending.copy()
         kick_message_logger_pending.clear()
-    for m in kick_message_logger_pending:
+    for m in pending:
         cID = m[0]
         messageType = m[1]
         message = m[2]
@@ -719,6 +721,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     return
                 if mode == "ctww":
                     currDatabase.set_ctww_version(version)
+                    currCtwwHandler.kick_user(0)
                 elif mode == "beta":
                     currDatabase.set_beta_version(version)
                 await message.reply( "{} version set to: {}".format( mode, version))
@@ -1380,6 +1383,48 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             elif (mode == "clear"):
                 currDatabase.clear_console_unique_server_address(consoleID)
                 await message.reply( "Operation succeeded.")
+    elif bot_cmd == "banned_ultra_shortcut":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content)
+            if (len(tag) < 4):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            mode = tag[2]
+            track = tag[3]
+            if mode not in ["get", "set", "clear"]:
+                await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()[bot_cmd] + "```")
+                return
+            if mode == "get":
+                bannedsc = currDatabase.get_track_banned_ultrasc(track)
+                msg ="Banned shortcuts for specified track:\n```\n"
+                for entry in bannedsc:
+                    msg += "- from_min: {:.04f}, from_max: {:.04f}, to_min: {:.04f}, to_max: {:.04f}, trigger: {:.04f}\n".format(entry[0], entry[1], entry[2], entry[3], entry[4])
+                msg += "```"
+                await message.reply(msg)
+            elif mode == "clear":
+                currDatabase.clear_track_banned_ultrasc(track)
+                await message.reply( "Operation succeeded.")
+            elif mode == "set":
+                entry = tag[4:]
+                if (len(entry) != 5):
+                    await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                    return
+                entryfloats = []
+                for e in entry:
+                    try:
+                        entryfloats.append(float(e))
+                    except:
+                        await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                        return
+                currDatabase.set_track_banned_ultrasc(track, entryfloats[0], entryfloats[1], entryfloats[2], entryfloats[3], entryfloats[4])
+
+                bannedsc = currDatabase.get_track_banned_ultrasc(track)
+                msg ="Set banned shortcuts for specified track:\n```\n"
+                for entry in bannedsc:
+                    msg += "- from_min: {:.04f}, from_max: {:.04f}, to_min: {:.04f}, to_max: {:.04f}, trigger: {:.04f}\n".format(entry[0], entry[1], entry[2], entry[3], entry[4])
+                msg += "```"
+                await message.reply(msg)
+
 
     else:
         await message.reply( "Invalid server command, use `@RedYoshiBot server help` to get all the available server commands.")
