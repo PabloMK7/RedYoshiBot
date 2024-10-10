@@ -99,6 +99,7 @@ class OnlineUser:
         self.playerID = -1
         self.customCharID = 0
         self.lobby = 0
+        self.uName = ""
 
     def setDebug(self):
         self.debug = True
@@ -467,10 +468,13 @@ class CTGP7CtwwHandler:
                     if users[i] is None or users[i].lastActive() < u.lastActive():
                         users[i] = u
             charIDs = [(u.customCharID if u is not None else 0) for u in users]
+            names = [((u.uName + "_" + u.getName()) if u is not None else "") for u in users]
             retDoc = {}
+            retNameDoc = {}
             for i in range(8):
                 retDoc[str(i)] = charIDs[i]
-            return (0, {"charIDs": retDoc})
+                retNameDoc[str(i)] = names[i]
+            return (0, {"charIDs": retDoc, "names": retNameDoc})
         
     def resetRoomPlayerIDs(self, room: OnlineRoom):
         for cID in room.players:
@@ -508,12 +512,15 @@ class CTGP7CtwwHandler:
             isCTGP7Network = input.get("ctgp7network")
             pid = input.get("pid")
             lobby = input.get("lobby")
+            uName = input.get("uName")
             retDict = {}
             
             if (isCTGP7Network is None):
                 isCTGP7Network = False
             if (lobby is None):
                 lobby = 0
+            if (uName is None):
+                uName = ""
 
             if (pid is None or pid == 0 or localver is None or miiName is None):
                 return (-1, {})
@@ -553,6 +560,7 @@ class CTGP7CtwwHandler:
             self.user_logout(user)
             self.user_login(user)
             user.lobby = lobby
+            user.uName = uName
             self.newLogins += 1
             retDict["token"] = user.getToken()
             vrData = self.database.get_console_vr(cID)
@@ -567,6 +575,7 @@ class CTGP7CtwwHandler:
             for s in CTGP7ServerDatabase.allowed_console_status:
                 if (self.database.get_console_status(cID, s) == 1): gradeCount += 1
             retDict["myStarGrade"] = 0 if gradeCount == 0 else gradeCount + StarGrade.CUSTOM_PLAYER.value
+            retDict["name"] = (user.uName + "_" + user.getName())
 
             allowedChars = self.database.get_allowed_characters()
             if allowedChars != "":
@@ -916,6 +925,7 @@ class CTGP7CtwwHandler:
                 isDebug = True
         ret = ""
         if (isDebug): ret += " (Debug)"
+        if (room.lobby != 0): ret += " (Private)"
         return ret
 
     def fetch_state(self):
@@ -938,7 +948,6 @@ class CTGP7CtwwHandler:
                     continue
                 if (room.lobby != 0):
                     privRooms += 1
-                    continue
                 pubRooms += 1
                 roomInfo = {}
                 roomInfo["gID"] = room.gID
@@ -950,6 +959,7 @@ class CTGP7CtwwHandler:
                 roomInfo["messageID"] = room.getMessageID()
                 roomInfo["updated"] = room.wasUpdated()
                 roomInfo["log"] = room.needsLog()
+                roomInfo["hidden"] = room.lobby != 0
                 roomInfo["players"] = []
                 for u in room.getPlayers():
                     user = self.loggedUsers.get(u)
@@ -958,6 +968,8 @@ class CTGP7CtwwHandler:
                     userInfo = {}
                     if not self.nexhttp.is_user_in_room(user, room):
                         continue
+                    if (user.isDebug()):
+                        roomInfo["hidden"] = True
                     userInfo["name"] = user.getName()
                     nat_quality = self.nexhttp.get_user_nat_status_quality(user)
                     userInfo["badnatmyself"] = nat_quality[0] is not None and nat_quality[0] < 0.5

@@ -469,6 +469,9 @@ async def prepare_server_channels(ctgp7_server: CTGP7ServerHandler):
     ctwwChan = SELF_BOT_SERVER.get_channel(ch_list()["CTWW"])
     async for m in ctwwChan.history(limit=200):
         await m.delete()
+    ctwwPrivChan = SELF_BOT_SERVER.get_channel(ch_list()["CTWW_PRIV"])
+    async for m in ctwwPrivChan.history(limit=200):
+        await m.delete()
     statsChan = SELF_BOT_SERVER.get_channel(ch_list()["STATS"])
     mIds = []
     i = 0
@@ -495,6 +498,7 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isCitra: boo
     global stats_curr_pub_online_rooms
     global stats_curr_pri_online_rooms
     ctwwChan = SELF_BOT_SERVER.get_channel(ch_list()["CTWW"])
+    ctwwPrivChan = SELF_BOT_SERVER.get_channel(ch_list()["CTWW_PRIV"])
     currCtwwHandler.purge_tokens(datetime.timedelta(minutes=5))
     currCtwwHandler.purge_users(datetime.timedelta(minutes=5))
     currCtwwHandler.purge_rooms()
@@ -518,15 +522,22 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isCitra: boo
     currMsgIds = set()
     for room in serverInfo["rooms"]:
         msgID = room["messageID"]
+        isHidden = room["hidden"]
         msg = None
         if (room["updated"]):
             try:
                 if (msgID != 0):
-                    msg = await ctwwChan.fetch_message(msgID)
+                    if isHidden:
+                        msg = await ctwwPrivChan.fetch_message(msgID)
+                    else:
+                        msg = await ctwwChan.fetch_message(msgID)
             except:
                 msgID = 0
             if msgID == 0:
-                msg = await ctwwChan.send("Room is being created...")
+                if (isHidden):
+                    msg = await ctwwPrivChan.send("Room is being created...")
+                else:
+                    msg = await ctwwChan.send("Room is being created...")
                 msgID = msg.id
                 if (not currCtwwHandler.update_room_messageID(room["gID"], msgID)):
                     await msg.delete()
@@ -568,13 +579,18 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isCitra: boo
                 chPrivate = SELF_BOT_SERVER.get_channel(ch_list()["ONLINELOGS"])
                 await chPrivate.send(embed=embed)
             
-        currMsgIds.add(msgID)
+        currMsgIds.add((isHidden, msgID))
     otherRooms = (all_prev_room_msg_ids_citra if isCitra else all_prev_room_msg_ids) - currMsgIds
-    for mID in otherRooms:
+    for (hidden, mID) in otherRooms:
         try:
-           msg = await ctwwChan.fetch_message(mID)
-           await msg.delete()
+            if hidden:
+                msg = await ctwwPrivChan.fetch_message(mID)
+            else:
+                msg = await ctwwChan.fetch_message(mID)
+            await msg.delete()
         except:
+            # Message failed to delete, try to delete again in next iteration
+            currMsgIds.add((hidden,mID))
             pass
     if (isCitra):
         all_prev_room_msg_ids_citra = currMsgIds
