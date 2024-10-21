@@ -960,6 +960,8 @@ class CTGP7CtwwHandler:
                 roomInfo["updated"] = room.wasUpdated()
                 roomInfo["log"] = room.needsLog()
                 roomInfo["hidden"] = room.lobby != 0
+                roomInfo["private"] = room.lobby != 0
+                roomInfo["debug"] = False
                 roomInfo["players"] = []
                 for u in room.getPlayers():
                     user = self.loggedUsers.get(u)
@@ -970,6 +972,7 @@ class CTGP7CtwwHandler:
                         continue
                     if (user.isDebug()):
                         roomInfo["hidden"] = True
+                        roomInfo["debug"] = True
                     userInfo["name"] = user.getName()
                     nat_quality = self.nexhttp.get_user_nat_status_quality(user)
                     userInfo["badnatmyself"] = nat_quality[0] is not None and nat_quality[0] < 0.5
@@ -985,6 +988,7 @@ class CTGP7CtwwHandler:
                     userInfo["cID"] = u
                     userInfo["verified"] = user.verified()
                     roomInfo["players"].append(userInfo)
+                roomInfo["regionID"] = self.lobbyToRegionID(room.lobby) if roomInfo["private"] else (self.database.get_debugonline_region() if roomInfo["debug"] else self.database.get_online_region())
                 if (room.getMode() <= 1):
                     roomInfo["players"].sort(key=lambda x:x["vr"], reverse=True)
                 if (len(roomInfo["players"]) != 0):

@@ -648,6 +648,11 @@ class CTGP7ServerDatabase:
             # Update entry
             c.execute("UPDATE console_status SET {} = ? WHERE cID = ?".format(str(status)), (int(value), int(cID)))
 
+    def clear_console_status(self, cID):
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute("DELETE FROM console_status WHERE cID = ?", (int(cID),))
+
     def transfer_console_status(self, oldcID, newcID):
         with self.lock:
             c = self.conn.cursor()

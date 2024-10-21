@@ -1039,6 +1039,10 @@ async def checkCTGPMissSpell(message):
     global lastsentctgpmisspell
     words : str = message.content.split()
     showSpam = message.channel.id != ch_list()["BOTCHAT"] and len(words) == 1
+    # -------
+    if len(words) < 5:
+        return
+    # -------
     for word in words:
         if (len(word) == 4 or (len(word) == 5 and word[-1:] == "7") or (len(word) == 6 and word[-2:] == "-7")):
             ctgp = word[0:4].lower()

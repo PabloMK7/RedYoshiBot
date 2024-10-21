@@ -44,7 +44,8 @@ def staff_server_help_array():
         "console_admin": ">@RedYoshiBot server console_admin (get/set/clear) (consoleID)\nSets or clears the admin status for the specified console.",
         "region": ">@RedYoshiBot server region (newvalue)\nSets the CTWW/CD online region in the server.",
         "manage_vr": ">@RedYoshiBot server manage_vr (get/set) (consoleID) (ctww/cd/points) (newvalue)\nGets or sets the VR or points for the specified console (Don't set if console is in racing state online).",
-        "transfer": ">@RedYoshiBot server transfer (oldConsoleID) (newConsoleID)\nTransfers all the transferable data from an old console to a new console (VR and Discord link).",
+        "transfer": ">@RedYoshiBot server transfer (oldConsoleID) (newConsoleID)\nTransfers all the transferable data from an old console to a new console.",
+        "prune": ">@RedYoshiBot server prune (consoleID)\nClears most of the data from the specified console.",
         "getlink": ">@RedYoshiBot server getlink (consoleID/discordID)\nGets link between console ID and Discord account.",
         "unlink": ">@RedYoshiBot server getlink (consoleID/discordID)\nBreaks the link between console ID and Discord account.",
         "apply_player_role": ">@RedYoshiBot server apply_player_role\nVERY SLOW!!! Applies the Player role to all linked console accounts.",
@@ -75,6 +76,7 @@ def staff_server_command_level():
         "region": 0,
         "manage_vr": 1,
         "transfer": 1,
+        "prune": 1,
         "getlink": 1,
         "unlink": 1,
         "apply_player_role": 0,
@@ -544,7 +546,7 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isCitra: boo
                     continue
             
             bordercolor = room["color"]
-            embed=discord.Embed(title="{}{} Room".format("Citra " if isCitra else "", room["gameMode"]), description="State: {}\nID: 0x{:08X}".format(room["state"], room["fakeID"]), color=bordercolor, timestamp=datetime.datetime.now())
+            embed=discord.Embed(title="{}{} Room".format("Citra " if isCitra else "", room["gameMode"]), description="State: {}\nID: 0x{:08X}{}".format(room["state"], room["fakeID"], "\nRegion: 0x{:08X}".format(room["regionID"]) if room["private"] else ""), color=bordercolor, timestamp=datetime.datetime.now())
             playerString = "```\n"
             for player in room["players"]:
                 vrStr = ""
@@ -655,7 +657,7 @@ def transfer_console_data(ctgp7_server: CTGP7ServerHandler, srcCID: int, dstCID:
     currDatabase = ctgp7_server.citraDatabase if isCitra else ctgp7_server.database
     currCtwwHandler = ctgp7_server.citraCtwwHandler if isCitra else ctgp7_server.ctwwHandler
     try:
-        # Transfer VR
+        # Transfer VR and points
         srcVR = currDatabase.get_console_vr(srcCID)
         srcPoints = currDatabase.get_console_points(srcCID)
         currDatabase.set_console_vr(dstCID, (srcVR.ctVR, srcVR.cdVR))
@@ -667,7 +669,25 @@ def transfer_console_data(ctgp7_server: CTGP7ServerHandler, srcCID: int, dstCID:
         if (discordID is not None):
             currDatabase.delete_discord_link_console(srcCID)
             currDatabase.set_discord_link_console(discordID, dstCID)
+        # Transfer console status
         currDatabase.transfer_console_status(srcCID, dstCID)
+        return ""
+    except Exception as e:
+        return str(e)
+    
+def prune_console_data(ctgp7_server: CTGP7ServerHandler, cID: int, isCitra: bool):
+    currDatabase = ctgp7_server.citraDatabase if isCitra else ctgp7_server.database
+    try:
+        # Delete VR and points
+        currDatabase.set_console_vr(cID, (1000, 1000))
+        currDatabase.set_console_points(cID, 0)
+        # Delete discord link
+        discordID = currDatabase.get_discord_link_console(cID)
+        if (discordID is not None):
+            currDatabase.delete_discord_link_console(cID)
+            queue_player_role_update(discordID)
+        # Delete console status
+        currDatabase.clear_console_status(cID)
         return ""
     except Exception as e:
         return str(e)
@@ -1187,6 +1207,27 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Invalid destination console ID.")
                 return
             res = transfer_console_data(ctgp7_server, srcConsoleID, dstConsoleID, isCitra)
+            if (res == ""):
+                await message.reply( "Operation succeeded.")
+            else:
+                await message.reply( "Operation failed:```{}```".format(res))
+    elif bot_cmd == "prune":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content)
+            if (len(tag) != 3):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            consoleID = tag[2]
+            if (consoleID.startswith("0x")):
+                consoleID = consoleID[2:]
+            try:
+                consoleID = int(consoleID, 16)
+                if (consoleID == 0):
+                    raise ValueError()
+            except ValueError:
+                await message.reply("Invalid source console ID.")
+                return
+            res = prune_console_data(ctgp7_server, consoleID, isCitra)
             if (res == ""):
                 await message.reply( "Operation succeeded.")
             else:
