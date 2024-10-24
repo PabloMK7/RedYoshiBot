@@ -559,6 +559,7 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isCitra: boo
                 if (player["state"] != ""):
                     stat = " - " + player["state"]
                 symbolstring = "\u2705" if player["verified"] else ""
+                symbolstring += "\U0001F3A4" if player["usingVC"] else ""
                 symbolstring += "\u2755" if player["badnatmyself"] else ""
                 symbolstring += "\u2757" if player["badnatother"] else ""
                 if len(symbolstring) != 0:

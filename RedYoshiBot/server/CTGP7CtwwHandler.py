@@ -100,6 +100,7 @@ class OnlineUser:
         self.customCharID = 0
         self.lobby = 0
         self.uName = ""
+        self.usingVC = False
 
     def setDebug(self):
         self.debug = True
@@ -165,6 +166,9 @@ class OnlineUser:
 
     def setCustomCharacter(self, charID: int):
         self.customCharID = charID
+
+    def setUsingVoiceChat(self, usingVC: bool):
+        self.usingVC = usingVC
 
     def __hash__(self):
         return hash(self.cID)
@@ -649,6 +653,7 @@ class CTGP7CtwwHandler:
             token = input.get("token")
             playerID = input.get("myPlayerID"); playerID = -1 if playerID is None else playerID
             charID = input.get("customCharID"); charID = 0 if charID is None else charID
+            usingVC = input.get("voiceChat"); usingVC = False if usingVC is None else usingVC
             retDict = {}
 
             if (localver is None):
@@ -669,6 +674,7 @@ class CTGP7CtwwHandler:
             user.setVRIncr(None)
             user.setPlayerID(playerID)
             user.setCustomCharacter(charID)
+            user.setUsingVoiceChat(usingVC)
 
             room = self.activeRooms.get(gID)
             if (room is None or not room.hasPlayer(user)):
@@ -708,6 +714,7 @@ class CTGP7CtwwHandler:
             token = input.get("token")
             ctvr = input.get("ctvr")
             cdvr = input.get("cdvr")
+            usingVC = input.get("voiceChat"); usingVC = False if usingVC is None else usingVC
 
             if (gID is None or szsName is None or token is None or ctvr is None or cdvr is None):
                 return (-1, {})
@@ -725,7 +732,8 @@ class CTGP7CtwwHandler:
                 room.setRace(szsName)
                 room.appendToTrackHistory(szsName, self.database)
                 room.enableLog()
-            
+
+            user.setUsingVoiceChat(usingVC)
             user.isAlive()
 
             retdict = {}
@@ -987,6 +995,7 @@ class CTGP7CtwwHandler:
                     userInfo["state"] = user.getStateName()
                     userInfo["cID"] = u
                     userInfo["verified"] = user.verified()
+                    userInfo["usingVC"] = user.usingVC
                     roomInfo["players"].append(userInfo)
                 roomInfo["regionID"] = self.lobbyToRegionID(room.lobby) if roomInfo["private"] else (self.database.get_debugonline_region() if roomInfo["debug"] else self.database.get_online_region())
                 if (room.getMode() <= 1):
