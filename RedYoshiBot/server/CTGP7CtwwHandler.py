@@ -638,6 +638,9 @@ class CTGP7CtwwHandler:
             allowedTracks = self.database.get_allowed_tracks()
             if (allowedTracks != ""):
                 retDict["allowedTracks"] = allowedTracks
+            allowedItems = self.database.get_allowed_items()
+            if (allowedItems != ""):
+                retDict["allowedItems"] = allowedItems
             user.setVRIncr(None)
 
             user.isAlive()
@@ -985,7 +988,7 @@ class CTGP7CtwwHandler:
                     nat_quality = self.nexhttp.get_user_nat_status_quality(user)
                     userInfo["badnatmyself"] = nat_quality[0] is not None and nat_quality[0] < 0.5
                     userInfo["badnatother"] = nat_quality[1] is not None and nat_quality[1] < 0.5
-                    if (room.getMode() <= 1):
+                    if (room.getMode() <= 1 and not roomInfo["private"]):
                         userInfo["vr"] = user.getVR()[0 if room.getMode() == 0 else 1]
                         userInfo["vrIncr"] = user.getVRIncr()
                     else:

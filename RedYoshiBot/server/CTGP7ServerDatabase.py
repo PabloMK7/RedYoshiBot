@@ -161,6 +161,12 @@ class CTGP7ServerDatabase:
     def set_allowed_tracks(self, l: str):
         self.set_database_config("allowedTracks", str(l))
 
+    def get_allowed_items(self) -> str:
+        return str(self.get_database_config("allowedItems"))
+    
+    def set_allowed_items(self, l: str):
+        self.set_database_config("allowedItems", str(l))
+
     def fetch_unique_PID(self):
         pid = int(self.get_database_config("currUniquePID"))
         self.set_database_config("currUniquePID", pid + 1)

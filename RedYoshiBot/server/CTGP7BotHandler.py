@@ -52,7 +52,7 @@ def staff_server_help_array():
         "purge_console_link": ">@RedYoshiBot server purge_console_link\nRemoved console links from users that are no longer in the server.",
         "get_mii_icon": ">@RedYoshiBot server get_mii_icon (consoleID)\nGets the mii icon of the specified user.",
         "name_history": ">@RedYoshiBot server name_history (consoleID)\nGets the name history of the specified user.",
-        "config": ">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable/vrmultiplier/allowedCharacters/allowedTracks) [newValue]\nGets or sets the config parameters for online mode.",
+        "config": ">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable/vrmultiplier/allowedCharacters/allowedTracks/allowedItems) [newValue]\nGets or sets the config parameters for online mode.",
         "otplegality": ">@RedYoshiBot server otplegality (get/getall/set/clear) (consoleID)\nGets, sets or clear the otp legality of a specified console.",
         "consoleserver": ">@RedYoshiBot server consoleserver (get/set/clear)\nSets a NEX server address to the specified console.",
         "banned_ultra_shortcut": ">@RedYoshiBot server banned_ultra_shortcut (get/set/clear) (szsName) [from_min] [from_max] [to_min] [to_max] [trigger]\nManages the banned ultra shortcuts for the specified track.",
@@ -1310,7 +1310,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["config"] + "```")
                 return
             mode = tag[2]
-            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset", "blockedTrackHistory", "serveraddr", "serveravailable", "vrmultiplier", "allowedCharacters", "allowedTracks"]:
+            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset", "blockedTrackHistory", "serveraddr", "serveravailable", "vrmultiplier", "allowedCharacters", "allowedTracks", "allowedItems"]:
                 await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()["config"] + "```")
                 return
             if (len(tag) == 3):
@@ -1333,6 +1333,8 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     amount = currDatabase.get_vr_multiplier()
                 elif mode == "allowedCharacters":
                     amount = currDatabase.get_allowed_characters()
+                elif mode == "allowedItems":
+                    amount = currDatabase.get_allowed_items()
                 await message.reply( "Config for \"{}\" is: {}".format(mode, amount))
                 return
             else:
@@ -1345,7 +1347,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                         amount = str(tag[3])
                         if not ":" in amount:
                             raise ValueError()
-                    elif (mode == "allowedCharacters" or mode == "allowedTracks"):
+                    elif (mode == "allowedCharacters" or mode == "allowedTracks" or mode == "allowedItems"):
                         amount = str(tag[3])
                         if amount == "clear":
                             amount = ""
@@ -1372,6 +1374,8 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     currDatabase.set_allowed_characters(amount)
                 elif mode == "allowedTracks":
                     currDatabase.set_allowed_tracks(amount)
+                elif mode == "allowedItems":
+                    currDatabase.set_allowed_items(amount)
                 await message.reply("Config for \"{}\" is: {}".format(mode, amount))
                 return
     elif bot_cmd == "otplegality":
