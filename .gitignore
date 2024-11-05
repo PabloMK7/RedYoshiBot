@@ -3,5 +3,7 @@
 RedYoshiBot/code_sections/
 RedYoshiBot/script/
 MKTranslationDownload.py
+ChpackKeys.py
+cryptofile
 **/*.sqlite
 localUtils/

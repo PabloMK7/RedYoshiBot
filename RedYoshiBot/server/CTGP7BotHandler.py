@@ -1333,6 +1333,8 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     amount = currDatabase.get_vr_multiplier()
                 elif mode == "allowedCharacters":
                     amount = currDatabase.get_allowed_characters()
+                elif mode == "allowedTracks":
+                    amount = currDatabase.get_allowed_tracks()
                 elif mode == "allowedItems":
                     amount = currDatabase.get_allowed_items()
                 await message.reply( "Config for \"{}\" is: {}".format(mode, amount))

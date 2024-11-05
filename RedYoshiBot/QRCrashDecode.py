@@ -23,13 +23,21 @@ class QRCrashDecode:
             qrData = data
         elif (url != ""):
             try:
-                response = requests.get(url, timeout=7)
+                response = requests.get(url, timeout=7, stream=True)
                 if (response.status_code != 200):
-                    raise Exception()
-            except:
-                raise Exception("Couldn't download image!")
+                    raise Exception("Got {}".format(response.status_code))
+                response_content = BytesIO()
+                size = 0
+                for chunk in response.iter_content(1_000_000):
+                    size += len(chunk)
+                    response_content.write(chunk)
+                    if size > 50_000_000:
+                        raise ValueError('Image too large!')
+            except Exception as e:
+                raise Exception("Couldn't download image: " + repr(e))
+            response_content.seek(0)
             try:
-                file_bytes = np.asarray(bytearray(response.content), dtype=np.uint8)
+                file_bytes = np.asarray(bytearray(response_content.read()), dtype=np.uint8)
                 img = cv2.imdecode(file_bytes, cv2.IMREAD_GRAYSCALE)
                 # preprocessing using opencv
                 blur = cv2.GaussianBlur(img, (5, 5), 0)

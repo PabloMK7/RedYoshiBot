@@ -15,6 +15,8 @@ from .FunctionSearch import MK7FunctionSearch
 from . import MKTranslationDownload
 from .server.CTGP7ServerHandler import CTGP7ServerHandler
 from .HomeMenuVersionList import HomeMenuVersionList
+from .chpack.ChpackKeys import chpack_get_available_keys_as_str_list
+from .chpack.ChpackCrypto import chpack_crypt
 import hashlib
 import sqlite3
 import struct
@@ -417,12 +419,19 @@ def help_array():
         "report": "!report (Explanation)\nReports a bug with the given explanation. Can only be used in #bugs_discussion.",
         "bugcount": ">@RedYoshiBot bugcount\nShows the amount of open and closed bugs.",
         "getlang": ">@RedYoshiBot getlang (Language)\nGets the language file from the MK Translation Project spreadsheet. Can only be used by translators.",
+        "chpackcrypt": ">@RedYoshiBot chpackcrypt (encrypt/decrypt) (key_kind) [url]\nEncrypts or decrypts the files in the provided chpack file. You can either specify the file url or attach the file to the message. Only contributors can encrypt, and only owner can decrypt. Available key kinds: {}".format(chpack_get_available_keys_as_str_list()),
         "parseqr": ">@RedYoshiBot parseqr [url]\nParses the CTGP-7 QR crash data from the image url. You can either specify the image url or attach the image to the message.",
         "funcname": ">@RedYoshiBot funcname (address) (region) (version)\nFinds the Mario Kart 7 function name for a given address, region and version combination.\n- address: Address to find in hex.\n- region: Region of the game (1 - EUR, 2 - USA, 3 - JAP).\n- version: Version of the game (1 - rev0 v1.1, 2 - rev1, 3 - rev2).",
         "listcmd": ">@RedYoshiBot listcmd\nLists alls custom exclamantion commands",
 
         "server": ">@RedYoshiBot server/citraserver/bothserver (command) (options)\nRuns a server related command.\nUse \'@RedYoshiBot server help\' to get all the available server commands."
     }
+
+def private_channel_allowed_cmd():
+    return {
+        "chpackcrypt"
+    }
+
 def staff_help_array():
     return {
         "say": ">@RedYoshiBot say (channel/user) (text)\r\nSends a message in the specified channel or a DM if it is a user.",
@@ -1305,10 +1314,16 @@ async def on_message(message):
     try:
         if (message.content == ""): return
         random.seed()
-        bot_mtn = message.content.split()[0]
-        if (not is_channel_private(message.channel) and get_from_mention(bot_mtn) == client.user) and (message.author != client.user): #@RedYoshiBot
+        msg_split = message.content.split(None, 2)
+
+        bot_mtn = "" if len(msg_split) == 0 else msg_split[0]
+        bot_cmd = "" if len(msg_split) <= 1 else msg_split[1]
+        
+        if (((not is_channel_private(message.channel)) or bot_cmd in private_channel_allowed_cmd()) and get_from_mention(bot_mtn) == client.user) and (message.author != client.user): #@RedYoshiBot
+            if bot_cmd == "":
+                await message.reply( 'Hi! :3\nTo get the list of all the available commands use `@RedYoshiBot help`')
+                return
             try:
-                bot_cmd = message.content.split()[1]
                 if bot_cmd == 'mute':
                     if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split()
@@ -1394,6 +1409,51 @@ async def on_message(message):
                             await message.channel.send(file=sendFile, content="Here is your file:")
                         except Exception as e:
                             await message.channel.send( "An exception occured with your request: ```{}```".format(str(e)))
+                elif bot_cmd == 'chpackcrypt':
+                    tag = message.content.split(None)
+                    if (len(tag) != 4 and len(tag) != 5):
+                        await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["chpackcrypt"] + "```")
+                        return
+                    mode = tag[2]
+                    if mode not in ("encrypt", "decrypt"):
+                        await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["chpackcrypt"] + "```")
+                        return
+                    canencrypt = get_role(role_list()["CONTRIBUTOR"]) in get_from_mention(message.author.id).roles
+                    candecrypt = message.author.id == SELF_BOT_SERVER.owner.id
+                    if mode == "encrypt" and not canencrypt:
+                        await message.reply("You don't have permissions to do that!")
+                        return
+                    if mode == "decrypt" and not candecrypt:
+                        await message.reply("You don't have permissions to do that!")
+                        return
+                    key_kind = tag[3]
+                    url = ""
+                    if (len(tag) == 5):
+                        url = tag[4]
+                    else:
+                        if (message.reference is not None):
+                            replyFromID = message.reference.message_id
+                            try:
+                                url = (await message.channel.fetch_message(replyFromID)).attachments[0].url
+                            except:
+                                await message.reply("File not found in replied message.")
+                                return
+                        else:
+                            try:
+                                url = message.attachments[0].url
+                            except:
+                                await message.reply("File not found in message.")
+                                return
+                    dstFile = io.BytesIO()
+                    async with message.channel.typing():
+                        try:
+                            chpack_crypt(url, dstFile, key_kind, mode == "decrypt")
+                        except Exception as e:
+                            await message.reply("Failed to process chpack: ```{}```".format(escapeFormatting(repr(e), False)))
+                            return
+                        dstFile.seek(0)
+                        sendFile = discord.File(dstFile, filename="output.chpack")
+                        await message.channel.send(file=sendFile, content="Done")
                 elif bot_cmd == 'talk':
                     if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split(None)
@@ -2115,8 +2175,8 @@ async def on_message(message):
                     return
                 else:
                     await message.reply( 'Unknown command: `{}`\nTo get the list of all the available commands use `@RedYoshiBot help`'.format(bot_cmd))    
-            except IndexError:
-                await message.reply( 'Hi! :3\nTo get the list of all the available commands use `@RedYoshiBot help`')
+            except:
+                raise
         elif (is_channel_private(message.channel) and not message.author == client.user):
             staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["DELETEEDITLOGS"])
             await staff_chan.send("{} sent me the following in a DM:\n```{}```".format(message.author.mention, message.content))

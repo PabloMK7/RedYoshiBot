@@ -1001,7 +1001,7 @@ class CTGP7CtwwHandler:
                     userInfo["usingVC"] = user.usingVC
                     roomInfo["players"].append(userInfo)
                 roomInfo["regionID"] = self.lobbyToRegionID(room.lobby) if roomInfo["private"] else (self.database.get_debugonline_region() if roomInfo["debug"] else self.database.get_online_region())
-                if (room.getMode() <= 1):
+                if (room.getMode() <= 1 and not roomInfo["private"]):
                     roomInfo["players"].sort(key=lambda x:x["vr"], reverse=True)
                 if (len(roomInfo["players"]) != 0):
                     ret["rooms"].append(roomInfo)
