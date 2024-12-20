@@ -98,6 +98,7 @@ class OnlineUser:
         self.isctgp7network = False
         self.playerID = -1
         self.customCharID = 0
+        self.badgeID = 0
         self.lobby = 0
         self.uName = ""
         self.usingVC = False
@@ -166,6 +167,9 @@ class OnlineUser:
 
     def setCustomCharacter(self, charID: int):
         self.customCharID = charID
+
+    def setBadge(self, bID: int):
+        self.badgeID = bID
 
     def setUsingVoiceChat(self, usingVC: bool):
         self.usingVC = usingVC
@@ -473,12 +477,15 @@ class CTGP7CtwwHandler:
                         users[i] = u
             charIDs = [(u.customCharID if u is not None else 0) for u in users]
             names = [((u.uName + "_" + u.getName()) if u is not None else "") for u in users]
+            badgeIDs = [(u.badgeID if u is not None else 0) for u in users]
             retDoc = {}
             retNameDoc = {}
+            retBadgesDoc = {}
             for i in range(8):
                 retDoc[str(i)] = charIDs[i]
                 retNameDoc[str(i)] = names[i]
-            return (0, {"charIDs": retDoc, "names": retNameDoc})
+                retBadgesDoc[str(i)] = badgeIDs[i]
+            return (0, {"charIDs": retDoc, "names": retNameDoc, "badgeIDs": retBadgesDoc})
         
     def resetRoomPlayerIDs(self, room: OnlineRoom):
         for cID in room.players:
@@ -656,6 +663,7 @@ class CTGP7CtwwHandler:
             token = input.get("token")
             playerID = input.get("myPlayerID"); playerID = -1 if playerID is None else playerID
             charID = input.get("customCharID"); charID = 0 if charID is None else charID
+            badgeID = input.get("badgeID"); badgeID = 0 if badgeID is None else badgeID
             usingVC = input.get("voiceChat"); usingVC = False if usingVC is None else usingVC
             retDict = {}
 
@@ -678,6 +686,10 @@ class CTGP7CtwwHandler:
             user.setPlayerID(playerID)
             user.setCustomCharacter(charID)
             user.setUsingVoiceChat(usingVC)
+
+            if badgeID != 0 and not self.database.has_console_badge(cID, badgeID):
+                badgeID = 0
+            user.setBadge(badgeID)
 
             room = self.activeRooms.get(gID)
             if (room is None or not room.hasPlayer(user)):
@@ -740,7 +752,7 @@ class CTGP7CtwwHandler:
             user.isAlive()
 
             retdict = {}
-            scs = self.database.get_track_banned_ultrasc(szsName)
+            scs = [] if user.lobby != 0 else self.database.get_track_banned_ultrasc(szsName)
             if (len(scs) != 0):
                 scstring = ""
                 for item in scs:
@@ -770,6 +782,10 @@ class CTGP7CtwwHandler:
             if (room is None or not room.hasPlayer(user)):
                 return (CTWWLoginStatus.FAILED.value, {})
             
+            bID = self.database.get_event_grant_badge()
+            if bID != 0:
+                self.database.grant_badge(cID, bID)
+
             if room.getMode() <= 1 and user.lobby == 0:
                 self.database.set_console_vr(cID, [ctvr, cdvr])
             

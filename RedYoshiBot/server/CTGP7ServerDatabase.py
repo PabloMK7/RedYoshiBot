@@ -3,6 +3,8 @@ import sqlite3
 from enum import Enum
 import time
 import datetime
+import random
+from typing import List, Tuple
 
 from ..CTGP7Defines import CTGP7Defines
 
@@ -17,6 +19,8 @@ class ConsoleMessageType(Enum):
     TIMED_KICKMESSAGE = 3
 
 class CTGP7ServerDatabase:
+    created_badges = {}
+
     allowed_console_status = [
         "allgold",
         "all1star",
@@ -177,6 +181,12 @@ class CTGP7ServerDatabase:
     
     def get_nex_http_server(self):
         return str(self.get_database_config("nexhttpserver"))
+
+    def get_event_grant_badge(self):
+        return int(self.get_database_config("eventGrantBadge"))
+    
+    def set_event_grant_badge(self, bID: int):
+        self.set_database_config("eventGrantBadge", int(bID))
 
     def verify_console_legality(self, cID, cSH1, cSH2):
         with self.lock:
@@ -706,3 +716,88 @@ class CTGP7ServerDatabase:
             for row in rows:
                 ret.append([float(row[1]), float(row[2]), float(row[3]), float(row[4]), float(row[5])])
         return ret
+    
+    def add_badge(self, name: str, desc: str, icon: bytes) -> int:
+        with self.lock:
+            c = self.conn.cursor()
+            # Maintain same ID for console and Citra DBs
+            if name in CTGP7ServerDatabase.created_badges:
+                bID = CTGP7ServerDatabase.created_badges[name]
+            else:
+                bID = random.getrandbits(63)
+                CTGP7ServerDatabase.created_badges[name] = bID
+            c.execute('INSERT INTO badges VALUES (?,?,?,?)', (int(bID), str(name), str(desc), sqlite3.Binary(icon)))
+            return bID
+        
+    def edit_badge(self, bID: int, name: str, desc: str, icon: bytes):
+         with self.lock:
+            c = self.conn.cursor()
+            c.execute("UPDATE badges SET name = ?, description = ?, icon = ? WHERE bID = ?", (str(name), str(desc), sqlite3.Binary(icon), int(bID)))
+
+    def get_badge(self, bID: int):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM badges WHERE bID = ?", (int(bID),))
+            for row in rows:
+                return (row[0], row[1], row[2], bytes(row[3]))
+            return None
+    
+    def delete_badge(self, bID: int):
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute("DELETE FROM badges WHERE bID = ?", (int(bID),))
+            c.execute("DELETE FROM console_badges WHERE bID = ?", (int(bID),))
+
+    def get_all_badges(self):
+        with self.lock:
+            c = self.conn.cursor()
+            c2 = self.conn.cursor()
+            rows = c.execute("SELECT bID, name, description FROM badges")
+            ret = []
+            for row in rows:
+                count = 0
+                rows2 = c2.execute("SELECT COUNT(*) FROM console_badges WHERE bID = ?", (int(row[0]),))
+                for row2 in rows2:
+                    count = row2[0]
+                ret.append((row[0], row[1], row[2], count))
+            return ret
+        
+    def get_console_badges(self, cID: int) -> List[Tuple[int, int]]:
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM console_badges WHERE cID = ?", (int(cID),))
+            ret = []
+            for row in rows:
+                ret.append((row[1], row[2]))
+            return ret
+    
+    def has_console_badge(self, cID: int, bID: int, badges = None):
+        if badges is None:
+            badges = self.get_console_badges(cID)
+        for b in badges:
+            if bID == b[0]:
+                return True
+        return False
+
+    def grant_badge(self, cID: int, bID: int):
+        if self.has_console_badge(cID, bID):
+            return
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute("INSERT INTO console_badges VALUES (?,?,?)", (int(cID), int(bID), int(time.time())))
+
+    def ungrant_badge(self, cID: int, bID: int):
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute("DELETE FROM console_badges WHERE cID = ? AND bID = ?", (int(cID), int(bID)))
+    
+    def ungrant_all_badges(self, cID: int):
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute("DELETE FROM console_badges WHERE cID = ?", (int(cID),))
+
+    def transfer_badges(self, oldcID: int, newcID: int):
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute("DELETE FROM console_badges WHERE cID = ?", (int(newcID),))
+            c.execute("UPDATE console_badges SET cID = ? WHERE cID = ?", (int(newcID), int(oldcID)))

@@ -1093,12 +1093,12 @@ async def sendMultiMessage(channel, message, startStr, endStr):
     def splitListByLimit(stringList, size):
         curr = ""
         ret = []
-        for m in message:
+        for m in stringList:
             if (len(m) > size):
                 ret = ret + splitStrByLimit(m, size)
             elif (len(curr) + len(m) > size):
                 ret.append(curr)
-                curr = ""
+                curr = m
             else:
                 curr += m
         ret.append(curr)

@@ -12,6 +12,7 @@ import datetime
 import matplotlib.pyplot as plt
 from PIL import Image
 import io
+import requests
 
 SELF_BOT_MEMBER = None
 SELF_BOT_SERVER = None
@@ -27,7 +28,8 @@ def server_help_array():
         "help": ">@RedYoshiBot server help\nGets the help for the server specific commands.",
         "stats": ">@RedYoshiBot server stats (ct/ot/ba)\nGets the usage stats for custom tracks (ct), original tracks (ot) or battle arenas (ba).",
         "link": ">@RedYoshiBot server link (link code)\nLinks a console to your discord account using the code provided by the CTGP-7 plugin.",
-        "unlink": ">@RedYoshiBot server unlink\nUnlinks your console and discord account."
+        "unlink": ">@RedYoshiBot server unlink\nUnlinks your console and discord account.",
+        "list_badges": ">@RedYoshiBot server list_badges\nLists all the available badges.",
     }
 def staff_server_help_array():
     return {
@@ -52,10 +54,14 @@ def staff_server_help_array():
         "purge_console_link": ">@RedYoshiBot server purge_console_link\nRemoved console links from users that are no longer in the server.",
         "get_mii_icon": ">@RedYoshiBot server get_mii_icon (consoleID)\nGets the mii icon of the specified user.",
         "name_history": ">@RedYoshiBot server name_history (consoleID)\nGets the name history of the specified user.",
-        "config": ">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable/vrmultiplier/allowedCharacters/allowedTracks/allowedItems) [newValue]\nGets or sets the config parameters for online mode.",
+        "config": ">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable/vrmultiplier/allowedCharacters/allowedTracks/allowedItems/finishracebadge) [newValue]\nGets or sets the config parameters for online mode.",
         "otplegality": ">@RedYoshiBot server otplegality (get/getall/set/clear) (consoleID)\nGets, sets or clear the otp legality of a specified console.",
         "consoleserver": ">@RedYoshiBot server consoleserver (get/set/clear)\nSets a NEX server address to the specified console.",
         "banned_ultra_shortcut": ">@RedYoshiBot server banned_ultra_shortcut (get/set/clear) (szsName) [from_min] [from_max] [to_min] [to_max] [trigger]\nManages the banned ultra shortcuts for the specified track.",
+        "add_badge": ">@RedYoshiBot server add_badge (badge_name) | (badge_description)\nCreates a new badge from the provided name, description and attached bclim file.",
+        "edit_badge": ">@RedYoshiBot server edit_badge (badgeID) (badge_name) | (badge_description)\nEdits thespecified badge to the provided name, description and attached bclim file.",
+        "delete_badge": ">@RedYoshiBot server delete_badge (badgeID)\nDeletes the specified badge.",
+        "console_badge": ">@RedYoshiBot server console_badge (grant|remove) (consoleID) (badgeID)\nDoes specified operation for the console ID and badge ID.",
     }
     
 def staff_server_command_level():
@@ -87,6 +93,11 @@ def staff_server_command_level():
         "otplegality": 0,
         "consoleserver": 0,
         "banned_ultra_shortcut": 0,
+        "add_badge": 0,
+        "list_badges": 1,
+        "edit_badge": 0,
+        "delete_badge": 0,
+        "console_badge": 1,
     }
 
 async def staff_server_can_execute(message, command, silent=False):
@@ -602,11 +613,17 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isCitra: boo
 
 async def server_on_member_remove(ctgp7_server: CTGP7ServerHandler, member: discord.Member):
     try:
-        ctgp7_server.database.delete_discord_link_user(member.id)
+        cid = ctgp7_server.database.get_discord_link_user(member.id)
+        if cid is not None:
+            ctgp7_server.database.delete_discord_link_user(member.id)
+            ctgp7_server.database.ungrant_badge(cid, CTGP7Requests.badge_ids["DISCORD_LINK"])
     except:
         pass
     try:
-        ctgp7_server.citraDatabase.delete_discord_link_user(member.id)
+        cid = ctgp7_server.citraDatabase.get_discord_link_user(member.id)
+        if cid is not None:
+            ctgp7_server.citraDatabase.delete_discord_link_user(member.id)
+            ctgp7_server.citraDatabase.ungrant_badge(cid, CTGP7Requests.badge_ids["DISCORD_LINK"])
     except:
         pass
 
@@ -652,6 +669,7 @@ def get_user_info(userID):
     courseRole = get_role(role_list()["COURSECREATOR"])
     betaAccessRole = get_role(role_list()["BETAACCESS"])
     ret["canBeta"] = contrRole in member.roles or courseRole in member.roles or betaAccessRole in member.roles or member.premium_since is not None
+    ret["contrib"] = contrRole in member.roles
     return ret
 
 def transfer_console_data(ctgp7_server: CTGP7ServerHandler, srcCID: int, dstCID: int, isCitra: bool):
@@ -672,6 +690,7 @@ def transfer_console_data(ctgp7_server: CTGP7ServerHandler, srcCID: int, dstCID:
             currDatabase.set_discord_link_console(discordID, dstCID)
         # Transfer console status
         currDatabase.transfer_console_status(srcCID, dstCID)
+        currDatabase.transfer_badges(srcCID, dstCID)
         return ""
     except Exception as e:
         return str(e)
@@ -689,6 +708,7 @@ def prune_console_data(ctgp7_server: CTGP7ServerHandler, cID: int, isCitra: bool
             queue_player_role_update(discordID)
         # Delete console status
         currDatabase.clear_console_status(cID)
+        currDatabase.ungrant_all_badges(cID)
         return ""
     except Exception as e:
         return str(e)
@@ -1042,6 +1062,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             return
 
         currDatabase.set_discord_link_console(message.author.id, cID)
+        currDatabase.grant_badge(cID, CTGP7Requests.badge_ids["DISCORD_LINK"])
         del CTGP7Requests.pendingDiscordLinks[cID]
         await message.reply("Operation succeeded.")
         queue_player_role_update(message.author.id)
@@ -1114,6 +1135,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             if (discordID is None):
                 discordID = currDatabase.get_discord_link_console(consoleID)
             currDatabase.delete_discord_link_console(consoleID)
+            currDatabase.ungrant_badge(consoleID, CTGP7Requests.badge_ids["DISCORD_LINK"])
             queue_player_role_update(discordID)
             await message.reply("Operation succeeded.")
         else:
@@ -1126,6 +1148,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply("There is no console linked with your account.")
                 return
             currDatabase.delete_discord_link_console(consoleID)
+            currDatabase.ungrant_badge(consoleID, CTGP7Requests.badge_ids["DISCORD_LINK"])
             queue_player_role_update(message.author.id)
             await message.reply("Operation succeeded.")
     elif bot_cmd == "manage_vr":
@@ -1261,10 +1284,14 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             total = 0
             for ac in allCons:
                 userID = ac[1]
+                cID = ac[0]
                 member = get_from_mention(userID)
                 if (member is None):
                     currDatabase.delete_discord_link_user(userID)
+                    currDatabase.ungrant_badge(cID, CTGP7Requests.badge_ids["DISCORD_LINK"])
                     total += 1
+                else:
+                    currDatabase.grant_badge(cID, CTGP7Requests.badge_ids["DISCORD_LINK"])
             await message.reply("Done! Purged {} users.".format(total))
     elif bot_cmd == "get_mii_icon":
         if await staff_server_can_execute(message, bot_cmd):
@@ -1310,7 +1337,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["config"] + "```")
                 return
             mode = tag[2]
-            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset", "blockedTrackHistory", "serveraddr", "serveravailable", "vrmultiplier", "allowedCharacters", "allowedTracks", "allowedItems"]:
+            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset", "blockedTrackHistory", "serveraddr", "serveravailable", "vrmultiplier", "allowedCharacters", "allowedTracks", "allowedItems", "finishracebadge"]:
                 await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()["config"] + "```")
                 return
             if (len(tag) == 3):
@@ -1337,12 +1364,16 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     amount = currDatabase.get_allowed_tracks()
                 elif mode == "allowedItems":
                     amount = currDatabase.get_allowed_items()
+                elif mode == "finishracebadge":
+                    amount = currDatabase.get_event_grant_badge()
                 await message.reply( "Config for \"{}\" is: {}".format(mode, amount))
                 return
             else:
                 try:
                     if (mode == "ctCPUAmount" or mode == "cdCPUAmount" or mode == "blockedTrackHistory" or mode == "serveravailable"):
                         amount = int(tag[3])
+                    elif (mode == "finishracebadge"):
+                        amount = int(tag[3], 16)
                     elif (mode == "rubberBMult" or mode == "rubberBOffset" or mode == "vrmultiplier"):
                         amount = float(tag[3])
                     elif (mode == "serveraddr"):
@@ -1378,6 +1409,8 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     currDatabase.set_allowed_tracks(amount)
                 elif mode == "allowedItems":
                     currDatabase.set_allowed_items(amount)
+                elif mode == "finishracebadge":
+                    currDatabase.set_event_grant_badge(amount)
                 await message.reply("Config for \"{}\" is: {}".format(mode, amount))
                 return
     elif bot_cmd == "otplegality":
@@ -1502,8 +1535,152 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     msg += "- from_min: {:.04f}, from_max: {:.04f}, to_min: {:.04f}, to_max: {:.04f}, trigger: {:.04f}\n".format(entry[0], entry[1], entry[2], entry[3], entry[4])
                 msg += "```"
                 await message.reply(msg)
-
-
+    elif bot_cmd == "add_badge":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content, 2)
+            if (len(tag) != 3):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            name_desc = tag[2].split("|")
+            if (len(name_desc) != 2):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            name = name_desc[0].strip()
+            desc = name_desc[1].strip()
+            try:
+                url = message.attachments[0].url
+            except:
+                await message.reply( "File not attached, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            try:
+                response = requests.get(url, timeout=7, stream=True)
+                if (response.status_code != 200):
+                    raise Exception("Got {}".format(response.status_code))
+                response_content = io.BytesIO()
+                size = 0
+                for chunk in response.iter_content(10_000):
+                    size += len(chunk)
+                    response_content.write(chunk)
+                    if size > 20_000:
+                        raise ValueError('Image too large!')
+            except Exception as e:
+                await message.reply("Couldn't download image: " + repr(e))
+                return
+            response_content.seek(0)
+            icon = response_content.read()
+            bID = currDatabase.add_badge(name, desc, icon)
+            await message.reply("Badge created:\n- `{}` (0x{:016X}): `{}`".format(name, bID, desc))
+    elif bot_cmd == "edit_badge":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content, 3)
+            if (len(tag) != 4):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            bID = tag[2]
+            try:
+                bID = int(bID, 16)
+                if (bID == 0):
+                    raise ValueError()
+                badge = currDatabase.get_badge(bID)
+                if badge is None:
+                    raise ValueError()
+            except ValueError:
+                await message.reply("Invalid badge ID.")
+                return
+            name_desc = tag[3].split("|")
+            if (len(name_desc) != 2):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            name = name_desc[0].strip()
+            desc = name_desc[1].strip()
+            try:
+                url = message.attachments[0].url
+            except:
+                await message.reply( "File not attached, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            try:
+                response = requests.get(url, timeout=7, stream=True)
+                if (response.status_code != 200):
+                    raise Exception("Got {}".format(response.status_code))
+                response_content = io.BytesIO()
+                size = 0
+                for chunk in response.iter_content(10_000):
+                    size += len(chunk)
+                    response_content.write(chunk)
+                    if size > 20_000:
+                        raise ValueError('Image too large!')
+            except Exception as e:
+                await message.reply("Couldn't download image: " + repr(e))
+                return
+            response_content.seek(0)
+            icon = response_content.read()
+            currDatabase.edit_badge(bID, name, desc, icon)
+            await message.reply("Badge edited:\n- `{}` (0x{:016X}): `{}`".format(name, bID, desc))
+    elif bot_cmd == "delete_badge":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content, 2)
+            if (len(tag) != 3):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            bID = tag[2]
+            try:
+                bID = int(bID, 16)
+                if (bID == 0):
+                    raise ValueError()
+                badge = currDatabase.get_badge(bID)
+                if badge is None:
+                    raise ValueError()
+            except ValueError:
+                await message.reply("Invalid badge ID.")
+                return
+            currDatabase.delete_badge(bID)
+            await message.reply( "Operation succeeded.")
+    elif bot_cmd == "console_badge":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message.content, 4)
+            if (len(tag) != 5):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            mode = tag[2]
+            if mode not in ["grant", "remove"]:
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            cID = tag[3]
+            try:
+                cID = int(cID, 16)
+                if (cID == 0):
+                    raise ValueError()
+            except ValueError:
+                await message.reply("Invalid console ID.")
+                return
+            bID = tag[4]
+            try:
+                bID = int(bID, 16)
+                if (bID == 0):
+                    raise ValueError()
+                badge = currDatabase.get_badge(bID)
+                if badge is None:
+                    raise ValueError()
+            except ValueError:
+                await message.reply("Invalid badge ID.")
+                return
+            if mode == "grant":
+                currDatabase.grant_badge(cID, bID)
+            elif mode == "remove":
+                currDatabase.ungrant_badge(cID, bID)
+            await message.reply( "Operation succeeded.")
+    elif bot_cmd == "list_badges":
+        is_staff = await staff_server_can_execute(message, bot_cmd, True)
+        badge_list = currDatabase.get_all_badges()
+        msg = []
+        for b in badge_list:
+            if is_staff:
+                msg.append("- `{}` (0x{:016X}) ({} players): `{}`\n".format(b[1], b[0], b[3], b[2]))
+            else:
+                if b[1][0] == "_":
+                    continue
+                msg.append("- `{}` ({} players): `{}`\n".format(b[1], b[3], b[2]))
+        await sendMultiMessage(message.channel, msg, "Badge list:\n", "")
     else:
         await message.reply( "Invalid server command, use `@RedYoshiBot server help` to get all the available server commands.")
         
