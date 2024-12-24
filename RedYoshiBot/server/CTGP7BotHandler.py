@@ -658,8 +658,9 @@ async def server_bot_loop(ctgp7_server: CTGP7ServerHandler):
 def get_user_info(userID):
     member = get_from_mention(userID)
     if (member is None):
-        return None
+        return (None, None)
     ret = {}
+    ret_internal = {}
     ret["name"] = member.name
     if (member.discriminator is not None and str(member.discriminator) != "0"):
         ret["discrim"] = str(member.discriminator)
@@ -669,8 +670,16 @@ def get_user_info(userID):
     courseRole = get_role(role_list()["COURSECREATOR"])
     betaAccessRole = get_role(role_list()["BETAACCESS"])
     ret["canBeta"] = contrRole in member.roles or courseRole in member.roles or betaAccessRole in member.roles or member.premium_since is not None
-    ret["contrib"] = contrRole in member.roles
-    return ret
+    ret_internal["contrib"] = contrRole in member.roles
+    ret_internal["booster"] = member.premium_since is not None
+    return (ret, ret_internal)
+
+def unlink_console(database: CTGP7ServerDatabase, cID: int):
+    discordID = database.get_discord_link_console(cID)
+    if discordID is not None:
+        database.delete_discord_link_console(cID)
+        queue_player_role_update(discordID)
+    database.ungrant_badge(cID, CTGP7Requests.badge_ids["DISCORD_LINK"])
 
 def transfer_console_data(ctgp7_server: CTGP7ServerHandler, srcCID: int, dstCID: int, isCitra: bool):
     currDatabase = ctgp7_server.citraDatabase if isCitra else ctgp7_server.database
@@ -1132,11 +1141,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply("Specified ID has no link established.")
                 return
 
-            if (discordID is None):
-                discordID = currDatabase.get_discord_link_console(consoleID)
-            currDatabase.delete_discord_link_console(consoleID)
-            currDatabase.ungrant_badge(consoleID, CTGP7Requests.badge_ids["DISCORD_LINK"])
-            queue_player_role_update(discordID)
+            unlink_console(currDatabase, consoleID)
             await message.reply("Operation succeeded.")
         else:
             tag = get_server_bot_args(message.content)
@@ -1147,9 +1152,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             if (consoleID is None):
                 await message.reply("There is no console linked with your account.")
                 return
-            currDatabase.delete_discord_link_console(consoleID)
-            currDatabase.ungrant_badge(consoleID, CTGP7Requests.badge_ids["DISCORD_LINK"])
-            queue_player_role_update(message.author.id)
+            unlink_console(currDatabase, consoleID)
             await message.reply("Operation succeeded.")
     elif bot_cmd == "manage_vr":
         if await staff_server_can_execute(message, bot_cmd):

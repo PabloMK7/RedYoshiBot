@@ -41,9 +41,12 @@ class CTGP7Requests:
         "RAINBOW_PLAYER": 0x0721EFB83424F89F,
         "DISCORD_LINK": 0x005BEE8EE0F9EE79,
         "CONTRIBUTOR": 0x3AEF2F9B8A3DA167,
+        "CURRENT_SERVER_BOOSTER": 0x242239C1E96A2B37,
+        "SERVER_BOOSTER": 0x3A20DBEE90993942,
     }
 
     get_user_info = None
+    unlink_console = None
     queue_player_role_update = None
 
     pendingDiscordLinks = {}
@@ -91,13 +94,20 @@ class CTGP7Requests:
             self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["RAINBOW_PLAYER"])
 
         contrib_badge = False
+        booster_badge = False
         discordLink = self.currDatabase.get_discord_link_console(self.cID)
         if discordLink is not None:
-            usrInfo = CTGP7Requests.get_user_info(discordLink)
-            if usrInfo is not None:
-                contrib_badge = usrInfo["contrib"]
+            (_, usrInfoPrivate) = CTGP7Requests.get_user_info(discordLink)
+            if usrInfoPrivate is not None:
+                contrib_badge = usrInfoPrivate["contrib"]
+                booster_badge = usrInfoPrivate["booster"]
         if contrib_badge:
             self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["CONTRIBUTOR"])
+        if booster_badge:
+            self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["CURRENT_SERVER_BOOSTER"])
+            self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["SERVER_BOOSTER"])
+        else:
+            self.currDatabase.ungrant_badge(self.cID, CTGP7Requests.badge_ids["CURRENT_SERVER_BOOSTER"])
 
         if (queue_update):
             discordID = self.currDatabase.get_discord_link_console(self.cID)
@@ -185,6 +195,10 @@ class CTGP7Requests:
     def req_discord_info(self, input):
         if (self.isCitra):
             return (-1, 0)
+        unlink = input.get("unlink")
+        if unlink is not None and unlink:
+            CTGP7Requests.unlink_console(self.currDatabase, self.cID)
+            return (0, {})
         discordLink = self.currDatabase.get_discord_link_console(self.cID)
         if (discordLink is None):
             if ("request" in input and input["request"]):
@@ -196,7 +210,7 @@ class CTGP7Requests:
         else:
             if (self.cID in CTGP7Requests.pendingDiscordLinks):
                 del CTGP7Requests.pendingDiscordLinks[self.cID]
-            usrInfo = CTGP7Requests.get_user_info(discordLink)
+            (usrInfo, _) = CTGP7Requests.get_user_info(discordLink)
             if (usrInfo is None):
                 self.currDatabase.delete_discord_link_console(self.cID)
                 self.currDatabase.ungrant_badge(self.cID, CTGP7Requests.badge_ids["DISCORD_LINK"])

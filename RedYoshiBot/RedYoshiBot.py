@@ -1187,7 +1187,7 @@ async def checkNitroScam(message):
                 pass
             
 
-from .server.CTGP7BotHandler import queue_player_role_update, get_user_info, handle_server_command, handler_server_init_loop, handler_server_update_globals, kick_message_callback, server_message_logger_callback, server_on_member_remove
+from .server.CTGP7BotHandler import queue_player_role_update, get_user_info, unlink_console, handle_server_command, handler_server_init_loop, handler_server_update_globals, kick_message_callback, server_message_logger_callback, server_on_member_remove
 
 on_ready_completed = False
 @client.event
@@ -1217,6 +1217,7 @@ async def on_ready():
     ctgp7_server.citraDatabase.setKickLogCallback(kick_message_callback)
     CTGP7ServerHandler.loggerCallback = server_message_logger_callback
     CTGP7Requests.get_user_info = get_user_info
+    CTGP7Requests.unlink_console = unlink_console
     CTGP7Requests.queue_player_role_update = queue_player_role_update
     asyncio.ensure_future(muted_task())
     asyncio.ensure_future(change_game())
