@@ -17,37 +17,42 @@ class QRCrashDecode:
     gameRevision = {0: "Rev0", 1: "Rev0 1.1", 2: "Rev1", 3: "1.2"}
     exceptionType = {0: "Prefetch abort", 1: "Data abort", 2: "Undefined instruction", 3: "Abort", 4: "Custom", 5: "Unknown"}
     gameState = {0: "Uninitialized", 1: "Patch Process", 2: "Main", 3: "Menu (ID: {})", 4: "Race ({})", 5: "Trophy"}
+    
+    @staticmethod
+    def downloadDecodeQR(url):
+        try:
+            response = requests.get(url, timeout=7, stream=True)
+            if (response.status_code != 200):
+                raise Exception("Got {}".format(response.status_code))
+            response_content = BytesIO()
+            size = 0
+            for chunk in response.iter_content(1_000_000):
+                size += len(chunk)
+                response_content.write(chunk)
+                if size > 50_000_000:
+                    raise ValueError('Image too large!')
+        except Exception as e:
+            raise Exception("Couldn't download image: " + repr(e))
+        response_content.seek(0)
+        try:
+            file_bytes = np.asarray(bytearray(response_content.read()), dtype=np.uint8)
+            img = cv2.imdecode(file_bytes, cv2.IMREAD_GRAYSCALE)
+            # preprocessing using opencv
+            blur = cv2.GaussianBlur(img, (5, 5), 0)
+            ret, img = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        except:
+            raise Exception("Invalid image provided!")
+        try:
+            qrData = pyzbar.decode(img)[0].data
+        except:
+            raise Exception("QR Code data not found!")
+        return qrData
 
     def __init__(self, url = "", data = ""):
         if (data != ""):
             qrData = data
         elif (url != ""):
-            try:
-                response = requests.get(url, timeout=7, stream=True)
-                if (response.status_code != 200):
-                    raise Exception("Got {}".format(response.status_code))
-                response_content = BytesIO()
-                size = 0
-                for chunk in response.iter_content(1_000_000):
-                    size += len(chunk)
-                    response_content.write(chunk)
-                    if size > 50_000_000:
-                        raise ValueError('Image too large!')
-            except Exception as e:
-                raise Exception("Couldn't download image: " + repr(e))
-            response_content.seek(0)
-            try:
-                file_bytes = np.asarray(bytearray(response_content.read()), dtype=np.uint8)
-                img = cv2.imdecode(file_bytes, cv2.IMREAD_GRAYSCALE)
-                # preprocessing using opencv
-                blur = cv2.GaussianBlur(img, (5, 5), 0)
-                ret, img = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-            except:
-                raise Exception("Invalid image provided!")
-            try:
-                qrData = pyzbar.decode(img)[0].data
-            except:
-                raise Exception("QR Code data not found!")
+            qrData = QRCrashDecode.downloadDecodeQR(url)
         else:
             raise Exception("No data provided!")
         

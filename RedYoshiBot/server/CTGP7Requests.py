@@ -43,6 +43,14 @@ class CTGP7Requests:
         "CONTRIBUTOR": 0x3AEF2F9B8A3DA167,
         "CURRENT_SERVER_BOOSTER": 0x242239C1E96A2B37,
         "SERVER_BOOSTER": 0x3A20DBEE90993942,
+        "ALL_GOLD": 0x404D12637BDE7057,
+        "ALL_1STAR": 0x459F4116A6CD16EE,
+        "ALL_3STAR": 0x6C385A941FA4B4F2,
+        "ALL_MISSION": 0x3C17AE89F6C1A9EC,
+        "ALL_BLUE_COINS": 0x638AA0998344ACE2,
+        "5K_VR": 0x19C31A57E86591E6,
+        "10K_VR": 0x48300D897426DCE9,
+        "50K_VR": 0x686517CAD6BC107D,
     }
 
     get_user_info = None
@@ -75,8 +83,29 @@ class CTGP7Requests:
             new = input.get(s, False)
             if new: count += 1
             if (not prev and new):
+                prev = new
                 self.currDatabase.set_console_status(self.cID, s, 1)
                 queue_update = True
+            if s == "allgold" and prev:
+                self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["ALL_GOLD"])
+            if s == "all1star" and prev:
+                self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["ALL_1STAR"])
+            if s == "all3star" and prev:
+                self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["ALL_3STAR"])
+            if s == "all10pts" and prev:
+                self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["ALL_MISSION"])
+            if s == "bluecoin" and prev:
+                self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["ALL_BLUE_COINS"])
+        
+        vrData = self.currDatabase.get_console_vr(self.cID)
+        vr = max(vrData.ctVR, vrData.cdVR)
+        if vr >= 5000:
+            self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["5K_VR"])
+        if vr >= 10000:
+            self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["10K_VR"])
+        if vr >= 50000:
+            self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["50K_VR"])
+
         
         badges = self.currDatabase.get_console_badges(self.cID)
 

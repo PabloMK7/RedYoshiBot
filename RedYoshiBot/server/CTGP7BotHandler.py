@@ -4,6 +4,7 @@ from .CTGP7ServerHandler import CTGP7ServerHandler
 from .CTGP7ServerDatabase import ConsoleMessageType, CTGP7ServerDatabase
 from ..RedYoshiBot import FakeMember, ch_list, is_channel, is_channel_private, get_role, parsetime, sendMultiMessage, escapeFormatting, role_list, get_from_mention, CreateFakeMember, applyRole, removeRole
 from ..CTGP7Defines import CTGP7Defines
+from ..QRCrashDecode import QRCrashDecode
 import discord
 import asyncio
 import threading
@@ -61,7 +62,7 @@ def staff_server_help_array():
         "add_badge": ">@RedYoshiBot server add_badge (badge_name) | (badge_description)\nCreates a new badge from the provided name, description and attached bclim file.",
         "edit_badge": ">@RedYoshiBot server edit_badge (badgeID) (badge_name) | (badge_description)\nEdits thespecified badge to the provided name, description and attached bclim file.",
         "delete_badge": ">@RedYoshiBot server delete_badge (badgeID)\nDeletes the specified badge.",
-        "console_badge": ">@RedYoshiBot server console_badge (grant|remove) (consoleID) (badgeID)\nDoes specified operation for the console ID and badge ID.",
+        "console_badge": ">@RedYoshiBot server console_badge (grant|remove|list) (consoleID) [badgeID]\nDoes specified operation for the console ID and badge ID.",
     }
     
 def staff_server_command_level():
@@ -721,6 +722,32 @@ def prune_console_data(ctgp7_server: CTGP7ServerHandler, cID: int, isCitra: bool
         return ""
     except Exception as e:
         return str(e)
+    
+async def parse_console_ID(message: discord.Message, candidateID: str, silent: bool = False):
+    candidateID = str(candidateID)
+    try:
+        if candidateID.startswith("QR"):
+            if candidateID.startswith("QR:"):
+                url = candidateID[3:]
+            else:
+                try:
+                    url = message.attachments[0].url
+                except:
+                    raise Exception("Message does not have an attached image")
+            candidateID = QRCrashDecode.downloadDecodeQR(url)
+            if isinstance(candidateID, bytes):
+                candidateID = candidateID.decode()
+
+        if (candidateID.startswith("0x")):
+            candidateID = candidateID[2:]
+        try:
+            candidateID = int(candidateID, 16)
+        except:
+            raise Exception("Invalid console ID.")
+        return candidateID
+    except Exception as e:
+        if not silent: await message.reply(str(e))
+        return None
 
 stats_command_last_exec = datetime.datetime.utcnow()
 async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: discord.Message, isCitra: bool):
@@ -839,7 +866,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
     elif bot_cmd == "kick" or bot_cmd == "skick":
         if await staff_server_can_execute(message, bot_cmd):
             tag = get_server_bot_args(message.content, 4)
-            if (len(tag) < 2):
+            if (len(tag) <= 2):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
             consoleID = tag[2]
@@ -974,15 +1001,8 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
             mode = tag[2]
-            consoleID = tag[3]
-            if (consoleID.startswith("0x")):
-                consoleID = consoleID[2:]
-            try:
-                consoleID = int(consoleID, 16)
-                if (consoleID == 0):
-                    raise ValueError()
-            except ValueError:
-                await message.reply( "Invalid console ID.")
+            consoleID = await parse_console_ID(message, tag[3])
+            if consoleID is None:
                 return
             if mode not in ["get", "set", "clear"]:
                 await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()[bot_cmd] + "```")
@@ -1002,15 +1022,8 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
             mode = tag[2]
-            consoleID = tag[3]
-            if (consoleID.startswith("0x")):
-                consoleID = consoleID[2:]
-            try:
-                consoleID = int(consoleID, 16)
-                if (consoleID == 0):
-                    raise ValueError()
-            except ValueError:
-                await message.reply("Invalid console ID.")
+            consoleID = await parse_console_ID(message, tag[3])
+            if consoleID is None:
                 return
             if mode not in ["get", "set", "clear"]:
                 await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()[bot_cmd] + "```")
@@ -1162,15 +1175,8 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 return
             mode = tag[2]
             game = tag[4]
-            consoleID = tag[3]
-            if (consoleID.startswith("0x")):
-                consoleID = consoleID[2:]
-            try:
-                consoleID = int(consoleID, 16)
-                if (consoleID == 0):
-                    raise ValueError()
-            except ValueError:
-                await message.reply( "Invalid console ID.")
+            consoleID = await parse_console_ID(message, tag[3])
+            if consoleID is None:
                 return
             if mode not in ["get", "set"]:
                 await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()[bot_cmd] + "```")
@@ -1244,15 +1250,8 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             if (len(tag) != 3):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
-            consoleID = tag[2]
-            if (consoleID.startswith("0x")):
-                consoleID = consoleID[2:]
-            try:
-                consoleID = int(consoleID, 16)
-                if (consoleID == 0):
-                    raise ValueError()
-            except ValueError:
-                await message.reply("Invalid source console ID.")
+            consoleID = await parse_console_ID(message, tag[2])
+            if consoleID is None:
                 return
             res = prune_console_data(ctgp7_server, consoleID, isCitra)
             if (res == ""):
@@ -1302,10 +1301,8 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             if (len(tag) != 3):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["get_mii_icon"] + "```")
                 return
-            try:
-                consoleID = int(tag[2], 16)
-            except:
-                await message.reply("Invalid console ID provided.")
+            consoleID = await parse_console_ID(message, tag[2])
+            if consoleID is None:
                 return
             miiIcon = currCtwwHandler.getMiiIcon(consoleID)
             miiName = currDatabase.get_console_last_name(consoleID)
@@ -1322,10 +1319,8 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             if (len(tag) != 3):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["name_history"] + "```")
                 return
-            try:
-                consoleID = int(tag[2], 16)
-            except:
-                await message.reply("Invalid console ID provided.")
+            consoleID = await parse_console_ID(message, tag[2])
+            if consoleID is None:
                 return
             name_list = currDatabase.get_console_name_history(consoleID)
             msg = "Name history for specified ID: ```\n"
@@ -1641,37 +1636,50 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
     elif bot_cmd == "console_badge":
         if await staff_server_can_execute(message, bot_cmd):
             tag = get_server_bot_args(message.content, 4)
-            if (len(tag) != 5):
+            if (len(tag) != 5 and len(tag) != 4):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
             mode = tag[2]
-            if mode not in ["grant", "remove"]:
+            if mode not in ["grant", "remove", "list"]:
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
-            cID = tag[3]
-            try:
-                cID = int(cID, 16)
-                if (cID == 0):
-                    raise ValueError()
-            except ValueError:
-                await message.reply("Invalid console ID.")
+            cID = await parse_console_ID(message, tag[3])
+            if cID is None:
                 return
-            bID = tag[4]
-            try:
-                bID = int(bID, 16)
-                if (bID == 0):
-                    raise ValueError()
-                badge = currDatabase.get_badge(bID)
-                if badge is None:
-                    raise ValueError()
-            except ValueError:
-                await message.reply("Invalid badge ID.")
-                return
-            if mode == "grant":
-                currDatabase.grant_badge(cID, bID)
-            elif mode == "remove":
-                currDatabase.ungrant_badge(cID, bID)
-            await message.reply( "Operation succeeded.")
+            if mode == "list":
+                if (len(tag) != 4):
+                    await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                    return
+                badge_list = currDatabase.get_console_badges(cID)
+                msg = []
+                for b in badge_list:
+                    badge_info = currDatabase.get_badge(b[0])
+                    if badge_info is None:
+                        continue
+                    dt = datetime.datetime.fromtimestamp(float(b[1]))
+                    msg.append("- `{}` (0x{:016X}) ({}): `{}`\n".format(badge_info[1], badge_info[0], str(dt), badge_info[2]))
+                
+                await sendMultiMessage(message.channel, msg, "Badge list for 0x{:016X}:\n".format(cID), "")
+            else:
+                if (len(tag) != 5):
+                    await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                    return
+                bID = tag[4]
+                try:
+                    bID = int(bID, 16)
+                    if (bID == 0):
+                        raise ValueError()
+                    badge = currDatabase.get_badge(bID)
+                    if badge is None:
+                        raise ValueError()
+                except ValueError:
+                    await message.reply("Invalid badge ID.")
+                    return
+                if mode == "grant":
+                    currDatabase.grant_badge(cID, bID)
+                elif mode == "remove":
+                    currDatabase.ungrant_badge(cID, bID)
+                await message.reply( "Operation succeeded.")
     elif bot_cmd == "list_badges":
         is_staff = await staff_server_can_execute(message, bot_cmd, True)
         badge_list = currDatabase.get_all_badges()

@@ -241,6 +241,8 @@ class CTGP7ServerDatabase:
                 ret = []
                 for row in rows:
                     if (i >= amount): break
+                    if CTGP7Defines.getTrackNameFromSzs(row[0]) == "???":
+                        continue
                     ret.append([row[0], 0, row[1]])
                     i += 1
                 return ret
@@ -252,6 +254,8 @@ class CTGP7ServerDatabase:
                 ret = []
                 for row in rows:
                     if (i >= amount): break
+                    if CTGP7Defines.getTrackNameFromSzs(row[0]) == "???":
+                        continue
                     prevValue = c2.execute("SELECT SUM(freq) FROM stats_tracksfreq WHERE id = ? AND split < ?", (str(row[0]), int(currsplit))).fetchone()[0]
                     ret.append([row[0], row[2], 0 if prevValue is None else prevValue])
                     i += 1
@@ -267,6 +271,8 @@ class CTGP7ServerDatabase:
 
     def increment_track_frequency(self, szsName, value):
         currsplit = self.get_track_freq_split()
+        if CTGP7Defines.getTrackNameFromSzs(szsName) == "???":
+            return
         with self.lock:
             c = self.conn.cursor()
             rows = c.execute("SELECT * FROM stats_tracksfreq WHERE id = ? AND split = ?", (str(szsName),int(currsplit)))
