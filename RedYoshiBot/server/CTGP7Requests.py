@@ -51,6 +51,7 @@ class CTGP7Requests:
         "5K_VR": 0x19C31A57E86591E6,
         "10K_VR": 0x48300D897426DCE9,
         "50K_VR": 0x686517CAD6BC107D,
+        "BETA_TESTER": 0x4742331927F672C9,
     }
 
     get_user_info = None
@@ -225,6 +226,10 @@ class CTGP7Requests:
         if (self.isCitra):
             return (-1, 0)
         unlink = input.get("unlink")
+        
+        wantsDiscordBetaBadge = input.get("discordBetaBadge"); 
+        if wantsDiscordBetaBadge is None: wantsDiscordBetaBadge = False
+        
         if unlink is not None and unlink:
             CTGP7Requests.unlink_console(self.currDatabase, self.cID)
             return (0, {})
@@ -244,6 +249,9 @@ class CTGP7Requests:
                 self.currDatabase.delete_discord_link_console(self.cID)
                 self.currDatabase.ungrant_badge(self.cID, CTGP7Requests.badge_ids["DISCORD_LINK"])
                 return self.req_discord_info(input)
+            else:
+                if usrInfo["canBeta"] and wantsDiscordBetaBadge:
+                    self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["BETA_TESTER"])
             return (0, usrInfo)
 
     def get_beta_version(self, input):
