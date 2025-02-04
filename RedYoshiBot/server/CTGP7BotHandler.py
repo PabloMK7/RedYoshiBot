@@ -157,41 +157,23 @@ def purge_player_name_symbols(line: str):
     toTranslate = dict.fromkeys(map(ord, '\n\r\u2705\u2757\u2755'), None)
     return line.translate(toTranslate)
 
-def gen_course_usage_embed(database: CTGP7ServerDatabase, course_type: int):
+async def send_course_usage_list(message: discord.Message, database: CTGP7ServerDatabase, course_type: int):
     mostTracks = database.get_most_played_tracks(course_type, 10000)
-    tName = ""
-    if (course_type == 0):
-        tName = "Original Tracks"
-    elif (course_type == 1):
-        tName = "Custom Tracks"
-    elif (course_type == 2):
-        tName = "Battle Arenas"
-    embed = discord.Embed(title="Most Played Tracks", description=tName, color=0xff0000, timestamp=datetime.datetime.now())
+    position_list = []
     currTrack = 1
-    for d in range(0, 4):
-        slic = []
-        if (d < 2):
-            slic = mostTracks[:(len(mostTracks)//2)]
+    for k in mostTracks:
+        trackName = CTGP7Defines.getTrackNameFromSzs(k[0])
+        position = str(currTrack)
+        positionSpaces = " " * max((4 - len(position)), 0)
+        splitSpaces = " " * max((32 - len(trackName)), 0)
+        if (k[1] != 0):
+            split = "{} ({})".format(str(k[1]), str(k[1]+k[2]))
         else:
-            slic = mostTracks[(len(mostTracks)//2):]
-        if (d == 2):
-            embed.add_field(name="** **", value="** **", inline=False)
-        mostPlayedStr = "```\n"
-        for k in slic:
-            if (d % 2 == 0):
-                trackName = CTGP7Defines.getTrackNameFromSzs(k[0])
-                position = str(currTrack)
-                positionSpaces = " " * max((4 - len(position)), 0)
-                mostPlayedStr += "{}.{}{}\n".format(position, positionSpaces, trackName)
-                currTrack += 1
-            else:
-                if (k[1] != 0):
-                    mostPlayedStr += "{} ({})\n".format(str(k[1]), str(k[1]+k[2]))
-                else:
-                    mostPlayedStr += "{}\n".format(str(k[2]))
-        mostPlayedStr += "```"
-        embed.add_field(name="** **", value=mostPlayedStr, inline=True)
-    return embed
+            split = "{}".format(str(k[2]))
+        position_list.append("{}.{}{}{}{}\n".format(position, positionSpaces, trackName, splitSpaces, split))
+        currTrack += 1
+    
+    await sendMultiMessage(message.channel, position_list, "```\n", "```")
 
 server_message_logger_lock = threading.Lock()
 server_message_logger_pending = ""
@@ -1055,8 +1037,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             opt = 1
         elif (tag[2] == "ba"):
             opt = 2
-        embed = gen_course_usage_embed(currDatabase, opt)
-        await message.reply(embed=embed)
+        await send_course_usage_list(message, currDatabase, opt)
     elif bot_cmd == "link":
         if (isCitra):
             await message.reply("Operation not supported with Citra.")
@@ -1657,7 +1638,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     if badge_info is None:
                         continue
                     dt = datetime.datetime.fromtimestamp(float(b[1]))
-                    msg.append("- `{}` (0x{:016X}) ({}): `{}`\n".format(badge_info[1], badge_info[0], str(dt), badge_info[2]))
+                    msg.append("- `{}` (0x{:016X}) ({}): `{}`\n".format(badge_info[1], badge_info[0], str(dt), badge_info[2].replace("\n", " ")))
                 
                 await sendMultiMessage(message.channel, msg, "Badge list for 0x{:016X}:\n".format(cID), "")
             else:
@@ -1686,12 +1667,12 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
         msg = []
         for b in badge_list:
             if is_staff:
-                msg.append("- `{}` (0x{:016X}) ({} players): `{}`\n".format(b[1], b[0], b[3], b[2]))
+                msg.append("- `{}` (0x{:016X}) ({} players): `{}`\n".format(b[1], b[0], b[3], b[2].replace("\n", " ")))
             else:
                 if b[1][0] == "_":
                     continue
-                msg.append("- `{}` ({} players): `{}`\n".format(b[1], b[3], b[2]))
-        await sendMultiMessage(message.channel, msg, "Badge list:\n", "")
+                msg.append("- `{}` ({} players): `{}`\n".format(b[1], b[3], b[2].replace("\n", " ")))
+        await sendMultiMessage(message.channel, msg, "", "")
     else:
         await message.reply( "Invalid server command, use `@RedYoshiBot server help` to get all the available server commands.")
         
