@@ -117,7 +117,8 @@ async def staff_server_can_execute(message, command, silent=False):
         await message.channel.send("{}, you don't have permission to do that!".format(message.author.name))
     return retVal
 
-def get_server_bot_args(content: str, maxslplits=-1): # splits: amount of cuts after "server"
+def get_server_bot_args(message: discord.message, maxslplits=-1): # splits: amount of cuts after "server"
+    content = message.content
     realsplits = maxslplits + 1 if maxslplits != -1 else maxslplits
     return content.split(maxsplit=realsplits)[1:]
 
@@ -737,12 +738,12 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
     currDatabase = ctgp7_server.citraDatabase if isCitra else ctgp7_server.database
     currCtwwHandler = ctgp7_server.citraCtwwHandler if isCitra else ctgp7_server.ctwwHandler
     try:
-        bot_cmd = get_server_bot_args(message.content, 2)[1]
+        bot_cmd = get_server_bot_args(message, 2)[1]
     except IndexError:
         await message.reply( "Invalid syntax, use `@RedYoshiBot server help` to get all the available server commands")
         return
     if (bot_cmd == "help"):
-        tag = get_server_bot_args(message.content)
+        tag = get_server_bot_args(message)
         if is_channel(message, ch_list()["BOTCHAT"]) or await staff_server_can_execute(message, bot_cmd, silent=True) or is_channel_private(message.channel):
             if (len(tag) > 2):
                 if await staff_server_can_execute(message, bot_cmd, silent=True):
@@ -772,7 +773,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             return
     elif bot_cmd == "version":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content)
+            tag = get_server_bot_args(message)
             if (len(tag) != 3 and len(tag) != 4):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["version"] + "```")
                 return
@@ -803,7 +804,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 return
     elif bot_cmd == "tracksplit":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content)
+            tag = get_server_bot_args(message)
             if (len(tag) != 2 and len(tag) != 3):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["tracksplit"] + "```")
                 return
@@ -827,7 +828,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 return
     elif bot_cmd == "region":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content)
+            tag = get_server_bot_args(message)
             if (len(tag) != 2 and len(tag) != 3):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["region"] + "```")
                 return
@@ -847,7 +848,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 return
     elif bot_cmd == "kick" or bot_cmd == "skick":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content, 4)
+            tag = get_server_bot_args(message, 4)
             if (len(tag) <= 2):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
@@ -889,7 +890,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             return
     elif bot_cmd == "ban" or bot_cmd == "sban":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content, 3)
+            tag = get_server_bot_args(message, 3)
             if (len(tag) != 4):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
@@ -909,7 +910,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             return
     elif bot_cmd == "message":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content, 4)
+            tag = get_server_bot_args(message, 4)
             if (len(tag) != 5):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["message"] + "```")
                 return
@@ -939,7 +940,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             return
     elif bot_cmd == "clear":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content, 2)
+            tag = get_server_bot_args(message, 2)
             if (len(tag) != 3):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["clear"] + "```")
                 return
@@ -959,7 +960,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             return
     elif bot_cmd == "disband":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content, 2)
+            tag = get_server_bot_args(message, 2)
             if (len(tag) != 3):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["disband"] + "```")
                 return
@@ -978,7 +979,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             return
     elif bot_cmd == "console_verify":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content, 3)
+            tag = get_server_bot_args(message, 3)
             if (len(tag) != 4):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
@@ -999,7 +1000,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Operation succeeded.")
     elif bot_cmd == "console_admin":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content, 3)
+            tag = get_server_bot_args(message, 3)
             if (len(tag) != 4):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
@@ -1019,7 +1020,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 currDatabase.set_console_is_admin(consoleID, mode == "set")
                 await message.reply( "Operation succeeded.")
     elif bot_cmd == "stats":
-        tag = get_server_bot_args(message.content)
+        tag = get_server_bot_args(message)
         if (len(tag) != 3):
             await message.reply( "Invalid syntax, correct usage:\r\n```" + server_help_array()["stats"] + "```")
             return
@@ -1043,7 +1044,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             await message.reply("Operation not supported with Citra.")
             return
         
-        tag = get_server_bot_args(message.content)
+        tag = get_server_bot_args(message)
         if (len(tag) != 3):
             await message.reply( "Invalid syntax, correct usage:\r\n```" + server_help_array()["link"] + "```")
             return
@@ -1071,7 +1072,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
         queue_player_role_update(message.author.id)
     elif bot_cmd == "getlink":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content)
+            tag = get_server_bot_args(message)
             if (len(tag) != 3):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["getlink"] + "```")
                 return
@@ -1107,7 +1108,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             await message.reply("`{:016X} {}` -> {}".format(consoleID, lastName, member.mention))
     elif bot_cmd == "unlink":
         if await staff_server_can_execute(message, bot_cmd, True):
-            tag = get_server_bot_args(message.content)
+            tag = get_server_bot_args(message)
             if (len(tag) != 3):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + server_help_array()["unlink"] + "```")
                 return
@@ -1138,7 +1139,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             unlink_console(currDatabase, consoleID)
             await message.reply("Operation succeeded.")
         else:
-            tag = get_server_bot_args(message.content)
+            tag = get_server_bot_args(message)
             if (len(tag) != 2):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + server_help_array()["unlink"] + "```")
                 return
@@ -1150,7 +1151,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             await message.reply("Operation succeeded.")
     elif bot_cmd == "manage_vr":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content)
+            tag = get_server_bot_args(message)
             if (len(tag) != 5 and len(tag) != 6):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
@@ -1196,7 +1197,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Operation succeeded.")
     elif bot_cmd == "transfer":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content)
+            tag = get_server_bot_args(message)
             if (len(tag) != 4):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
@@ -1227,7 +1228,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Operation failed:```{}```".format(res))
     elif bot_cmd == "prune":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content)
+            tag = get_server_bot_args(message)
             if (len(tag) != 3):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
@@ -1278,7 +1279,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             await message.reply("Done! Purged {} users.".format(total))
     elif bot_cmd == "get_mii_icon":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content)
+            tag = get_server_bot_args(message)
             if (len(tag) != 3):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["get_mii_icon"] + "```")
                 return
@@ -1296,7 +1297,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply("Mii for {}:".format(miiName), file=discord.File(fp=image_binary, filename='mii.png'))
     elif bot_cmd == "name_history":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content)
+            tag = get_server_bot_args(message)
             if (len(tag) != 3):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["name_history"] + "```")
                 return
@@ -1311,7 +1312,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             await message.reply(msg)
     elif bot_cmd == "config":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content)
+            tag = get_server_bot_args(message)
             if (len(tag) != 3 and len(tag) != 4):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["config"] + "```")
                 return
@@ -1394,7 +1395,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 return
     elif bot_cmd == "otplegality":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content)
+            tag = get_server_bot_args(message)
             if (len(tag) != 4 and len(tag) != 3):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
@@ -1439,7 +1440,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Operation succeeded.")
     elif bot_cmd == "consoleserver":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content, 4)
+            tag = get_server_bot_args(message, 4)
             if (len(tag) != 4 and len(tag) != 5):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
@@ -1475,7 +1476,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Operation succeeded.")
     elif bot_cmd == "banned_ultra_shortcut":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content)
+            tag = get_server_bot_args(message)
             if (len(tag) < 4):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
@@ -1516,7 +1517,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply(msg)
     elif bot_cmd == "add_badge":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content, 2)
+            tag = get_server_bot_args(message, 2)
             if (len(tag) != 3):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
@@ -1551,7 +1552,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             await message.reply("Badge created:\n- `{}` (0x{:016X}): `{}`".format(name, bID, desc))
     elif bot_cmd == "edit_badge":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content, 3)
+            tag = get_server_bot_args(message, 3)
             if (len(tag) != 4):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
@@ -1597,7 +1598,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             await message.reply("Badge edited:\n- `{}` (0x{:016X}): `{}`".format(name, bID, desc))
     elif bot_cmd == "delete_badge":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content, 2)
+            tag = get_server_bot_args(message, 2)
             if (len(tag) != 3):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
@@ -1616,7 +1617,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             await message.reply( "Operation succeeded.")
     elif bot_cmd == "console_badge":
         if await staff_server_can_execute(message, bot_cmd):
-            tag = get_server_bot_args(message.content, 4)
+            tag = get_server_bot_args(message, 4)
             if (len(tag) != 5 and len(tag) != 4):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
@@ -1675,6 +1676,44 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
         await sendMultiMessage(message.channel, msg, "", "")
     else:
         await message.reply( "Invalid server command, use `@RedYoshiBot server help` to get all the available server commands.")
-        
+
+current_action = ""
+async def handle_action_message(ctgp7_server: CTGP7ServerHandler, message: discord.Message, isCitra: bool):
+    global current_action
+    currDatabase = ctgp7_server.citraDatabase if isCitra else ctgp7_server.database
+    valid_actions = [
+        "grant_badge (badgeID): Gives the specified badge",
+    ]
+    if (message.content == "" or message.content.startswith("0x") or message.content.startswith("QR")):
+        tag = current_action.split(None, 2)
+        if len(tag) == 0: tag = [""]
+        if tag[0] == "grant_badge":
+            try:
+                bID = int(tag[1], 16)
+                if (bID == 0):
+                    raise ValueError()
+                badge = currDatabase.get_badge(bID)
+                if badge is None:
+                    raise ValueError()
+            except ValueError:
+                await message.reply("Invalid badge ID.")
+                return
+            cID = await parse_console_ID(message, "QR" if message.content == "" else message.content)
+            if cID is not None:
+                currDatabase.grant_badge(cID, bID)
+                await message.reply("Operation succeeded.")
+        else:
+            await sendMultiMessage(message.channel, valid_actions, "Unknown action or action not set, valid actions:\n```", "```")
+    else:
+        current_action = message.content
+        if current_action == "clear":
+            current_action = ""
+            await message.reply("Cleared action successfully.")
+        elif current_action == "help":
+            current_action = ""
+            await sendMultiMessage(message.channel, valid_actions, "Valid actions:\n```", "```\nSet an action then send affected QR or consoleID.\nType `clear` to clear current action.")
+        else:
+            await message.reply("Action set to `{}`".format(current_action))
+
 def handler_server_init_loop(ctgp7_server: CTGP7ServerHandler):
     asyncio.ensure_future(server_bot_loop(ctgp7_server))

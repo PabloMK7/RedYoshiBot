@@ -532,6 +532,8 @@ def ch_list():
         "EMERGENCY": 839085550606614558,
         "PHISING": 882574850688950322,
         "DELETEEDITLOGS": 1184928816481706164,
+        "CONSOLE_ACTIONS": 1336735937090289674,
+        "CITRA_ACTIONS": 1336737024446693488,
     }
 
 def NUMBER_EMOJI():
@@ -1187,7 +1189,7 @@ async def checkNitroScam(message):
                 pass
             
 
-from .server.CTGP7BotHandler import queue_player_role_update, get_user_info, unlink_console, handle_server_command, handler_server_init_loop, handler_server_update_globals, kick_message_callback, server_message_logger_callback, server_on_member_remove
+from .server.CTGP7BotHandler import queue_player_role_update, get_user_info, unlink_console, handle_server_command, handler_server_init_loop, handler_server_update_globals, kick_message_callback, server_message_logger_callback, server_on_member_remove, handle_action_message
 
 on_ready_completed = False
 @client.event
@@ -1313,8 +1315,15 @@ async def on_message(message):
         print("Error, some variable is None")
         return None
     try:
+        if message.author != client.user and is_channel(message, ch_list()["CONSOLE_ACTIONS"]):
+            await handle_action_message(ctgp7_server, message, False)
+            return
+        elif message.author != client.user and is_channel(message, ch_list()["CITRA_ACTIONS"]):
+            await handle_action_message(ctgp7_server, message, True)
+            return
+    
         if (message.content == ""): return
-        random.seed()
+
         msg_split = message.content.split(None, 2)
 
         bot_mtn = "" if len(msg_split) == 0 else msg_split[0]
@@ -2239,6 +2248,7 @@ def perform_exit():
 
 try:
     atexit.register(exit_handler)
+    random.seed()
     client.run(sys.argv[1], log_level=logging.ERROR)
 except:
     perform_exit()
