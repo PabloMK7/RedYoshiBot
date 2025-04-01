@@ -188,6 +188,24 @@ class CTGP7ServerDatabase:
     def set_event_grant_badge(self, bID: int):
         self.set_database_config("eventGrantBadge", int(bID))
 
+    def set_blue_shell_showdown(self, isShowdown):
+        self.set_database_config("blueshellshowdown", 1 if bool(isShowdown) else 0)
+
+    def get_blue_shell_showdown(self):
+        return int(self.get_database_config("blueshellshowdown")) != 0
+    
+    def get_special_char_vr_multiplier(self) -> float:
+        return float(self.get_database_config("specialvrcharmultiplier"))
+
+    def set_special_char_vr_multiplier(self, multiplier: float):
+        self.set_database_config("specialvrcharmultiplier", float(multiplier))
+
+    def get_special_vr_characters(self) -> str:
+        return str(self.get_database_config("specialvrcharacters"))
+    
+    def set_special_vr_characters(self, l: str):
+        self.set_database_config("specialvrcharacters", str(l))
+
     def verify_console_legality(self, cID, cSH1, cSH2):
         with self.lock:
             c = self.conn.cursor()

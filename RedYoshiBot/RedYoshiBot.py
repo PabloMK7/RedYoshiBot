@@ -1082,6 +1082,13 @@ async def sendMikuMessage(message, ignore_timeout):
     except:
         raise
 
+async def sendNoPiracyMessage(message: discord.Message, deleteOriginal):
+    if (is_channel_private(message.channel)):
+        return
+    await message.channel.send("{} please do not mention piracy sites. Any help with piracy is not allowed in this server (rule 3).".format(message.author.mention))
+    if deleteOriginal:
+        await message.delete()
+
 def escapeFormatting(text: str, onlyCodeBlock: bool):
     if (onlyCodeBlock):
         return text.replace("`", "'")
@@ -2218,6 +2225,8 @@ async def on_message(message):
             if (subsindex == 2):
                 current_talk_id = ''
                 await message.reply( "Cleared chat destination.")
+        elif "hshop" in message.content.lower() or "3hs" in message.content.lower():
+            await sendNoPiracyMessage(message, True)
         elif (all(x in message.content.lower() for x in ["miku"]) or all(x in message.content.lower() for x in ["mbs"])) and itercount((x in message.content.lower() for x in ["remove", "replace", "delete"]), 1) and message.author != client.user:
             await sendMikuMessage(message, False)
         else:

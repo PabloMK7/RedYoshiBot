@@ -52,6 +52,8 @@ class CTGP7Requests:
         "10K_VR": 0x48300D897426DCE9,
         "50K_VR": 0x686517CAD6BC107D,
         "BETA_TESTER": 0x4742331927F672C9,
+        "THANKS_FOR_PLAYING": 0x3B68C72DCE874AD5,
+        "BLUE_SHELL_MASTER": 0x04A7ADBB5729EB57,
     }
 
     get_user_info = None
@@ -97,6 +99,11 @@ class CTGP7Requests:
                 self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["ALL_MISSION"])
             if s == "bluecoin" and prev:
                 self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["ALL_BLUE_COINS"])
+
+        if input.get("watchedcredits", False):
+            self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["THANKS_FOR_PLAYING"])
+        if input.get("dodgedblue", False):
+            self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["BLUE_SHELL_MASTER"])
         
         vrData = self.currDatabase.get_console_vr(self.cID)
         vr = max(vrData.ctVR, vrData.cdVR)
@@ -332,7 +339,10 @@ class CTGP7Requests:
     def put_ultra_shortcut(self, input):
         with self.currCtwwHandler.lock:
             if not self.cID in self.currCtwwHandler.loggedUsers: return
-        self.currDatabase.set_console_message(self.cID, ConsoleMessageType.TIMED_KICKMESSAGE.value, "Use of ultrashortcut", 60)
+        user = self.currCtwwHandler.loggedUsers.get(self.cID)
+        szsName = "" if user is None else user.lastSZSName
+        track = CTGP7Defines.getTrackNameFromSzs(szsName)
+        self.currDatabase.set_console_message(self.cID, ConsoleMessageType.TIMED_KICKMESSAGE.value, "Use of ultrashortcut ({})".format(track), 60)
         self.currCtwwHandler.kick_user(self.cID)
         return (0, 0)
 

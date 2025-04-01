@@ -102,6 +102,7 @@ class OnlineUser:
         self.lobby = 0
         self.uName = ""
         self.usingVC = False
+        self.lastSZSName = ""
 
     def setDebug(self):
         self.debug = True
@@ -591,6 +592,10 @@ class CTGP7CtwwHandler:
             allowedChars = self.database.get_allowed_characters()
             if allowedChars != "":
                 retDict["allowedCharacters"] = allowedChars
+            
+            specialVRChars = self.database.get_special_vr_characters()
+            if (specialVRChars != ""):
+                retDict["specialVRCharacters"] = specialVRChars
 
             if (miiChecksum is not None):
                 storedChecksum = self.database.get_mii_icon_checksum(cID)
@@ -648,6 +653,11 @@ class CTGP7CtwwHandler:
             allowedItems = self.database.get_allowed_items()
             if (allowedItems != ""):
                 retDict["allowedItems"] = allowedItems
+            specialVRChars = self.database.get_special_vr_characters()
+            if (specialVRChars != ""):
+                retDict["specialCharVRMultiplier"] = int(self.database.get_special_char_vr_multiplier() * 1000)
+            if self.database.get_blue_shell_showdown():
+                retDict["blueShellShowdown"] = True
             user.setVRIncr(None)
 
             user.isAlive()
@@ -750,6 +760,7 @@ class CTGP7CtwwHandler:
 
             user.setUsingVoiceChat(usingVC)
             user.isAlive()
+            user.lastSZSName = szsName
 
             retdict = {}
             scs = [] if user.lobby != 0 else self.database.get_track_banned_ultrasc(szsName)

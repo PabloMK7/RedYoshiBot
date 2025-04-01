@@ -55,7 +55,7 @@ def staff_server_help_array():
         "purge_console_link": ">@RedYoshiBot server purge_console_link\nRemoved console links from users that are no longer in the server.",
         "get_mii_icon": ">@RedYoshiBot server get_mii_icon (consoleID)\nGets the mii icon of the specified user.",
         "name_history": ">@RedYoshiBot server name_history (consoleID)\nGets the name history of the specified user.",
-        "config": ">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable/vrmultiplier/allowedCharacters/allowedTracks/allowedItems/finishracebadge) [newValue]\nGets or sets the config parameters for online mode.",
+        "config": ">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable/vrmultiplier/allowedCharacters/allowedTracks/allowedItems/finishracebadge/blueshellshowdown/specialvrcharacters/specialvrcharmultiplier) [newValue]\nGets or sets the config parameters for online mode.",
         "otplegality": ">@RedYoshiBot server otplegality (get/getall/set/clear) (consoleID)\nGets, sets or clear the otp legality of a specified console.",
         "consoleserver": ">@RedYoshiBot server consoleserver (get/set/clear)\nSets a NEX server address to the specified console.",
         "banned_ultra_shortcut": ">@RedYoshiBot server banned_ultra_shortcut (get/set/clear) (szsName) [from_min] [from_max] [to_min] [to_max] [trigger]\nManages the banned ultra shortcuts for the specified track.",
@@ -1317,7 +1317,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["config"] + "```")
                 return
             mode = tag[2]
-            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset", "blockedTrackHistory", "serveraddr", "serveravailable", "vrmultiplier", "allowedCharacters", "allowedTracks", "allowedItems", "finishracebadge"]:
+            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset", "blockedTrackHistory", "serveraddr", "serveravailable", "vrmultiplier", "allowedCharacters", "allowedTracks", "allowedItems", "finishracebadge", "blueshellshowdown", "specialvrcharacters", "specialvrcharmultiplier"]:
                 await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()["config"] + "```")
                 return
             if (len(tag) == 3):
@@ -1346,21 +1346,27 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     amount = currDatabase.get_allowed_items()
                 elif mode == "finishracebadge":
                     amount = currDatabase.get_event_grant_badge()
+                elif mode == "blueshellshowdown":
+                    amount = 1 if currDatabase.get_blue_shell_showdown() else 0
+                elif mode == "specialvrcharacters":
+                    amount = currDatabase.get_special_vr_characters()
+                elif mode == "specialvrcharmultiplier":
+                    amount = currDatabase.get_special_char_vr_multiplier()
                 await message.reply( "Config for \"{}\" is: {}".format(mode, amount))
                 return
             else:
                 try:
-                    if (mode == "ctCPUAmount" or mode == "cdCPUAmount" or mode == "blockedTrackHistory" or mode == "serveravailable"):
+                    if (mode == "ctCPUAmount" or mode == "cdCPUAmount" or mode == "blockedTrackHistory" or mode == "serveravailable" or mode == "blueshellshowdown"):
                         amount = int(tag[3])
                     elif (mode == "finishracebadge"):
                         amount = int(tag[3], 16)
-                    elif (mode == "rubberBMult" or mode == "rubberBOffset" or mode == "vrmultiplier"):
+                    elif (mode == "rubberBMult" or mode == "rubberBOffset" or mode == "vrmultiplier" or mode == "specialvrcharmultiplier"):
                         amount = float(tag[3])
                     elif (mode == "serveraddr"):
                         amount = str(tag[3])
                         if not ":" in amount:
                             raise ValueError()
-                    elif (mode == "allowedCharacters" or mode == "allowedTracks" or mode == "allowedItems"):
+                    elif (mode == "allowedCharacters" or mode == "allowedTracks" or mode == "allowedItems" or mode == "specialvrcharacters"):
                         amount = str(tag[3])
                         if amount == "clear":
                             amount = ""
@@ -1391,6 +1397,12 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     currDatabase.set_allowed_items(amount)
                 elif mode == "finishracebadge":
                     currDatabase.set_event_grant_badge(amount)
+                elif mode == "blueshellshowdown":
+                    currDatabase.set_blue_shell_showdown(amount)
+                elif mode == "specialvrcharacters":
+                    currDatabase.set_special_vr_characters(amount)
+                elif mode == "specialvrcharmultiplier":
+                    currDatabase.set_special_char_vr_multiplier(amount)
                 await message.reply("Config for \"{}\" is: {}".format(mode, amount))
                 return
     elif bot_cmd == "otplegality":
