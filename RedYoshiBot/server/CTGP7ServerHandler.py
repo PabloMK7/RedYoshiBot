@@ -19,6 +19,7 @@ from .CTGP7Requests import CTGP7Requests
 from .CTGP7ServerDatabase import CTGP7ServerDatabase
 from .CTGP7CtwwHandler import CTGP7CtwwHandler
 from .CTGP7NEXHTTPHandler import CTGP7NEXHTTPHandler
+from .CTGP7PointsModeHandler import CTGP7PointsModeHandler
 from .CTGP7ServerCritical import do_critical_operations_in, do_critical_operations_out
 
 class CTGP7ServerHandler:
@@ -110,6 +111,7 @@ class CTGP7ServerHandler:
                 solver = CTGP7Requests(
                     CTGP7ServerHandler.myself.citraDatabase if isCitra else CTGP7ServerHandler.myself.database, 
                     CTGP7ServerHandler.myself.citraCtwwHandler if isCitra else CTGP7ServerHandler.myself.ctwwHandler,
+                    CTGP7ServerHandler.myself.citraPointsHandler if isCitra else CTGP7ServerHandler.myself.pointsHandler,
                     inputData, CTGP7ServerHandler.debug_mode, reqConsoleID, isCitra)
                 outputData.update(solver.solve())
                 logStr += solver.info
@@ -178,6 +180,8 @@ class CTGP7ServerHandler:
         self.nexhttp = CTGP7NEXHTTPHandler(self.database)
         self.ctwwHandler = CTGP7CtwwHandler(self.database, self.nexhttp)
         self.citraCtwwHandler = CTGP7CtwwHandler(self.citraDatabase, self.nexhttp)
+        self.pointsHandler = CTGP7PointsModeHandler(self.database)
+        self.citraPointsHandler = CTGP7PointsModeHandler(self.citraDatabase)
 
         server_thread = threading.Thread(target=self.server_start)
         server_thread.daemon = True
@@ -198,6 +202,10 @@ class CTGP7ServerHandler:
         self.citraDatabase = None
         self.ctwwHandler = None
         self.citraCtwwHandler = None
+        self.pointsHandler.stop()
+        self.pointsHandler = None
+        self.citraPointsHandler.stop()
+        self.citraPointsHandler = None
         CTGP7ServerHandler.myself = None
         print("CTGP-7 server terminated.")
     

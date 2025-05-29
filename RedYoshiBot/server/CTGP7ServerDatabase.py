@@ -30,11 +30,19 @@ class CTGP7ServerDatabase:
         "bluecoin",
     ]
     class VRInfos:
-        def __init__(self):
+        def __init__(self, withPos: bool):
             self.ctVR = 1000
             self.cdVR = 1000
-            self.ctPos = 0
-            self.cdPos = 0
+            if withPos:
+                self.ctPos = 0
+                self.cdPos = 0
+
+    class RankInfo:
+        def __init__(self):
+            self.rank = 0
+            self.cID = 0
+            self.name = ""
+            self.score = 0
 
     def __init__(self, path: str, isCitra: bool):
         self.isConn = False
@@ -205,6 +213,18 @@ class CTGP7ServerDatabase:
     
     def set_special_vr_characters(self, l: str):
         self.set_database_config("specialvrcharacters", str(l))
+
+    def get_weekly_points_duration_seconds(self):
+        return int(self.get_database_config("weeklypointsduration"))
+    
+    def set_weekly_points_duration_seconds(self, seconds: int):
+        self.set_database_config("weeklypointsduration", str(seconds))
+
+    def get_weekly_points_special_part_amounts(self):
+        return str(self.get_database_config("specialpartamounts"))
+    
+    def set_weekly_points_special_part_amounts(self, amounts: str):
+        self.set_database_config("specialpartamounts", str(amounts))
 
     def verify_console_legality(self, cID, cSH1, cSH2):
         with self.lock:
@@ -473,21 +493,22 @@ class CTGP7ServerDatabase:
                 return
             c.execute('INSERT INTO console_vr VALUES (?,?,?,?)', (int(cID), int(vr[0]), int(vr[1]), 0))
 
-    def get_console_vr(self, cID) -> VRInfos:
+    def get_console_vr(self, cID, withPos: bool) -> VRInfos:
         with self.lock:
-            vrData = CTGP7ServerDatabase.VRInfos()
+            vrData = CTGP7ServerDatabase.VRInfos(withPos)
             c = self.conn.cursor()
             rows = c.execute("SELECT * FROM console_vr WHERE cID = ?", (int(cID),))
             for row in rows:
                 vrData.ctVR = row[1]
                 vrData.cdVR = row[2]
                 break
-            rows = c.execute("SELECT COUNT(*) from console_vr WHERE ctvr > ?", (int(vrData.ctVR),))
-            for row in rows:
-                vrData.ctPos = row[0] + 1
-            rows = c.execute("SELECT COUNT(*) from console_vr WHERE cdvr > ?", (int(vrData.cdVR),))
-            for row in rows:
-                vrData.cdPos = row[0] + 1
+            if withPos:
+                rows = c.execute("SELECT COUNT(*) from console_vr WHERE ctvr > ?", (int(vrData.ctVR),))
+                for row in rows:
+                    vrData.ctPos = row[0] + 1
+                rows = c.execute("SELECT COUNT(*) from console_vr WHERE cdvr > ?", (int(vrData.cdVR),))
+                for row in rows:
+                    vrData.cdPos = row[0] + 1
             return vrData
 
     def set_console_points(self, cID, points):
@@ -825,3 +846,127 @@ class CTGP7ServerDatabase:
             c = self.conn.cursor()
             c.execute("DELETE FROM console_badges WHERE cID = ?", (int(newcID),))
             c.execute("UPDATE console_badges SET cID = ? WHERE cID = ?", (int(newcID), int(oldcID)))
+
+    def set_weekly_points_config(self, field, value):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM weekly_points_config WHERE field = ?", (str(field),))
+            for row in rows:
+                c.execute("UPDATE weekly_points_config SET value = ? WHERE field = ?", (str(value), str(field)))
+                return
+            # Create entry
+            c.execute('INSERT INTO weekly_points_config VALUES (?,?)', (str(field), str(value)))
+    
+    def get_weekly_points_config(self, field, default: str) -> str:
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM weekly_points_config WHERE field = ?", (str(field),))
+            for row in rows:
+                return str(row[1])
+        return default
+    
+    def get_weekly_points_leaderboard(self, minRank, maxRank, limit, cID=-1):
+        query = """
+            WITH ranked AS (
+                SELECT
+                    cID,
+                    score,
+                    RANK() OVER (ORDER BY score DESC) AS rank
+                FROM weekly_points_leaderboard
+            )
+            SELECT
+                cID,
+                score,
+                rank
+            FROM ranked
+            WHERE rank >= ? AND rank <= ?
+            ORDER BY rank
+            LIMIT ?;
+            """
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute(query, (int(minRank), int(maxRank), int(limit)))
+            ret: List[CTGP7ServerDatabase.RankInfo] = []
+            for row in rows:
+                rank = CTGP7ServerDatabase.RankInfo()
+                rank.rank = row[2]
+                rank.cID = row[0]
+                rank.score = row[1]
+                ret.append(rank)
+            i=0
+            self_index=-1
+            for r in ret:
+                c2 = self.conn.cursor()
+                if cID == int(r.cID):
+                    self_index = i
+                rows = c2.execute("SELECT * FROM console_name WHERE cID = ? ORDER BY timestamp DESC", (int(r.cID),))
+                name = "Player"
+                for row in rows:
+                    name = str(row[1])
+                    break
+                r.name = name
+                i+=1
+            return (self_index, ret)
+
+    def get_weekly_points_surrounding(self, cID, amount=4):
+        query = """
+        WITH ranked AS (
+            SELECT
+                cID,
+                score,
+                RANK() OVER (ORDER BY score DESC) AS position
+            FROM weekly_points_leaderboard
+        ),
+        target AS (
+            SELECT position AS target_pos
+            FROM ranked
+            WHERE cID = ?
+        )
+        SELECT
+            cID,
+            score,
+            position
+        FROM ranked
+        WHERE position BETWEEN (SELECT target_pos FROM target) - {}
+                        AND (SELECT target_pos FROM target) + {}
+        ORDER BY position;
+        """.format(amount, amount)
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute(query, (int(cID), ))
+            ret: List[CTGP7ServerDatabase.RankInfo] = []
+            for row in rows:
+                rank = CTGP7ServerDatabase.RankInfo()
+                rank.rank = row[2]
+                rank.cID = row[0]
+                rank.score = row[1]
+                ret.append(rank)
+            i = 0
+            self_index = -1
+            for r in ret:
+                c2 = self.conn.cursor()
+                if cID == int(r.cID):
+                    self_index = i
+                rows = c2.execute("SELECT * FROM console_name WHERE cID = ? ORDER BY timestamp DESC", (int(r.cID),))
+                name = "Player"
+                for row in rows:
+                    name = str(row[1])
+                    break
+                r.name = name
+                i+=1
+            return (self_index, ret)
+        
+    def set_weekly_points_leaderboard_score(self, cID: int, score: int):
+        query = """
+            INSERT INTO weekly_points_leaderboard (cID, score)
+            VALUES (?, ?)
+            ON CONFLICT(cID) DO UPDATE SET
+            score = excluded.score;"""
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute(query, (int(cID), int(score)))
+        
+    def clear_weekly_points_leaderboard(self):
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute("DELETE FROM weekly_points_leaderboard WHERE 1 = 1")

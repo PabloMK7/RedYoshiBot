@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import io
 import requests
+import time
 
 SELF_BOT_MEMBER = None
 SELF_BOT_SERVER = None
@@ -55,7 +56,7 @@ def staff_server_help_array():
         "purge_console_link": ">@RedYoshiBot server purge_console_link\nRemoved console links from users that are no longer in the server.",
         "get_mii_icon": ">@RedYoshiBot server get_mii_icon (consoleID)\nGets the mii icon of the specified user.",
         "name_history": ">@RedYoshiBot server name_history (consoleID)\nGets the name history of the specified user.",
-        "config": ">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable/vrmultiplier/allowedCharacters/allowedTracks/allowedItems/finishracebadge/blueshellshowdown/specialvrcharacters/specialvrcharmultiplier) [newValue]\nGets or sets the config parameters for online mode.",
+        "config": ">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable/vrmultiplier/allowedCharacters/allowedTracks/allowedItems/finishracebadge/blueshellshowdown/specialvrcharacters/specialvrcharmultiplier/weeklypointsduration/specialpartamounts) [newValue]\nGets or sets the config parameters for online mode.",
         "otplegality": ">@RedYoshiBot server otplegality (get/getall/set/clear) (consoleID)\nGets, sets or clear the otp legality of a specified console.",
         "consoleserver": ">@RedYoshiBot server consoleserver (get/set/clear)\nSets a NEX server address to the specified console.",
         "banned_ultra_shortcut": ">@RedYoshiBot server banned_ultra_shortcut (get/set/clear) (szsName) [from_min] [from_max] [to_min] [to_max] [trigger]\nManages the banned ultra shortcuts for the specified track.",
@@ -63,6 +64,7 @@ def staff_server_help_array():
         "edit_badge": ">@RedYoshiBot server edit_badge (badgeID) (badge_name) | (badge_description)\nEdits thespecified badge to the provided name, description and attached bclim file.",
         "delete_badge": ">@RedYoshiBot server delete_badge (badgeID)\nDeletes the specified badge.",
         "console_badge": ">@RedYoshiBot server console_badge (grant|remove|list) (consoleID) [badgeID]\nDoes specified operation for the console ID and badge ID.",
+        "points_weekly": ">@RedYoshiBot server points_weekly (get|end)\nGets the current Points Mode Weekly Challenge config or ends it immediately.",
     }
     
 def staff_server_command_level():
@@ -99,6 +101,7 @@ def staff_server_command_level():
         "edit_badge": 0,
         "delete_badge": 0,
         "console_badge": 1,
+        "points_weekly": 1,
     }
 
 async def staff_server_can_execute(message, command, silent=False):
@@ -221,7 +224,7 @@ async def kick_message_logger():
         isCitra = m[5]
         if (isSilent or (messageType != ConsoleMessageType.SINGLE_KICKMESSAGE.value and messageType != ConsoleMessageType.TIMED_KICKMESSAGE.value) or cID == 0):
             continue
-        embedPrivate=discord.Embed(title="{}Kick Report".format("Citra " if isCitra else ""), description="Console ID: 0x{:016X}".format(cID), color=0xff0000, timestamp=datetime.datetime.now())
+        embedPrivate=discord.Embed(title="{}Kick Report".format("Azahar " if isCitra else ""), description="Console ID: 0x{:016X}".format(cID), color=0xff0000, timestamp=datetime.datetime.now())
         embedPrivate.add_field(name="Reason", value=message, inline=False)
         if (messageType == ConsoleMessageType.TIMED_KICKMESSAGE.value):
             time = ""
@@ -265,8 +268,8 @@ async def update_graph_message(ctgp7_server: CTGP7ServerHandler):
             plt.plot(x, y1, color = "dodgerblue", label = "Launches", marker="o", markersize=3)
             plt.plot(x, y2, color = "lightskyblue", linestyle='dashed', label = "New Consoles", marker="o", markersize=3)
         else:
-            plt.plot(x, y1, color = "darkorange", label = "Citra Launches", marker="o", markersize=3)
-            plt.plot(x, y2, color = "gold", linestyle='dashed', label = "Citra New Consoles", marker="o", markersize=3)
+            plt.plot(x, y1, color = "darkorange", label = "Azahar Launches", marker="o", markersize=3)
+            plt.plot(x, y2, color = "gold", linestyle='dashed', label = "Azahar New Consoles", marker="o", markersize=3)
         for i,j in zip(x,y1):
             plt.annotate(str(j),xy=(i,j), fontsize=8)
         for i,j in zip(x,y2):
@@ -434,6 +437,7 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
             leaderTextVR = "```"
             for user in rankArray[i]:
                 userName = ctgp7_server.database.get_console_last_name(user[0], "Player")
+                userName = escapeFormatting(userName)
                 position = str(currPos)
                 positionSpaces = " " * max((4 - len(position)), 0)
                 leaderText += "{}.{}{}{}\n".format(position, positionSpaces, purge_player_name_symbols(userName), " \u2705" if ctgp7_server.database.get_console_is_verified(user[0]) else "")
@@ -541,7 +545,7 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isCitra: boo
                     continue
             
             bordercolor = room["color"]
-            embed=discord.Embed(title="{}{} Room".format("Citra " if isCitra else "", room["gameMode"]), description="State: {}\nID: 0x{:08X}{}".format(room["state"], room["fakeID"], "\nRegion: 0x{:08X}".format(room["regionID"]) if room["private"] else ""), color=bordercolor, timestamp=datetime.datetime.now())
+            embed=discord.Embed(title="{}{} Room".format("Azahar " if isCitra else "", room["gameMode"]), description="State: {}\nID: 0x{:08X}{}".format(room["state"], room["fakeID"], "\nRegion: 0x{:08X}".format(room["regionID"]) if room["private"] else ""), color=bordercolor, timestamp=datetime.datetime.now())
             playerString = "```\n"
             for player in room["players"]:
                 vrStr = ""
@@ -559,7 +563,7 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isCitra: boo
                 symbolstring += "\u2757" if player["badnatother"] else ""
                 if len(symbolstring) != 0:
                     symbolstring = " " + symbolstring
-                playerString += "{}{}{}{}\n".format(purge_player_name_symbols(player["name"]), symbolstring, vrStr, stat)
+                playerString += "{}{}{}{}\n".format(purge_player_name_symbols(escapeFormatting(player["name"])), symbolstring, vrStr, stat)
             playerString += "```"
             if (playerString == "```\n```"):
                 playerString = "```\n- (None)\n```"
@@ -670,7 +674,7 @@ def transfer_console_data(ctgp7_server: CTGP7ServerHandler, srcCID: int, dstCID:
     currCtwwHandler = ctgp7_server.citraCtwwHandler if isCitra else ctgp7_server.ctwwHandler
     try:
         # Transfer VR and points
-        srcVR = currDatabase.get_console_vr(srcCID)
+        srcVR = currDatabase.get_console_vr(srcCID, False)
         srcPoints = currDatabase.get_console_points(srcCID)
         currDatabase.set_console_vr(dstCID, (srcVR.ctVR, srcVR.cdVR))
         currDatabase.set_console_points(dstCID, srcPoints[0])
@@ -737,13 +741,15 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
     global stats_command_last_exec
     currDatabase = ctgp7_server.citraDatabase if isCitra else ctgp7_server.database
     currCtwwHandler = ctgp7_server.citraCtwwHandler if isCitra else ctgp7_server.ctwwHandler
+    currPointsHandler = ctgp7_server.citraPointsHandler if isCitra else ctgp7_server.pointsHandler
     try:
-        bot_cmd = get_server_bot_args(message, 2)[1]
+        bot_cmd = escapeFormatting(get_server_bot_args(message, 2)[1])
     except IndexError:
         await message.reply( "Invalid syntax, use `@RedYoshiBot server help` to get all the available server commands")
         return
     if (bot_cmd == "help"):
         tag = get_server_bot_args(message)
+        tag = [escapeFormatting(x) for x in tag]
         if is_channel(message, ch_list()["BOTCHAT"]) or await staff_server_can_execute(message, bot_cmd, silent=True) or is_channel_private(message.channel):
             if (len(tag) > 2):
                 if await staff_server_can_execute(message, bot_cmd, silent=True):
@@ -1168,7 +1174,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 return
             if (mode == "get"):
                 if (game == "ctww" or game == "cd"):
-                    vrData = currDatabase.get_console_vr(consoleID)
+                    vrData = currDatabase.get_console_vr(consoleID, True)
                     vr = vrData.ctVR if game == "ctww" else vrData.cdVR
                     vrPos = vrData.ctPos if game == "ctww" else vrData.cdPos
                     await message.reply("Console has {} VR (Position: {}) in {}".format(vr, vrPos, "Custom Tracks" if game == "ctww" else "Countdown"))
@@ -1188,7 +1194,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     await message.reply( "Invalid number.")
                     return
                 if (game == "ctww" or game == "cd"):
-                    vrData = currDatabase.get_console_vr(consoleID)
+                    vrData = currDatabase.get_console_vr(consoleID, False)
                     vrData = list((vrData.ctVR, vrData.cdVR))
                     vrData[0 if game == "ctww" else 1] = vr
                     currDatabase.set_console_vr(consoleID, tuple(vrData))
@@ -1317,7 +1323,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["config"] + "```")
                 return
             mode = tag[2]
-            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset", "blockedTrackHistory", "serveraddr", "serveravailable", "vrmultiplier", "allowedCharacters", "allowedTracks", "allowedItems", "finishracebadge", "blueshellshowdown", "specialvrcharacters", "specialvrcharmultiplier"]:
+            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset", "blockedTrackHistory", "serveraddr", "serveravailable", "vrmultiplier", "allowedCharacters", "allowedTracks", "allowedItems", "finishracebadge", "blueshellshowdown", "specialvrcharacters", "specialvrcharmultiplier", "weeklypointsduration", "specialpartamounts"]:
                 await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()["config"] + "```")
                 return
             if (len(tag) == 3):
@@ -1352,17 +1358,21 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     amount = currDatabase.get_special_vr_characters()
                 elif mode == "specialvrcharmultiplier":
                     amount = currDatabase.get_special_char_vr_multiplier()
+                elif mode == "weeklypointsduration":
+                    amount = currDatabase.get_weekly_points_duration_seconds()
+                elif mode == "specialpartamounts":
+                    amount = currDatabase.get_weekly_points_special_part_amounts()
                 await message.reply( "Config for \"{}\" is: {}".format(mode, amount))
                 return
             else:
                 try:
-                    if (mode == "ctCPUAmount" or mode == "cdCPUAmount" or mode == "blockedTrackHistory" or mode == "serveravailable" or mode == "blueshellshowdown"):
+                    if (mode == "ctCPUAmount" or mode == "cdCPUAmount" or mode == "blockedTrackHistory" or mode == "serveravailable" or mode == "blueshellshowdown" or mode == "weeklypointsduration"):
                         amount = int(tag[3])
                     elif (mode == "finishracebadge"):
                         amount = int(tag[3], 16)
                     elif (mode == "rubberBMult" or mode == "rubberBOffset" or mode == "vrmultiplier" or mode == "specialvrcharmultiplier"):
                         amount = float(tag[3])
-                    elif (mode == "serveraddr"):
+                    elif (mode == "serveraddr" or mode == "specialpartamounts"):
                         amount = str(tag[3])
                         if not ":" in amount:
                             raise ValueError()
@@ -1403,6 +1413,10 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     currDatabase.set_special_vr_characters(amount)
                 elif mode == "specialvrcharmultiplier":
                     currDatabase.set_special_char_vr_multiplier(amount)
+                elif mode == "weeklypointsduration":
+                    currDatabase.set_weekly_points_duration_seconds(amount)
+                elif mode == "specialpartamounts":
+                    currDatabase.set_weekly_points_special_part_amounts(amount)
                 await message.reply("Config for \"{}\" is: {}".format(mode, amount))
                 return
     elif bot_cmd == "otplegality":
@@ -1686,6 +1700,22 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     continue
                 msg.append("- `{}` ({} players): `{}`\n".format(b[1], b[3], b[2].replace("\n", " ")))
         await sendMultiMessage(message.channel, msg, "", "")
+    elif bot_cmd == "points_weekly":
+        if await staff_server_can_execute(message, bot_cmd):
+            tag = get_server_bot_args(message, 4)
+            if (len(tag) != 3):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            mode = tag[2]
+            if mode not in ["get", "end"]:
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            if mode == "get":
+                await message.reply("Current Points Mode Weekly Challenge Config:\n```{}```".format(currPointsHandler.getConfigStr()))
+            elif mode == "end":
+                newTime = int(time.time()) + 10
+                currPointsHandler.updateEndTime(newTime)
+                await message.reply( "Operation succeeded.")
     else:
         await message.reply( "Invalid server command, use `@RedYoshiBot server help` to get all the available server commands.")
 

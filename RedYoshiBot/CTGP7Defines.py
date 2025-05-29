@@ -1,3 +1,4 @@
+import random
 
 class CTGP7Defines(object):
     
@@ -279,6 +280,70 @@ class CTGP7Defines(object):
         }
     }
 
+    driverNames = {
+        0: "Bowser",
+        1: "Daisy",
+        2: "Donkey Kong",
+        3: "Honey Queen",
+        4: "Koopa Troopa",
+        5: "Lakitu",
+        6: "Luigi",
+        7: "Mario",
+        8: "Metal Mario",
+        9: "Mii",
+        10: "Mii",
+        11: "Peach",
+        12: "Rosalina",
+        13: "Shy Guy",
+        14: "Toad",
+        15: "Wario",
+        16: "Wiggler",
+        17: "Yoshi"
+    }
+
+    kartBodyNames = {
+        0: "Standard",
+        1: "Bolt Buggy",
+        2: "Royal Ribbon",
+        3: "Egg 1",
+        4: "B Dasher",
+        5: "Gherkin",
+        6: "Koopa Clown",
+        7: "Tiny Tug",
+        8: "Bumble V",
+        9: "Cact-X",
+        10: "Growlster",
+        11: "Pipe Frame",
+        12: "Barrel Train",
+        13: "Cloud 9",
+        14: "Blue Seven",
+        15: "Soda Jet",
+        16: "Gold Standard"
+    }
+
+    kartTireNames = {
+        0: "Normal",
+        1: "Monster",
+        2: "Roller",
+        3: "Slick",
+        4: "Slim",
+        5: "Sponge",
+        6: "Gold Wheels",
+        7: "Wooden",
+        8: "Red Monster",
+        9: "Mushroom",
+    }
+
+    kartWingNames = {
+        0: "Super Glider",
+        1: "Parafoil",
+        2: "Peach Parasol",
+        3: "Flower Glider",
+        4: "Swoop",
+        5: "Ghastly Glider",
+        6: "Gold Glider",
+    }
+
     @staticmethod
     def getTypeFromSZS(szsName, ctgpver=-1):
         lastVer = CTGP7Defines.versionIDs[0]
@@ -329,3 +394,30 @@ class CTGP7Defines(object):
     @staticmethod
     def getMenuString(menuID):
         return str(menuID)
+    
+    @staticmethod
+    def getRandomTrackSZS():
+        rndid = -1
+        maxid = max(CTGP7Defines.trackNames[CTGP7Defines.versionIDs[-1]].keys())
+        while not ((rndid >= 0 and rndid <= 31) or (rndid >= 42 and rndid <= maxid)):
+            rndid = random.randint(0, maxid)
+        for k, v in CTGP7Defines.trackszsnames[CTGP7Defines.versionIDs[-1]].items():
+            if v == rndid:
+                return k
+        raise Exception()
+    
+    @staticmethod
+    def getDriverName(driverID):
+        return CTGP7Defines.driverNames[driverID]
+    
+    @staticmethod
+    def getKartBodyName(bodyID):
+        return CTGP7Defines.kartBodyNames[bodyID]
+    
+    @staticmethod
+    def getKartTireName(tireID):
+        return CTGP7Defines.kartTireNames[tireID]
+    
+    @staticmethod
+    def getKartWingName(wingID):
+        return CTGP7Defines.kartWingNames[wingID]

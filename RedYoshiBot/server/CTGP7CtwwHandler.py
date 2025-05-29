@@ -314,7 +314,7 @@ class OnlineRoom:
             return 1000
         vrTot = 0
         for cID in self.players:
-            vrData = database.get_console_vr(cID)
+            vrData = database.get_console_vr(cID, False)
             vrTot += vrData.ctVR if self.gamemode == 0 else vrData.cdVR
         vrTot //= len(self.players)
         return vrTot
@@ -550,8 +550,6 @@ class CTGP7CtwwHandler:
             if "%" in miiName or "\\" in miiName or (nameValue is not None and ( "%" in nameValue or "\\" in nameValue)):
                 retDict["loginMessage"] = "Invalid name,\nplease change it."
                 return (CTWWLoginStatus.MESSAGEKICK.value, retDict)
-            
-            self.database.set_console_last_name(cID, str(OnlineUserName(nameMode, nameValue, miiName)))
 
             tocheck = [miiName]
             if nameValue is not None:
@@ -560,6 +558,7 @@ class CTGP7CtwwHandler:
                 retDict["loginMessage"] = "Inappropriate name,\nplease change it."
                 return (CTWWLoginStatus.MESSAGEKICK.value, retDict)
             
+            self.database.set_console_last_name(cID, str(OnlineUserName(nameMode, nameValue, miiName)))
             user = OnlineUser(OnlineUserName(nameMode, nameValue, miiName), cID, self.database.get_console_is_verified(cID), pid)
 
             consoleMsg = self.get_console_message(user.cID)
@@ -575,7 +574,7 @@ class CTGP7CtwwHandler:
             user.uName = uName
             self.newLogins += 1
             retDict["token"] = user.getToken()
-            vrData = self.database.get_console_vr(cID)
+            vrData = self.database.get_console_vr(cID, True)
             if (isDebug): user.setDebug()
             user.setVR(list((vrData.ctVR, vrData.cdVR)))
             retDict["ctvr"] = vrData.ctVR
@@ -639,7 +638,7 @@ class CTGP7CtwwHandler:
             retDict["roomKeySeed"] = room.getKeySeed(user)
             user.setState(UserState.SEARCHING.value)
             user.setPlayerID(-1)
-            vrData = self.database.get_console_vr(cID)
+            vrData = self.database.get_console_vr(cID, True)
             user.setVR(list((vrData.ctVR, vrData.cdVR)))
             retDict["ctvr"] = vrData.ctVR
             retDict["cdvr"] = vrData.cdVR
@@ -690,7 +689,7 @@ class CTGP7CtwwHandler:
             if (user is None): # User not logged in
                 return (CTWWLoginStatus.NOTLOGGED.value, {})
 
-            vrData = self.database.get_console_vr(cID)
+            vrData = self.database.get_console_vr(cID, False)
             user.setVR(list((vrData.ctVR, vrData.cdVR)))
             user.setVRIncr(None)
             user.setPlayerID(playerID)

@@ -571,13 +571,15 @@ def EMERGENCY_SPECIAL_ROLES():
         325843915125030914, # Course creator
         326154532977377281, # Contributor
         385544890030751754, # Muted
+        894352603830419506, # Beta Access
         # Roles with icons
         946727706005995561, # Player
         1080603479640383639, # Bronze Player
         1084265237303267451, # Silver Player
         1084265591055073431, # Gold Player
-        1084266021696852028, # Diamond Player
-        1084266363385819136 # Rainbow Player
+        1084266021696852028, # Emerald Player
+        1084266363385819136, # Diamond Player
+        1222582695754989608 # Rainbow Player
     ]
 
 def MIKU_EMOJI_ID():
@@ -1048,7 +1050,8 @@ async def handleExclamantion(message):
 lastsentctgpmisspell = datetime.datetime.now()
 async def checkCTGPMissSpell(message):
     global lastsentctgpmisspell
-    words : str = message.content.split()
+    words = message.content.split()
+    words = [escapeFormatting(x) for x in words]
     showSpam = message.channel.id != ch_list()["BOTCHAT"] and len(words) == 1
     # -------
     if len(words) < 5:
@@ -1089,11 +1092,11 @@ async def sendNoPiracyMessage(message: discord.Message, deleteOriginal):
     if deleteOriginal:
         await message.delete()
 
-def escapeFormatting(text: str, onlyCodeBlock: bool):
+def escapeFormatting(text: str, onlyCodeBlock: bool = False):
     if (onlyCodeBlock):
         return text.replace("`", "'")
     else:
-        return text.replace("@", "(at)").replace("*", "\\*").replace("_", "\\_").replace("~", "\\~").replace("`", "\\`")
+        return text.replace("@", "(at)").replace("`", "'")
 
 async def sendMultiMessage(channel, message, startStr, endStr):
     
@@ -1333,8 +1336,8 @@ async def on_message(message):
 
         msg_split = message.content.split(None, 2)
 
-        bot_mtn = "" if len(msg_split) == 0 else msg_split[0]
-        bot_cmd = "" if len(msg_split) <= 1 else msg_split[1]
+        bot_mtn = escapeFormatting("" if len(msg_split) == 0 else msg_split[0])
+        bot_cmd = escapeFormatting("" if len(msg_split) <= 1 else msg_split[1])
         
         if (((not is_channel_private(message.channel)) or bot_cmd in private_channel_allowed_cmd()) and get_from_mention(bot_mtn) == client.user) and (message.author != client.user): #@RedYoshiBot
             if bot_cmd == "":
@@ -1414,6 +1417,7 @@ async def on_message(message):
                 elif bot_cmd == 'getlang':
                     if is_channel(message, ch_list()["TRANSLATIONS"]):
                         tag = message.content.split(None)
+                        tag = [escapeFormatting(x) for x in tag]
                         if not (len(tag) == 3):
                             await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["getlang"] + "```")
                             return
@@ -1796,6 +1800,7 @@ async def on_message(message):
                             print("Error parsing: " + fact_id)
                             traceback.print_exc()
                             raise
+                    final_text = escapeFormatting(final_text)
                     if (len(final_text) < 1994):
                         await message.reply( "```" + final_text + "```")
                 elif bot_cmd == 'listfact':
@@ -1813,12 +1818,14 @@ async def on_message(message):
                             if (member is None):
                                 member = CreateFakeMember(str(row[1]))
                             membname = member.name
+                            row[2] = escapeFormatting(row[2])
                             factSend.append(str(row[0]) + " - " + membname + " - " + row[2] + "\n----------\n")
                     else:
                         await message.reply( "I've sent you all the facts in a DM.")
                         for row in fact_text:
                             try:
                                 final_text = await fact_parse(row[2])
+                                final_text = escapeFormatting(final_text)
                                 text_isdyn = "(dynamic)" if await isfact_dynamic(row[2]) else "(static)"
                             except:
                                 continue
@@ -1852,8 +1859,7 @@ async def on_message(message):
                     if (len(tag) != 3):
                         await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["addfact"] + "```")
                         return
-                    tag[2] = tag[2].replace("@", "(at)")
-                    tag[2] = tag[2].replace("`", "")
+                    tag[2] = escapeFormatting(tag[2])
                     try:
                         dummy = await fact_parse(tag[2])
                     except:
@@ -1884,7 +1890,7 @@ async def on_message(message):
                                 qr = QRCrashDecode(data=url[5:])
                             else:
                                 qr = QRCrashDecode(url=url)
-                            qrtext = qr.printData()
+                            qrtext = escapeFormatting(qr.printData())
                         await message.reply( "Parsed QR data:\n```{}```".format(qrtext))
                     except Exception as e:
                         await message.reply( "Failed to parse QR data:\n```{}```".format(str(e)))
@@ -1945,6 +1951,7 @@ async def on_message(message):
                         await message.reply("Operation succeeded")
                 elif bot_cmd == 'help':
                     tag = message.content.split()
+                    tag = [escapeFormatting(x) for x in tag]
                     if (len(tag) > 2):
                         if tag[2] == "game":
                             if (len(tag) == 3):
@@ -2199,6 +2206,7 @@ async def on_message(message):
             await staff_chan.send("{} sent me the following in a DM:\n```{}```".format(message.author.mention, message.content))
         elif (is_channel(message, ch_list()["BUGS"]) and (message.author != client.user) and bot_mtn == "!report"):
             tag = message.content.split(None, 1)
+            tag = [escapeFormatting(x) for x in tag]
             if (len(tag) > 1):
                 notif_msg = await message.reply( "Adding your bug report: ```{}```".format(tag[1]))
                 bug_reports = SELF_BOT_SERVER.get_channel(ch_list()["BUG_OPEN"])

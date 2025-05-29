@@ -7,6 +7,7 @@ import random
 from ..CTGP7Defines import CTGP7Defines
 from .CTGP7ServerDatabase import CTGP7ServerDatabase, ConsoleMessageType
 from .CTGP7CtwwHandler import CTGP7CtwwHandler, CTWWLoginStatus
+from .CTGP7PointsModeHandler import CTGP7PointsModeHandler
 
 class CTGP7Requests:
 
@@ -62,12 +63,13 @@ class CTGP7Requests:
 
     pendingDiscordLinks = {}
 
-    def __init__(self, database: CTGP7ServerDatabase, ctwwHandler: CTGP7CtwwHandler, request: dict, debug: bool, consoleID: int, isCitra: bool):
+    def __init__(self, database: CTGP7ServerDatabase, ctwwHandler: CTGP7CtwwHandler, pointsModeHandler: CTGP7PointsModeHandler, request: dict, debug: bool, consoleID: int, isCitra: bool):
         self.req = request
         self.info = ""
         self.debug = debug
         self.currDatabase = database
         self.currCtwwHandler = ctwwHandler
+        self.currPointsModeHandler = pointsModeHandler
         self.cID = consoleID
         self.isCitra = isCitra
 
@@ -105,7 +107,7 @@ class CTGP7Requests:
         if input.get("dodgedblue", False):
             self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["BLUE_SHELL_MASTER"])
         
-        vrData = self.currDatabase.get_console_vr(self.cID)
+        vrData = self.currDatabase.get_console_vr(self.cID, False)
         vr = max(vrData.ctVR, vrData.cdVR)
         if vr >= 5000:
             self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["5K_VR"])
@@ -328,7 +330,30 @@ class CTGP7Requests:
             ret["badge_{}".format(str(bID))] = badge_dict
         return (0, ret)
 
-    def put_mii_icon(self, input):
+    def server_get_points_weekly_config(self, input):
+        localver = input.get("localVer")
+        if self.currDatabase.get_ctww_version() != localver:
+            return (CTWWLoginStatus.VERMISMATCH.value, {})
+        return (0, self.currPointsModeHandler.getConfigBson())
+    
+    def server_get_points_weekly_leaderboard(self, input):
+        return (0, self.currPointsModeHandler.getLeaderboardBson(self.cID))
+    
+    def server_put_points_weekly_score(self, input):
+        retDict = {}
+        consoleMsg = self.currCtwwHandler.get_console_message(self.cID)
+        if (consoleMsg is not None and consoleMsg[0] == CTWWLoginStatus.MESSAGEKICK.value):
+            retDict["loginMessage"] = consoleMsg[1]
+            return (CTWWLoginStatus.MESSAGEKICK.value, retDict)
+        uid = input.get("uid")
+        score = input.get("score")
+        res = self.currPointsModeHandler.updatePlayerScore(self.cID, score, uid)
+        if res:
+            return self.server_get_points_weekly_leaderboard(input)
+        else:
+            return (100, {})
+
+    def server_put_mii_icon(self, input):
         miiIcon = input.get("miiIcon")
         miiIconChecksum = input.get("miiIconChecksum")
         if (miiIcon is None or miiIconChecksum is None):
@@ -336,7 +361,7 @@ class CTGP7Requests:
         self.currDatabase.set_mii_icon(self.cID, miiIcon, miiIconChecksum)
         return (0, 0)
     
-    def put_ultra_shortcut(self, input):
+    def server_put_ultra_shortcut(self, input):
         with self.currCtwwHandler.lock:
             if not self.cID in self.currCtwwHandler.loggedUsers: return
         user = self.currCtwwHandler.loggedUsers.get(self.cID)
@@ -356,6 +381,8 @@ class CTGP7Requests:
         "roomcharids": server_get_room_charids,
         "message": server_get_console_message,
         "badges": server_get_badges,
+        "ptsweekcfg": server_get_points_weekly_config,
+        "ptsweekbrd": server_get_points_weekly_leaderboard,
     }
 
     put_functions = {
@@ -367,8 +394,9 @@ class CTGP7Requests:
         "onlwatch": server_user_room_watch_handler,
         "onlleaveroom": server_user_room_leave_handler,
         "hrtbt": server_user_heartbeat,
-        "miiicon": put_mii_icon,
-        "ultrashortcut": put_ultra_shortcut,
+        "miiicon": server_put_mii_icon,
+        "ultrashortcut": server_put_ultra_shortcut,
+        "ptsweekscore": server_put_points_weekly_score,
     }
 
     hide_logs_input = [
