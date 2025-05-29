@@ -2191,7 +2191,7 @@ async def on_message(message):
                         await handle_server_command(ctgp7_server, message, bot_cmd == "citraserver")
                     return
                 else:
-                    await message.reply( 'Unknown command: `{}`\nTo get the list of all the available commands use `@RedYoshiBot help`'.format(bot_cmd))    
+                    await message.reply( 'Unknown command: `{}`\nTo get the list of all the available commands use `@RedYoshiBot help`'.format(bot_cmd).replace('`', '')    
             except:
                 raise
         elif (is_channel_private(message.channel) and not message.author == client.user):
