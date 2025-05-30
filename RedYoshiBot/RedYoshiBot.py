@@ -1051,7 +1051,6 @@ lastsentctgpmisspell = datetime.datetime.now()
 async def checkCTGPMissSpell(message):
     global lastsentctgpmisspell
     words = message.content.split()
-    words = [escapeFormatting(x) for x in words]
     showSpam = message.channel.id != ch_list()["BOTCHAT"] and len(words) == 1
     # -------
     if len(words) < 5:
@@ -1092,11 +1091,8 @@ async def sendNoPiracyMessage(message: discord.Message, deleteOriginal):
     if deleteOriginal:
         await message.delete()
 
-def escapeFormatting(text: str, onlyCodeBlock: bool = False):
-    if (onlyCodeBlock):
-        return text.replace("`", "'")
-    else:
-        return text.replace("@", "(at)").replace("`", "'")
+def escapeFormatting(text: str):
+    return text.replace("@", "(at)").replace("`", "'")
 
 async def sendMultiMessage(channel, message, startStr, endStr):
     
@@ -1140,9 +1136,9 @@ def getURLs(s: str):
 
 checkNitroScam_data = {}
 
-async def checkNitroScam(message):
+async def checkNitroScam(message, orig_content):
     global checkNitroScam_data
-    contents = message.content.lower()
+    contents = orig_content.lower()
     phisingScore = sum([contents.count("@everyone") * 2, contents.count("@here") * 2, contents.count("ctpk") * 2, contents.count("nitro") * 2, contents.count("free"), contents.count("cs:go"), contents.count("claim"), contents.count("steam"), contents.count("gift")])
     if (phisingScore == 0): return
     urlCount = 0
@@ -1172,7 +1168,7 @@ async def checkNitroScam(message):
                 except:
                     pass
             phisChn = client.get_channel(ch_list()["PHISING"])
-            await sendMultiMessage(phisChn, "User: {} ({})\nScore: {}\nContents:\n--------------\n{}\n--------------".format(message.author.name, message.author.id, data["score"], contents.replace("@", "(at)")), "", "")
+            await sendMultiMessage(phisChn, "User: {} ({})\nScore: {}\nContents:\n--------------\n{}\n--------------".format(message.author.name, message.author.id, data["score"], escapeFormatting(contents)), "", "")
         if (data["score"] > 5):
             try:
                 # Do timeout first, which is quicker
@@ -1283,7 +1279,7 @@ async def on_member_remove(member):
 async def on_message_delete(message):
     staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["DELETEEDITLOGS"])
     if (message.channel != staff_chan and not message.author.bot):
-        parsedcontent = message.content.replace("@", "(at)")
+        parsedcontent = escapeFormatting(message.content)
         try:
             chanment = message.channel.mention
         except AttributeError:
@@ -1299,7 +1295,7 @@ async def on_message_edit(before, after):
     if not before.author.bot:
         staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["DELETEEDITLOGS"])
         if (before.channel != staff_chan):
-            parsedcontent = before.content.replace("@", "(at)")
+            parsedcontent = escapeFormatting(before.content)
             try:
                 chanment = before.channel.mention
             except AttributeError:
@@ -1325,21 +1321,25 @@ async def on_message(message):
         print("Error, some variable is None")
         return None
     try:
-        if message.author != client.user and is_channel(message, ch_list()["CONSOLE_ACTIONS"]):
+        if message.author == client.user:
+            return
+        
+        orig_content = message.content
+        message.content = escapeFormatting(message.content)
+
+        if is_channel(message, ch_list()["CONSOLE_ACTIONS"]):
             await handle_action_message(ctgp7_server, message, False)
             return
-        elif message.author != client.user and is_channel(message, ch_list()["CITRA_ACTIONS"]):
+        elif is_channel(message, ch_list()["CITRA_ACTIONS"]):
             await handle_action_message(ctgp7_server, message, True)
             return
-    
-        if (message.content == ""): return
 
         msg_split = message.content.split(None, 2)
 
-        bot_mtn = escapeFormatting("" if len(msg_split) == 0 else msg_split[0])
-        bot_cmd = escapeFormatting("" if len(msg_split) <= 1 else msg_split[1])
+        bot_mtn = "" if len(msg_split) == 0 else msg_split[0]
+        bot_cmd = "" if len(msg_split) <= 1 else msg_split[1]
         
-        if (((not is_channel_private(message.channel)) or bot_cmd in private_channel_allowed_cmd()) and get_from_mention(bot_mtn) == client.user) and (message.author != client.user): #@RedYoshiBot
+        if (((not is_channel_private(message.channel)) or bot_cmd in private_channel_allowed_cmd()) and get_from_mention(bot_mtn) == client.user): #@RedYoshiBot
             if bot_cmd == "":
                 await message.reply( 'Hi! :3\nTo get the list of all the available commands use `@RedYoshiBot help`')
                 return
@@ -1417,7 +1417,6 @@ async def on_message(message):
                 elif bot_cmd == 'getlang':
                     if is_channel(message, ch_list()["TRANSLATIONS"]):
                         tag = message.content.split(None)
-                        tag = [escapeFormatting(x) for x in tag]
                         if not (len(tag) == 3):
                             await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["getlang"] + "```")
                             return
@@ -1470,7 +1469,7 @@ async def on_message(message):
                         try:
                             chpack_crypt(url, dstFile, key_kind, mode == "decrypt")
                         except Exception as e:
-                            await message.reply("Failed to process chpack: ```{}```".format(escapeFormatting(repr(e), False)))
+                            await message.reply("Failed to process chpack: ```{}```".format(escapeFormatting(repr(e))))
                             return
                         dstFile.seek(0)
                         sendFile = discord.File(dstFile, filename="output.chpack")
@@ -1674,6 +1673,7 @@ async def on_message(message):
                                     await ch.send("@everyone\r\n" + json_data["name"] +" (" + json_data["tag_name"] + ") has been released! Here is the changelog:\r\n```" + json_data["body"] + "```")
                             except IndexError:
                                 await ch.send(json_data["name"] +" (" + json_data["tag_name"] + ") has been released! Here is the changelog:\r\n```" + json_data["body"] + "```")
+                            await message.reply("Operation succeeded.")
                 elif bot_cmd == 'cancel_schedule':
                     if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split()
@@ -1694,6 +1694,7 @@ async def on_message(message):
                 elif bot_cmd == 'schedule':
                     if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split(None, 4)
+                        tag_orig = orig_content.split(None, 4)
                         if (len(tag) != 5):
                             await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()["schedule"] + "```")
                             return
@@ -1706,17 +1707,19 @@ async def on_message(message):
                             await message.reply( "Invalid user or channel specified.")
                             return
                         messagesent = await message.reply( "The message will be sent in {} {} to {}".format(timeamount[1], timeamount[2], messagedest.name))
-                        await db_mng.schedule_add(messagesent.id, messagedest.id, timeamount[0], tag[4])
+                        await db_mng.schedule_add(messagesent.id, messagedest.id, timeamount[0], tag_orig[4])
                 elif bot_cmd == 'say':
                     if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split(None, 3)
+                        tag_orig = orig_content.split(None, 3)
                         if (len(tag) != 4):
                             await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()["schedule"] + "```")
                             return
-                        await sayfunc(tag[2], tag[3], message)
+                        await sayfunc(tag[2], tag_orig[3], message)
                 elif bot_cmd == 'edit':
                     if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split(None, 3)
+                        tag_orig = orig_content.split(None, 3)
                         if (len(tag) != 4):
                             await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()["edit"] + "```")
                             return
@@ -1726,7 +1729,7 @@ async def on_message(message):
                                 if (msg.author == client.user):
                                     try:
                                         old_content = msg.content
-                                        msg = await msg.edit(content=tag[3])
+                                        msg = await msg.edit(content=tag_orig[3])
                                         sendMultiMessage(message.channel, "Edited successfully:\nOld: \n--------\n{}\n--------\nNew:\n--------\n{}\n--------\n".format(old_content, msg.content), "```", "```")
                                         return
                                     except:
@@ -1818,8 +1821,8 @@ async def on_message(message):
                             if (member is None):
                                 member = CreateFakeMember(str(row[1]))
                             membname = member.name
-                            row[2] = escapeFormatting(row[2])
-                            factSend.append(str(row[0]) + " - " + membname + " - " + row[2] + "\n----------\n")
+                            final_text = escapeFormatting(row[2])
+                            factSend.append(str(row[0]) + " - " + membname + " - " + final_text + "\n----------\n")
                     else:
                         await message.reply( "I've sent you all the facts in a DM.")
                         for row in fact_text:
@@ -1859,7 +1862,6 @@ async def on_message(message):
                     if (len(tag) != 3):
                         await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["addfact"] + "```")
                         return
-                    tag[2] = escapeFormatting(tag[2])
                     try:
                         dummy = await fact_parse(tag[2])
                     except:
@@ -1869,13 +1871,14 @@ async def on_message(message):
                     await message.reply( "Fact added: \n```{}```".format(dummy))                        
                 elif bot_cmd == "parseqr":
                     tag = message.content.split(None, 2)
+                    tag_orig = orig_content.split(None, 2)
                     if ((len(tag) != 3 and len(tag) != 2) or (len(tag) == 2 and len(message.attachments) == 0 and message.reference is None)):
                         await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["parseqr"] + "```")
                         return
                     try:
                         url = ""
                         if (len(tag) == 3):
-                            url = tag[2]
+                            url = tag_orig[2]
                         else:
                             if (message.reference is not None):
                                 replyFromID = message.reference.message_id
@@ -1893,7 +1896,7 @@ async def on_message(message):
                             qrtext = escapeFormatting(qr.printData())
                         await message.reply( "Parsed QR data:\n```{}```".format(qrtext))
                     except Exception as e:
-                        await message.reply( "Failed to parse QR data:\n```{}```".format(str(e)))
+                        await message.reply( "Failed to parse QR data:\n```{}```".format(escapeFormatting(str(e))))
                         return
                 elif bot_cmd == "funcname":
                     tag = message.content.split(None)
@@ -1951,7 +1954,6 @@ async def on_message(message):
                         await message.reply("Operation succeeded")
                 elif bot_cmd == 'help':
                     tag = message.content.split()
-                    tag = [escapeFormatting(x) for x in tag]
                     if (len(tag) > 2):
                         if tag[2] == "game":
                             if (len(tag) == 3):
@@ -2201,12 +2203,11 @@ async def on_message(message):
                     await message.reply( 'Unknown command: `{}`\nTo get the list of all the available commands use `@RedYoshiBot help`'.format(bot_cmd))    
             except:
                 raise
-        elif (is_channel_private(message.channel) and not message.author == client.user):
+        elif (is_channel_private(message.channel)):
             staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["DELETEEDITLOGS"])
             await staff_chan.send("{} sent me the following in a DM:\n```{}```".format(message.author.mention, message.content))
-        elif (is_channel(message, ch_list()["BUGS"]) and (message.author != client.user) and bot_mtn == "!report"):
+        elif (is_channel(message, ch_list()["BUGS"]) and bot_mtn == "!report"):
             tag = message.content.split(None, 1)
-            tag = [escapeFormatting(x) for x in tag]
             if (len(tag) > 1):
                 notif_msg = await message.reply( "Adding your bug report: ```{}```".format(tag[1]))
                 bug_reports = SELF_BOT_SERVER.get_channel(ch_list()["BUG_OPEN"])
@@ -2219,28 +2220,27 @@ async def on_message(message):
                     notif_msg = await notif_msg.edit(content="{}, adding your bug report: ```{}```**Fail**".format(message.author.name, tag[1]))
             else:
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["report"] + "```")
-        elif (bot_mtn[0] == "!"):
+        elif (len(bot_mtn) > 1 and bot_mtn[0] == "!"):
             await handleExclamantion(message)
-        elif (await staff_can_execute(message, "talk", silent=True) and (message.author != client.user) and message.content[0] == '+' and len(message.content) > 2):
-            if (message.content[1] == '+'):
+        elif (await staff_can_execute(message, "talk", silent=True) and orig_content[0] == '+' and len(orig_content) > 2):
+            if (orig_content[1] == '+'):
                 subsindex = 2
             else:
                 subsindex = 1
             if (current_talk_id == ''):
                 await message.reply( "No chat destination set, please use `@RedYoshiBot talk` to set the chat destination ID")
                 return
-            await sayfunc(current_talk_id, message.content[subsindex:].strip(), message)
+            await sayfunc(current_talk_id, orig_content[subsindex:].strip(), message)
             if (subsindex == 2):
                 current_talk_id = ''
                 await message.reply( "Cleared chat destination.")
         elif "hshop" in message.content.lower() or "3hs" in message.content.lower():
             await sendNoPiracyMessage(message, True)
-        elif (all(x in message.content.lower() for x in ["miku"]) or all(x in message.content.lower() for x in ["mbs"])) and itercount((x in message.content.lower() for x in ["remove", "replace", "delete"]), 1) and message.author != client.user:
+        elif (all(x in message.content.lower() for x in ["miku"]) or all(x in message.content.lower() for x in ["mbs"])) and itercount((x in message.content.lower() for x in ["remove", "replace", "delete"]), 1):
             await sendMikuMessage(message, False)
         else:
-            if (message.author != client.user):
-                await checkCTGPMissSpell(message)
-                await checkNitroScam(message)
+            await checkCTGPMissSpell(message)
+            await checkNitroScam(message, orig_content)
     except:
         traceback.print_exc()
         pass

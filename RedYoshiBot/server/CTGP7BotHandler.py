@@ -198,7 +198,7 @@ async def server_message_logger():
         server_message_logger_pending = ""
         
     chPrivate = SELF_BOT_SERVER.get_channel(ch_list()["ONLINELOGS"])
-    await sendMultiMessage(chPrivate, escapeFormatting(text, True), "```\n", "```")
+    await sendMultiMessage(chPrivate, escapeFormatting(text), "```\n", "```")
 
 kick_message_logger_lock = threading.Lock()
 kick_message_logger_pending = []
@@ -743,13 +743,12 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
     currCtwwHandler = ctgp7_server.citraCtwwHandler if isCitra else ctgp7_server.ctwwHandler
     currPointsHandler = ctgp7_server.citraPointsHandler if isCitra else ctgp7_server.pointsHandler
     try:
-        bot_cmd = escapeFormatting(get_server_bot_args(message, 2)[1])
+        bot_cmd = get_server_bot_args(message, 2)[1]
     except IndexError:
         await message.reply( "Invalid syntax, use `@RedYoshiBot server help` to get all the available server commands")
         return
     if (bot_cmd == "help"):
         tag = get_server_bot_args(message)
-        tag = [escapeFormatting(x) for x in tag]
         if is_channel(message, ch_list()["BOTCHAT"]) or await staff_server_can_execute(message, bot_cmd, silent=True) or is_channel_private(message.channel):
             if (len(tag) > 2):
                 if await staff_server_can_execute(message, bot_cmd, silent=True):
@@ -1111,7 +1110,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 member = CreateFakeMember(discordID)
             
             lastName = currDatabase.get_console_last_name(consoleID)
-            await message.reply("`{:016X} {}` -> {}".format(consoleID, lastName, member.mention))
+            await message.reply("`{:016X} {}` -> {}".format(consoleID, escapeFormatting(lastName), member.mention))
     elif bot_cmd == "unlink":
         if await staff_server_can_execute(message, bot_cmd, True):
             tag = get_server_bot_args(message)
@@ -1300,7 +1299,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             with io.BytesIO() as image_binary:
                 miiIcon.save(image_binary, 'PNG')
                 image_binary.seek(0)
-                await message.reply("Mii for {}:".format(miiName), file=discord.File(fp=image_binary, filename='mii.png'))
+                await message.reply("Mii for {}:".format(escapeFormatting(miiName)), file=discord.File(fp=image_binary, filename='mii.png'))
     elif bot_cmd == "name_history":
         if await staff_server_can_execute(message, bot_cmd):
             tag = get_server_bot_args(message)
@@ -1313,7 +1312,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             name_list = currDatabase.get_console_name_history(consoleID)
             msg = "Name history for specified ID: ```\n"
             for name in name_list:
-                msg += "{} ({})\n".format(name[0], str(datetime.datetime.fromtimestamp(float(name[1]))))
+                msg += "{} ({})\n".format(escapeFormatting(name[0]), str(datetime.datetime.fromtimestamp(float(name[1]))))
             msg += "```"
             await message.reply(msg)
     elif bot_cmd == "config":
