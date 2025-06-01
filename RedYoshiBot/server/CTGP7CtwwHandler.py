@@ -73,7 +73,7 @@ class OnlineUserName:
 
     def getMiiName(self):
         return self.miiName
-    
+
     def __str__(self):
         if (self.mode == PlayerNameMode.HIDDEN.value):
             return "Player"
@@ -81,7 +81,11 @@ class OnlineUserName:
             if (self.name is None):
                 return "(Unknown)"
             else:
-                return self.name.replace("`", "'")
+                res = self.name.replace("`", "").replace("@", "")
+                if len(res) == 0:
+                    res = "Player"
+                return res
+        return "(Unknown)"
 
 class OnlineUser:
     def __init__(self, name: OnlineUserName, consoleID: int, isVerified: bool, pid: int):
@@ -547,7 +551,8 @@ class CTGP7CtwwHandler:
             if (nameMode == PlayerNameMode.CUSTOM.value and nameValue is None):
                 return (-1, {})
 
-            if "%" in miiName or "\\" in miiName or (nameValue is not None and ( "%" in nameValue or "\\" in nameValue)):
+            blockedstr = ["%", "\\", "`", "@"]
+            if any(s in miiName for s in blockedstr) or (nameValue is not None and any(s in nameValue for s in blockedstr)):
                 retDict["loginMessage"] = "Invalid name,\nplease change it."
                 return (CTWWLoginStatus.MESSAGEKICK.value, retDict)
 

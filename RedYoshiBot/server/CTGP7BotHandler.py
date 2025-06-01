@@ -2,6 +2,7 @@ from typing import Tuple
 from RedYoshiBot.server.CTGP7Requests import CTGP7Requests
 from .CTGP7ServerHandler import CTGP7ServerHandler
 from .CTGP7ServerDatabase import ConsoleMessageType, CTGP7ServerDatabase
+from .CTGP7CtwwHandler import OnlineUserName, PlayerNameMode
 from ..RedYoshiBot import FakeMember, ch_list, is_channel, is_channel_private, get_role, parsetime, sendMultiMessage, escapeFormatting, role_list, get_from_mention, CreateFakeMember, applyRole, removeRole
 from ..CTGP7Defines import CTGP7Defines
 from ..QRCrashDecode import QRCrashDecode
@@ -437,7 +438,7 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
             leaderTextVR = "```"
             for user in rankArray[i]:
                 userName = ctgp7_server.database.get_console_last_name(user[0], "Player")
-                userName = escapeFormatting(userName)
+                userName = str(OnlineUserName(PlayerNameMode.SHOW.value, userName, ""))
                 position = str(currPos)
                 positionSpaces = " " * max((4 - len(position)), 0)
                 leaderText += "{}.{}{}{}\n".format(position, positionSpaces, purge_player_name_symbols(userName), " \u2705" if ctgp7_server.database.get_console_is_verified(user[0]) else "")
