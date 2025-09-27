@@ -55,6 +55,7 @@ class CTGP7Requests:
         "BETA_TESTER": 0x4742331927F672C9,
         "THANKS_FOR_PLAYING": 0x3B68C72DCE874AD5,
         "BLUE_SHELL_MASTER": 0x04A7ADBB5729EB57,
+        "ONLINE_PLAYER": 0x674113EBE5DFA837,
     }
 
     get_user_info = None
@@ -286,7 +287,7 @@ class CTGP7Requests:
         return self.currCtwwHandler.handle_user_racestart_room(input, self.cID)
 
     def server_user_room_racefinish_handler(self, input):
-        return self.currCtwwHandler.handle_user_racefinish_room(input, self.cID)
+        return self.currCtwwHandler.handle_user_racefinish_room(input, self.cID, CTGP7Requests.badge_ids)
 
     def server_user_room_watch_handler(self, input):
         return self.currCtwwHandler.handle_user_watch_room(input, self.cID)
@@ -345,6 +346,9 @@ class CTGP7Requests:
         if (consoleMsg is not None and consoleMsg[0] == CTWWLoginStatus.MESSAGEKICK.value):
             retDict["loginMessage"] = consoleMsg[1]
             return (CTWWLoginStatus.MESSAGEKICK.value, retDict)
+        localver = input.get("localVer")
+        if self.currDatabase.get_ctww_version() != localver:
+            return (CTWWLoginStatus.VERMISMATCH.value, {})
         uid = input.get("uid")
         score = input.get("score")
         res = self.currPointsModeHandler.updatePlayerScore(self.cID, score, uid)
@@ -377,7 +381,7 @@ class CTGP7Requests:
         "logout": server_logout_handler,
         "discordinfo": req_discord_info,
         "onlinetoken": req_online_token,
-        "uniquepid": req_unique_pid,
+        "uniquepidv2": req_unique_pid,
         "roomcharids": server_get_room_charids,
         "message": server_get_console_message,
         "badges": server_get_badges,
@@ -420,10 +424,14 @@ class CTGP7Requests:
                 res = -1
                 value = 0
                 try:
-                    inData = self.req[k]["value"]
-                    res, value = CTGP7Requests.request_functions[reqType](self, inData)
-                    outData[k]["res"] = res
-                    outData[k]["value"] = value
+                    func = CTGP7Requests.request_functions.get(reqType)
+                    if func is None:
+                        outData[k]["res"] = -1
+                    else:
+                        inData = self.req[k]["value"]
+                        res, value = func(self, inData)
+                        outData[k]["res"] = res
+                        outData[k]["value"] = value
                 except:
                     traceback.print_exc()
                     outData[k]["res"] = -1

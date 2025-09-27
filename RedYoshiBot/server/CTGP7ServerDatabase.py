@@ -5,6 +5,7 @@ import time
 import datetime
 import random
 from typing import List, Tuple
+import string
 
 from ..CTGP7Defines import CTGP7Defines
 
@@ -970,3 +971,57 @@ class CTGP7ServerDatabase:
         with self.lock:
             c = self.conn.cursor()
             c.execute("DELETE FROM weekly_points_leaderboard WHERE 1 = 1")
+
+    def get_dynamic_link(self, id: str):
+        id = "".join(filter(lambda x: x in (string.ascii_letters + string.digits + "_"), str(id)))
+        id = id[:256] if len(id) > 256 else id
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM dynamic_links WHERE id = ?", (str(id),))
+            for row in rows:
+                return row[1]
+        return None
+    
+    def set_dynamic_link(self, id: str, location: str):
+        if location == "":
+            with self.lock:
+                c = self.conn.cursor()
+                c.execute("DELETE FROM weekly_points_leaderboard WHERE id = ?", (str(id),))
+        else:    
+            query = """
+                INSERT INTO dynamic_links (id, location)
+                VALUES (?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                location = excluded.location;"""
+            with self.lock:
+                c = self.conn.cursor()
+                c.execute(query, (str(id), str(location)))
+
+    def list_dynamic_links(self):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM dynamic_links")
+            ret = {}
+            for row in rows:
+                ret[row[0]] = row[1]
+            return ret
+        
+    def update_player_penalize(self, cID: int):
+        currTime = current_time_min()
+        penalize = False
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM player_penalize WHERE cID = ?", (int(cID),))
+            for row in rows:
+                penalize = (currTime > row[1]) and ((currTime - row[1]) < 60) 
+
+        query = """
+                INSERT INTO player_penalize (cID, lasttime)
+                VALUES (?, ?)
+                ON CONFLICT(cID) DO UPDATE SET
+                lasttime = excluded.lasttime;"""
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute(query, (int(cID), int(currTime)))
+
+        return penalize

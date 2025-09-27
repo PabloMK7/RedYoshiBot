@@ -66,6 +66,7 @@ def staff_server_help_array():
         "delete_badge": ">@RedYoshiBot server delete_badge (badgeID)\nDeletes the specified badge.",
         "console_badge": ">@RedYoshiBot server console_badge (grant|remove|list) (consoleID) [badgeID]\nDoes specified operation for the console ID and badge ID.",
         "points_weekly": ">@RedYoshiBot server points_weekly (get|end)\nGets the current Points Mode Weekly Challenge config or ends it immediately.",
+        "dynamic_link": ">@RedYoshiBot server dynamic_link (list/set) [id] [location]\nLists or sets a dynamic link. To erase a dynamic link, only specify id."
     }
     
 def staff_server_command_level():
@@ -103,6 +104,7 @@ def staff_server_command_level():
         "delete_badge": 0,
         "console_badge": 1,
         "points_weekly": 1,
+        "dynamic_link": -1,
     }
 
 async def staff_server_can_execute(message, command, silent=False):
@@ -112,13 +114,13 @@ async def staff_server_can_execute(message, command, silent=False):
         adminRole = get_role(role_list()["ADMIN"])
         hasMod = moderatorRole in message.author.roles
         hasAdmin = (adminRole in message.author.roles) or message.author.id == SELF_BOT_SERVER.owner.id
-        privilegeLevel = 0 if hasAdmin else (1 if hasMod else 2)
+        privilegeLevel = -1 if message.author.id == SELF_BOT_SERVER.owner.id else (0 if hasAdmin else (1 if hasMod else 2))
         try:
             retVal = staff_server_command_level()[command] >= privilegeLevel
         except:
             retVal = False
     if (not retVal and not silent):
-        await message.channel.send("{}, you don't have permission to do that!".format(message.author.name))
+        await message.reply("You don't have permission to do that!")
     return retVal
 
 def get_server_bot_args(message: discord.message, maxslplits=-1): # splits: amount of cuts after "server"
@@ -1188,7 +1190,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 try:
                     vr = int(tag[5])
                     if (game != "points"):
-                        if (vr < 1 or vr > 99999):
+                        if (vr < 1 or vr > 999999):
                             raise ValueError()
                 except ValueError:
                     await message.reply( "Invalid number.")
@@ -1715,6 +1717,31 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             elif mode == "end":
                 newTime = int(time.time()) + 10
                 currPointsHandler.updateEndTime(newTime)
+                await message.reply( "Operation succeeded.")
+    elif bot_cmd == "dynamic_link":
+        if await staff_server_can_execute(message, bot_cmd):
+            if (isCitra):
+                await message.reply("Operation not supported with Citra.")
+                return
+            tag = get_server_bot_args(message, 4)
+            mode = tag[2] if len(tag) >= 3 else ""
+            if (mode not in ["list", "set"]) or (len(tag) != 3 and mode == "list") or (len(tag) != 5 and len(tag) != 4 and mode == "set"):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
+                return
+            if mode == "list":
+                l = currDatabase.list_dynamic_links()
+                items = []
+                for k in l:
+                    items.append("{}: {}\n".format(k, l[k]))
+                if len(items) == 0:
+                    items.append("empty")
+                await sendMultiMessage(message.channel, items, "```", "```")
+            elif mode == "set":
+                id = tag[3]
+                location = ""
+                if (len(tag) == 5):
+                    location = tag[4]
+                currDatabase.set_dynamic_link(id, location)
                 await message.reply( "Operation succeeded.")
     else:
         await message.reply( "Invalid server command, use `@RedYoshiBot server help` to get all the available server commands.")

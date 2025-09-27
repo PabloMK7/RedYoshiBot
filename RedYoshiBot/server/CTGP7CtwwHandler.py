@@ -107,6 +107,7 @@ class OnlineUser:
         self.uName = ""
         self.usingVC = False
         self.lastSZSName = ""
+        self.canPenalize = False
 
     def setDebug(self):
         self.debug = True
@@ -178,6 +179,9 @@ class OnlineUser:
 
     def setUsingVoiceChat(self, usingVC: bool):
         self.usingVC = usingVC
+
+    def set_penalize_candidate(self, can_penalize):
+        self.canPenalize = can_penalize
 
     def __hash__(self):
         return hash(self.cID)
@@ -421,10 +425,10 @@ class CTGP7CtwwHandler:
             cidRem = user.cID
         elif (cID is not None):
             cidRem = cID
-        try:
+
+        if cidRem in self.loggedUsers:
+            self.try_penalize_user(self.loggedUsers[cidRem])
             del self.loggedUsers[cidRem]
-        except:
-            pass
     
     def remove_from_all_rooms(self, user: OnlineUser=None, cID: int=None):
         for k in self.activeRooms:
@@ -516,6 +520,16 @@ class CTGP7CtwwHandler:
                 return True
         return False
 
+    def try_penalize_user(self, user: OnlineUser):
+        if not user.canPenalize or user.lobby != 0:
+            return
+        
+        user.set_penalize_candidate(False)
+        penalize = self.database.update_player_penalize(user.cID)
+        if penalize:
+            self.database.set_console_message(user.cID, ConsoleMessageType.TIMED_KICKMESSAGE.value, "Disconnected mid race 2 times in less than 60 minutes", 30, True)
+            self.kick_user(user.cID)
+
     def handle_user_login(self, input: dict, cID: int):
         with self.lock:
             nameMode = input.get("nameMode")
@@ -565,6 +579,9 @@ class CTGP7CtwwHandler:
             
             self.database.set_console_last_name(cID, str(OnlineUserName(nameMode, nameValue, miiName)))
             user = OnlineUser(OnlineUserName(nameMode, nameValue, miiName), cID, self.database.get_console_is_verified(cID), pid)
+            
+            self.remove_from_all_rooms(user)
+            self.user_logout(user)
 
             consoleMsg = self.get_console_message(user.cID)
             if (consoleMsg is not None and consoleMsg[0] == CTWWLoginStatus.MESSAGEKICK.value):
@@ -572,8 +589,6 @@ class CTGP7CtwwHandler:
                 return (CTWWLoginStatus.MESSAGEKICK.value, retDict)
             
             user.setCTGP7Network(isCTGP7Network)
-            self.remove_from_all_rooms(user)
-            self.user_logout(user)
             self.user_login(user)
             user.lobby = lobby
             user.uName = uName
@@ -765,6 +780,7 @@ class CTGP7CtwwHandler:
             user.setUsingVoiceChat(usingVC)
             user.isAlive()
             user.lastSZSName = szsName
+            user.set_penalize_candidate(True)
 
             retdict = {}
             scs = [] if user.lobby != 0 else self.database.get_track_banned_ultrasc(szsName)
@@ -778,7 +794,7 @@ class CTGP7CtwwHandler:
 
             return (CTWWLoginStatus.SUCCESS.value, retdict)
     
-    def handle_user_racefinish_room(self, input, cID):
+    def handle_user_racefinish_room(self, input, cID, badge_ids):
         with self.lock:
             gID = input.get("gatherID")
             token = input.get("token")
@@ -797,6 +813,7 @@ class CTGP7CtwwHandler:
             if (room is None or not room.hasPlayer(user)):
                 return (CTWWLoginStatus.FAILED.value, {})
             
+            self.database.grant_badge(cID, badge_ids["ONLINE_PLAYER"])
             bID = self.database.get_event_grant_badge()
             if bID != 0:
                 self.database.grant_badge(cID, bID)
@@ -816,6 +833,7 @@ class CTGP7CtwwHandler:
                 user.setVRIncr(nowVR - prevVr)
 
             user.isAlive()
+            user.set_penalize_candidate(False)
 
             retDict["trackHistory"] = room.getTrackHistory()
 
@@ -856,6 +874,7 @@ class CTGP7CtwwHandler:
                 return (CTWWLoginStatus.NOTLOGGED.value, {})
 
             self.remove_from_all_rooms(user)
+            self.try_penalize_user(user)
 
             user.setState(UserState.IDLE.value)
             user.setPlayerID(-1)

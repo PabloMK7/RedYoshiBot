@@ -443,6 +443,7 @@ def staff_help_array():
         "unmute": ">@RedYoshiBot unmute (user)\r\nUnmutes a muted user.",
         "warn": ">@RedYoshiBot warn (user) [Reason]\nGives a warning to an user. Reason is optional.",
         "ban": ">@RedYoshiBot ban (user) [Reason]\nSets warnings to 4 and bans the user.",
+        "scam": ">@RedYoshiBot scam (user)\nMarks the user as a hacked/scam account. Kicks, mutes and deletes messages.",
         "kick": ">@RedYoshiBot warn (user) [Reason]\nSets warnings to 3 and kicks the user",
         "setwarn": ">@RedYoshiBot setwarn (user) (amount) [Reason]\nSets the warning amount of an user. Reason is optional.",
         "getwarn": ">@RedYoshiBot getwarn [user]\nGets all the warned users or the warnings for the specified user.",
@@ -473,6 +474,7 @@ def staff_command_level():
         "warn": 1,
         "setwarn": 1,
         "ban": 1,
+        "scam": 1,
         "kick": 1,
         "getwarn": 1,
         "getmute": 1,
@@ -534,6 +536,7 @@ def ch_list():
         "DELETEEDITLOGS": 1184928816481706164,
         "CONSOLE_ACTIONS": 1336735937090289674,
         "CITRA_ACTIONS": 1336737024446693488,
+        "SPAM_HONEYPOT": 1407294172548825248,
     }
 
 def NUMBER_EMOJI():
@@ -1136,9 +1139,41 @@ def getURLs(s: str):
 
 checkNitroScam_data = {}
 
-async def checkNitroScam(message, orig_content):
+async def performScamAction(author: discord.Member):
+    try:
+        # Do timeout first, which is quicker
+        await author.timeout(datetime.timedelta(hours=1))
+    except:
+        traceback.print_exc()
+    try:
+        await author.send("**CTGP-7 server:** Suspicious phising activity has been detected.\nYou have been kicked and muted for 3 days.\nPlease contact a staff member if you think this is a mistake.")
+    except:
+        pass
+    
+    # Ban, wait a bit, then unban then mute
+    try:
+        await author.ban(delete_message_seconds=60 * 60 * 24)
+    except:
+        traceback.print_exc()
+
+    await asyncio.sleep(120)
+    
+    try:
+        await author.unban()
+        await mute_user(author.id, 3 * 60 * 24)
+    except:
+        pass
+    
+async def checkNitroScam(message: discord.Message, orig_content):
     global checkNitroScam_data
     contents = orig_content.lower()
+
+    if (is_channel(message, ch_list()["SPAM_HONEYPOT"])):
+        phisChn = client.get_channel(ch_list()["PHISING"])
+        await sendMultiMessage(phisChn, "User: {} ({})\nScore: {}\nContents:\n--------------\n{}\n--------------".format(message.author.name, message.author.id, "Honeypot", escapeFormatting(contents)), "", "")
+        await performScamAction(message.author)
+        return
+    
     phisingScore = sum([contents.count("@everyone") * 2, contents.count("@here") * 2, contents.count("ctpk") * 2, contents.count("nitro") * 2, contents.count("free"), contents.count("cs:go"), contents.count("claim"), contents.count("steam"), contents.count("gift")])
     if (phisingScore == 0): return
     urlCount = 0
@@ -1170,30 +1205,7 @@ async def checkNitroScam(message, orig_content):
             phisChn = client.get_channel(ch_list()["PHISING"])
             await sendMultiMessage(phisChn, "User: {} ({})\nScore: {}\nContents:\n--------------\n{}\n--------------".format(message.author.name, message.author.id, data["score"], escapeFormatting(contents)), "", "")
         if (data["score"] > 5):
-            try:
-                # Do timeout first, which is quicker
-                await message.author.timeout(datetime.timedelta(hours=1))
-            except:
-                traceback.print_exc()
-            try:
-                await message.author.send("**CTGP-7 server:** Suspicious phising activity has been detected.\nYou have been kicked and muted for 3 days.\nPlease contact a staff member if you think this is a mistake.")
-            except:
-                pass
-            
-            # Ban, wait a bit, then unban then mute
-            try:
-                await message.author.ban(delete_message_seconds=60 * 60 * 24)
-            except:
-                traceback.print_exc()
-
-            await asyncio.sleep(120)
-            
-            try:
-                await message.author.unban()
-                await mute_user(message.author.id, 3 * 60 * 24)
-            except:
-                pass
-            
+            await performScamAction(message.author)
 
 from .server.CTGP7BotHandler import queue_player_role_update, get_user_info, unlink_console, handle_server_command, handler_server_init_loop, handler_server_update_globals, kick_message_callback, server_message_logger_callback, server_on_member_remove, handle_action_message
 
@@ -1623,6 +1635,18 @@ async def on_message(message):
                             await punish(warn_member, warncount)
                         else:
                             await message.reply( "Invalid member.")
+                elif bot_cmd == "scam" or bot_cmd == "spam":
+                    if await staff_can_execute(message, bot_cmd):
+                        tag = message.content.split(None, 4)
+                        if (len(tag) < 3):
+                            await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()["scam"] + "```")
+                            return
+                        warn_member = get_from_mention(tag[2])
+                        if (warn_member is None):
+                            await message.reply("Member not found, please do manual action.")
+                            return
+                        await message.reply("Operation succeeded.")
+                        await performScamAction(warn_member)
                 elif bot_cmd == 'getwarn':
                     tag = message.content.split()
                     if await staff_can_execute(message, bot_cmd):

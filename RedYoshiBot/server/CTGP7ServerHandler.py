@@ -41,6 +41,14 @@ class CTGP7ServerHandler:
 
     class PostGetHandler(BaseHTTPRequestHandler):
         def do_GET(self):
+            def send_not_found():
+                textret = "Not Found"
+                self.send_response(404)
+                self.send_header("Content-type", "text/plain")
+                self.send_header("Content-length", len(textret))
+                self.end_headers()
+                self.wfile.write(bytes(textret, "ascii"))
+
             what = ""
             if (len(self.path) >= 3 and self.path[0] == "/" and self.path[2] == "/"):
                 what = self.path[1]
@@ -59,13 +67,17 @@ class CTGP7ServerHandler:
                 self.send_header("Content-length", len(password))
                 self.end_headers()
                 self.wfile.write(bytes(password, "ascii"))
+            elif (what == "l"):
+                id = self.path[3:]
+                location = CTGP7ServerHandler.myself.database.get_dynamic_link(id)
+                if location is None:
+                    send_not_found()
+                else:
+                    self.send_response(302)
+                    self.send_header("Location", location)
+                    self.end_headers()
             else:
-                textret = "Not Found"
-                self.send_response(404)
-                self.send_header("Content-type", "text/plain")
-                self.send_header("Content-length", len(textret))
-                self.end_headers()
-                self.wfile.write(bytes(textret, "ascii"))
+                send_not_found()
 
         def do_POST(self):
             isCitra = "Citra" in self.headers
