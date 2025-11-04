@@ -521,14 +521,15 @@ class CTGP7CtwwHandler:
         return False
 
     def try_penalize_user(self, user: OnlineUser):
-        if not user.canPenalize or user.lobby != 0:
-            return
+        return
+        # if not user.canPenalize or user.lobby != 0 or user.isDebug():
+        #     return
         
-        user.set_penalize_candidate(False)
-        penalize = self.database.update_player_penalize(user.cID)
-        if penalize:
-            self.database.set_console_message(user.cID, ConsoleMessageType.TIMED_KICKMESSAGE.value, "Disconnected mid race 2 times in less than 60 minutes", 30, True)
-            self.kick_user(user.cID)
+        # user.set_penalize_candidate(False)
+        # penalize = self.database.update_player_penalize(user.cID)
+        # if penalize:
+        #     self.database.set_console_message(user.cID, ConsoleMessageType.TIMED_KICKMESSAGE.value, "Disconnected mid race 2 times in less than 30 minutes", 30, True)
+        #     self.kick_user(user.cID)
 
     def handle_user_login(self, input: dict, cID: int):
         with self.lock:

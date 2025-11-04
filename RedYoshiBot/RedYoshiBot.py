@@ -561,7 +561,7 @@ def role_list():
         "GOLD_PLAYER": 1084265591055073431,
         "EMERALD_PLAYER": 1084266021696852028,
         "DIAMOND_PLAYER": 1084266363385819136,
-        "RAINBOW_PLAYER": 1222582695754989608,
+        "RAINBOW_PLAYER": 1433172849098625035,
     }
 
 def SERVER_ID():
@@ -783,12 +783,28 @@ async def applyRole(memberID, roleID, atomic = False):
     except:
         pass
 
+async def applyRoles(memberID, roles, atomic = False):
+    try:
+        user = get_from_mention(memberID)
+        if (user is not None):
+            await user.add_roles(*roles, atomic=atomic)
+    except:
+        pass
+
 async def removeRole(memberID, roleID, atomic = False):
     try:
         user = get_from_mention(memberID)
         if (user is not None):
             role = get_role(roleID)
             await user.remove_roles(role, atomic=atomic)
+    except:
+        pass
+
+async def removeRoles(memberID, roles, atomic = False):
+    try:
+        user = get_from_mention(memberID)
+        if (user is not None):
+            await user.remove_roles(*roles, atomic=atomic)
     except:
         pass
 

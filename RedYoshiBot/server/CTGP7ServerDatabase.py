@@ -28,7 +28,7 @@ class CTGP7ServerDatabase:
         "all3star",
         "all10pts",
         "vr5000",
-        "bluecoin",
+        "scoreat",
     ]
     class VRInfos:
         def __init__(self, withPos: bool):
@@ -227,6 +227,12 @@ class CTGP7ServerDatabase:
     def set_weekly_points_special_part_amounts(self, amounts: str):
         self.set_database_config("specialpartamounts", str(amounts))
 
+    def get_weekly_badge_limits(self):
+        return str(self.get_database_config("weeklybadgelimits"))
+    
+    def set_weekly_badge_limits(self, amounts: str):
+        self.set_database_config("weeklybadgelimits", str(amounts))
+
     def verify_console_legality(self, cID, cSH1, cSH2):
         with self.lock:
             c = self.conn.cursor()
@@ -321,7 +327,41 @@ class CTGP7ServerDatabase:
             courseType = CTGP7Defines.getTypeFromSZS(szsName)
             if (courseType != -1):
                 c.execute('INSERT INTO stats_tracksfreq VALUES (?,?,?,?)', (str(szsName), int(currsplit), int(value), int(courseType)))
+
+    def update_score_attack_mean(self, szsName, value):
+        if CTGP7Defines.getTrackNameFromSzs(szsName) == "???":
+            return
+
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute(
+                """
+                INSERT INTO score_attack_mean (id, score, count)
+                VALUES (?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    score = score + excluded.score,
+                    count = count + excluded.count
+                """,
+                (str(szsName), int(value[0]), int(value[1]))
+            )
     
+    def get_all_score_attack_mean(self):
+        ret = []
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute(
+                """
+                    SELECT id, score, count, CAST(score AS FLOAT) / count AS mean
+                    FROM score_attack_mean
+                    ORDER BY mean DESC
+                """
+            )
+            for row in rows:
+                if CTGP7Defines.getTrackNameFromSzs(row[0]) == "???":
+                        continue
+                ret.append([row[0], row[3], row[2]])
+        return ret
+
     def get_stats(self):
         with self.lock:
             c = self.conn.cursor()
@@ -866,7 +906,7 @@ class CTGP7ServerDatabase:
                 return str(row[1])
         return default
     
-    def get_weekly_points_leaderboard(self, minRank, maxRank, limit, cID=-1):
+    def get_weekly_points_leaderboard(self, minRank, maxRank, limit, cID=-1, ignoreName=False):
         query = """
             WITH ranked AS (
                 SELECT
@@ -896,17 +936,18 @@ class CTGP7ServerDatabase:
                 ret.append(rank)
             i=0
             self_index=-1
-            for r in ret:
-                c2 = self.conn.cursor()
-                if cID == int(r.cID):
-                    self_index = i
-                rows = c2.execute("SELECT * FROM console_name WHERE cID = ? ORDER BY timestamp DESC", (int(r.cID),))
-                name = "Player"
-                for row in rows:
-                    name = str(row[1])
-                    break
-                r.name = name
-                i+=1
+            if not ignoreName:
+                for r in ret:
+                    c2 = self.conn.cursor()
+                    if cID == int(r.cID):
+                        self_index = i
+                    rows = c2.execute("SELECT * FROM console_name WHERE cID = ? ORDER BY timestamp DESC", (int(r.cID),))
+                    name = "Player"
+                    for row in rows:
+                        name = str(row[1])
+                        break
+                    r.name = name
+                    i+=1
             return (self_index, ret)
 
     def get_weekly_points_surrounding(self, cID, amount=4):
@@ -1013,7 +1054,7 @@ class CTGP7ServerDatabase:
             c = self.conn.cursor()
             rows = c.execute("SELECT * FROM player_penalize WHERE cID = ?", (int(cID),))
             for row in rows:
-                penalize = (currTime > row[1]) and ((currTime - row[1]) < 60) 
+                penalize = (currTime > row[1]) and ((currTime - row[1]) < 30) 
 
         query = """
                 INSERT INTO player_penalize (cID, lasttime)

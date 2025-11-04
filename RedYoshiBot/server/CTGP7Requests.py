@@ -23,6 +23,8 @@ class CTGP7Requests:
 		"cd_races",
 		"online_coin_battles",
 		"online_balloon_battles",
+        "score_attack_races",
+        "weekly_challenge_attempts",
         "failed_mission#2",
         "completed_mission#2",
         "perfect_mission#2",
@@ -56,6 +58,11 @@ class CTGP7Requests:
         "THANKS_FOR_PLAYING": 0x3B68C72DCE874AD5,
         "BLUE_SHELL_MASTER": 0x04A7ADBB5729EB57,
         "ONLINE_PLAYER": 0x674113EBE5DFA837,
+        "SCORE_ATTACK": 0x53198E0DF1F28F98,
+        "WEEKLY": 0x78C3336C4C60F2D2,
+        "WEEKLY_GOLD": 0x4BD339E5316CF6E0,
+        "WEEKLY_SILVER": 0x52FAF3B0161EDF33,
+        "WEEKLY_BRONZE": 0x334A9494246CC0CA,
     }
 
     get_user_info = None
@@ -100,9 +107,11 @@ class CTGP7Requests:
                 self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["ALL_3STAR"])
             if s == "all10pts" and prev:
                 self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["ALL_MISSION"])
-            if s == "bluecoin" and prev:
-                self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["ALL_BLUE_COINS"])
+            if s == "scoreat" and prev:
+                self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["SCORE_ATTACK"])
 
+        if input.get("bluecoin", False):
+            self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["ALL_BLUE_COINS"])
         if input.get("watchedcredits", False):
             self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["THANKS_FOR_PLAYING"])
         if input.get("dodgedblue", False):
@@ -175,15 +184,17 @@ class CTGP7Requests:
                 if (isFirstReport):
                     self.currDatabase.increment_today_launches()
                 for k in input:
-                    # Fix typo in the plugin
-                    namefixed = k
-                    if k == "completed_missionv#2":
-                        namefixed = "completed_mission#2"
-                    if (namefixed in CTGP7Requests.statsList):
-                        self.currDatabase.increment_general_stats(namefixed.split("#", 1)[0], input[k])
+                    if (k in CTGP7Requests.statsList):
+                        self.currDatabase.increment_general_stats(k.split("#", 1)[0], input[k])
                     elif (k == "played_tracks"):
                         for t in input[k]:
                             self.currDatabase.increment_track_frequency(t, input[k][t])
+                    elif (k == "score_track_mean"):
+                        for t in input[k]:
+                            val = input[k][t]
+                            score = int.from_bytes(val[:8], "little")
+                            count = int.from_bytes(val[8:], "little")
+                            self.currDatabase.update_score_attack_mean(t, (score, count))
                     elif (k == "status"):
                         self.handle_status(input[k])
                 self.currDatabase.set_stats_dirty(True)

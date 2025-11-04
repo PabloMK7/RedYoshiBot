@@ -66,9 +66,19 @@ class CTGP7PointsModeHandler:
             db.set_weekly_points_config("recTires", " ".join(str(x) for x in self.recTires))
             db.set_weekly_points_config("recWings", " ".join(str(x) for x in self.recWings))
 
-        def __str__(self):
-            ret = "UID: 0x{:016X}\nEnd Date: {}\n".format(self.uid, time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.endTime)))
-            ret += "Course: {}\n".format(CTGP7Defines.getTrackNameFromSzs(self.trackSzs))
+        def getString(self, is_admin):
+            ret = ""
+            if is_admin:
+                ret += "UID: 0x{:016X}\n".format(self.uid) 
+            now = time.time()
+            remaining = self.endTime - now
+            ret = "Course: {}\n".format(CTGP7Defines.getTrackNameFromSzs(self.trackSzs))
+            ret += "End Date: {} UTC (Remaining: {}d {}h {}m)\n".format(
+                time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(self.endTime)),
+                int(remaining // 86400),
+                int((remaining % 86400) // 3600),
+                int((remaining % 3600) // 60)
+            )
             ret += "Bonus:\n"
             ret += "\tDrivers: {}\n".format(", ".join(CTGP7Defines.getDriverName(x) for x in self.recDrivers))
             ret += "\tKarts: {}\n".format(", ".join(CTGP7Defines.getKartBodyName(x) for x in self.recBodies))
@@ -92,6 +102,8 @@ class CTGP7PointsModeHandler:
         self.configLock = threading.Lock()
         self.taskRunning = True
         self.task = asyncio.create_task(self._check_task())
+        self.onUpdateCallback = None
+        self.onChallengeEndCallback = None
         with self.configLock:
             self.config = self.WeeklyChallengeConfig(False, db)
 
@@ -105,7 +117,9 @@ class CTGP7PointsModeHandler:
 
     def getConfigBson(self):
         with self.configLock:
-            return self.config.asBson()
+            bson = self.config.asBson()
+            bson["limits"] = self.currDatabase.get_weekly_badge_limits()
+            return bson
         
     def getLeaderboardBson(self, cID):
         with self.configLock:
@@ -136,16 +150,28 @@ class CTGP7PointsModeHandler:
             if uID != -1 and uID != self.config.uid:
                 return False
             self.currDatabase.set_weekly_points_leaderboard_score(cID, score)
+            if self.onUpdateCallback is not None:
+                self.onUpdateCallback()
             return True
 
-    def getConfigStr(self):
+    def getConfigStr(self, is_admin):
         with self.configLock:
-            return str(self.config)
-        
+            return self.config.getString(is_admin)
+    
+    def resetLeaderboard(self):
+        self.currDatabase.clear_weekly_points_leaderboard()
+        if self.onUpdateCallback is not None:
+            self.onUpdateCallback()
+
     def updateEndTime(self, newEndTime):
         with self.configLock:
             self.config.endTime = newEndTime
             self.config.save(self.currDatabase)
+            if self.onUpdateCallback is not None:
+                self.onUpdateCallback()
+
+    def getBadgeLimits(self):
+        return self.currDatabase.get_weekly_badge_limits().split(":")
 
     async def _check_task(self):
         while self.taskRunning:
@@ -153,6 +179,10 @@ class CTGP7PointsModeHandler:
                 endTime = self.config.endTime
             if endTime == 0 or int(time.time()) >= endTime:
                 with self.configLock:
+                    if self.onChallengeEndCallback is not None:
+                        self.onChallengeEndCallback()
                     self.config = self.WeeklyChallengeConfig(True, self.currDatabase)
                     self.currDatabase.clear_weekly_points_leaderboard()
+                    if self.onUpdateCallback is not None:
+                        self.onUpdateCallback()
             await asyncio.sleep(5)

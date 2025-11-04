@@ -3,7 +3,7 @@ from RedYoshiBot.server.CTGP7Requests import CTGP7Requests
 from .CTGP7ServerHandler import CTGP7ServerHandler
 from .CTGP7ServerDatabase import ConsoleMessageType, CTGP7ServerDatabase
 from .CTGP7CtwwHandler import OnlineUserName, PlayerNameMode
-from ..RedYoshiBot import FakeMember, ch_list, is_channel, is_channel_private, get_role, parsetime, sendMultiMessage, escapeFormatting, role_list, get_from_mention, CreateFakeMember, applyRole, removeRole
+from ..RedYoshiBot import FakeMember, ch_list, is_channel, is_channel_private, get_role, parsetime, sendMultiMessage, escapeFormatting, role_list, get_from_mention, CreateFakeMember, applyRole, removeRole, removeRoles, applyRoles
 from ..CTGP7Defines import CTGP7Defines
 from ..QRCrashDecode import QRCrashDecode
 import discord
@@ -29,7 +29,7 @@ def handler_server_update_globals(bot_member, bot_server):
 def server_help_array():
     return {
         "help": ">@RedYoshiBot server help\nGets the help for the server specific commands.",
-        "stats": ">@RedYoshiBot server stats (ct/ot/ba)\nGets the usage stats for custom tracks (ct), original tracks (ot) or battle arenas (ba).",
+        "stats": ">@RedYoshiBot server stats (ct/ot/ba/scmean)\nGets the usage stats for custom tracks (ct), original tracks (ot), battle arenas (ba) or score attack mean (scmean).",
         "link": ">@RedYoshiBot server link (link code)\nLinks a console to your discord account using the code provided by the CTGP-7 plugin.",
         "unlink": ">@RedYoshiBot server unlink\nUnlinks your console and discord account.",
         "list_badges": ">@RedYoshiBot server list_badges\nLists all the available badges.",
@@ -57,7 +57,7 @@ def staff_server_help_array():
         "purge_console_link": ">@RedYoshiBot server purge_console_link\nRemoved console links from users that are no longer in the server.",
         "get_mii_icon": ">@RedYoshiBot server get_mii_icon (consoleID)\nGets the mii icon of the specified user.",
         "name_history": ">@RedYoshiBot server name_history (consoleID)\nGets the name history of the specified user.",
-        "config": ">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable/vrmultiplier/allowedCharacters/allowedTracks/allowedItems/finishracebadge/blueshellshowdown/specialvrcharacters/specialvrcharmultiplier/weeklypointsduration/specialpartamounts) [newValue]\nGets or sets the config parameters for online mode.",
+        "config": ">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable/vrmultiplier/allowedCharacters/allowedTracks/allowedItems/finishracebadge/blueshellshowdown/specialvrcharacters/specialvrcharmultiplier/weeklypointsduration/weeklyspecialpartamounts/weeklybadgelimits) [newValue]\nGets or sets the config parameters for online mode.",
         "otplegality": ">@RedYoshiBot server otplegality (get/getall/set/clear) (consoleID)\nGets, sets or clear the otp legality of a specified console.",
         "consoleserver": ">@RedYoshiBot server consoleserver (get/set/clear)\nSets a NEX server address to the specified console.",
         "banned_ultra_shortcut": ">@RedYoshiBot server banned_ultra_shortcut (get/set/clear) (szsName) [from_min] [from_max] [to_min] [to_max] [trigger]\nManages the banned ultra shortcuts for the specified track.",
@@ -65,7 +65,7 @@ def staff_server_help_array():
         "edit_badge": ">@RedYoshiBot server edit_badge (badgeID) (badge_name) | (badge_description)\nEdits thespecified badge to the provided name, description and attached bclim file.",
         "delete_badge": ">@RedYoshiBot server delete_badge (badgeID)\nDeletes the specified badge.",
         "console_badge": ">@RedYoshiBot server console_badge (grant|remove|list) (consoleID) [badgeID]\nDoes specified operation for the console ID and badge ID.",
-        "points_weekly": ">@RedYoshiBot server points_weekly (get|end)\nGets the current Points Mode Weekly Challenge config or ends it immediately.",
+        "points_weekly": ">@RedYoshiBot server points_weekly (get|end|clear)\nGets the current Points Mode Weekly Challenge config, ends it immediately or clears the leaderboard.",
         "dynamic_link": ">@RedYoshiBot server dynamic_link (list/set) [id] [location]\nLists or sets a dynamic link. To erase a dynamic link, only specify id."
     }
     
@@ -132,23 +132,32 @@ player_role_applier_lock = threading.Lock()
 player_role_applier_pending = []
 async def calc_player_role(ctgp7_server: CTGP7ServerHandler, userID: str):
     role_names = ["PLAYER", "BRONZE_PLAYER", "SILVER_PLAYER", "GOLD_PLAYER", "EMERALD_PLAYER", "DIAMOND_PLAYER", "RAINBOW_PLAYER"]
-    for r in role_names:
-        await removeRole(userID, role_list()[r])
+
+    all_roles = [get_role(role_list()[x]) for x in role_names]
+    await removeRoles(userID, all_roles)
+
     cID = ctgp7_server.database.get_discord_link_user(userID)
     if (cID is None):
         return
+    
     count = 0
     for s in CTGP7ServerDatabase.allowed_console_status:
         if (ctgp7_server.database.get_console_status(cID, s) == 1): count += 1
+
+    add_roles = [get_role(role_list()[role_names[0]])]
     if (count >= 1):
-        await applyRole(userID, role_list()[role_names[count]])
-    await applyRole(userID, role_list()[role_names[0]])
+        add_roles.append(get_role(role_list()[role_names[count]]))
+    await applyRoles(userID, add_roles)
 
 def queue_player_role_update(userID: str):
     global player_role_applier_lock
     global player_role_applier_pending
     with player_role_applier_lock:
         player_role_applier_pending.append(userID)
+
+async def process_pending_player_role_update_bulk(ctgp7_server: CTGP7ServerHandler, list):
+    for user in list:
+        await calc_player_role(ctgp7_server, user)
 
 async def process_pending_player_role_update(ctgp7_server: CTGP7ServerHandler):
     global player_role_applier_lock
@@ -165,20 +174,33 @@ def purge_player_name_symbols(line: str):
     return line.translate(toTranslate)
 
 async def send_course_usage_list(message: discord.Message, database: CTGP7ServerDatabase, course_type: int):
-    mostTracks = database.get_most_played_tracks(course_type, 10000)
-    position_list = []
-    currTrack = 1
-    for k in mostTracks:
-        trackName = CTGP7Defines.getTrackNameFromSzs(k[0])
-        position = str(currTrack)
-        positionSpaces = " " * max((4 - len(position)), 0)
-        splitSpaces = " " * max((32 - len(trackName)), 0)
-        if (k[1] != 0):
-            split = "{} ({})".format(str(k[1]), str(k[1]+k[2]))
-        else:
-            split = "{}".format(str(k[2]))
-        position_list.append("{}.{}{}{}{}\n".format(position, positionSpaces, trackName, splitSpaces, split))
-        currTrack += 1
+    if course_type == 3:
+        mostScore = database.get_all_score_attack_mean()
+        position_list = []
+        currTrack = 1
+        for k in mostScore:
+            trackName = CTGP7Defines.getTrackNameFromSzs(k[0])
+            position = str(currTrack)
+            positionSpaces = " " * max((4 - len(position)), 0)
+            meanSpaces = " " * max((32 - len(trackName)), 0)
+            mean = "{} ({})".format(str(int(k[1])), str(k[2]))
+            position_list.append("{}.{}{}{}{}\n".format(position, positionSpaces, trackName, meanSpaces, mean))
+            currTrack += 1
+    else:
+        mostTracks = database.get_most_played_tracks(course_type, 10000)
+        position_list = []
+        currTrack = 1
+        for k in mostTracks:
+            trackName = CTGP7Defines.getTrackNameFromSzs(k[0])
+            position = str(currTrack)
+            positionSpaces = " " * max((4 - len(position)), 0)
+            splitSpaces = " " * max((32 - len(trackName)), 0)
+            if (k[1] != 0):
+                split = "{} ({})".format(str(k[1]), str(k[1]+k[2]))
+            else:
+                split = "{}".format(str(k[2]))
+            position_list.append("{}.{}{}{}{}\n".format(position, positionSpaces, trackName, splitSpaces, split))
+            currTrack += 1
     
     await sendMultiMessage(message.channel, position_list, "```\n", "```")
 
@@ -250,6 +272,7 @@ stats_curr_pri_online_rooms = 0
 stats_curr_online_stuff_changed = True
 stats_message_id = [0, 0]
 vr_message_id = 0
+weekly_message_id = 0
 graph_launches_message_id = 0
 last_graph_update_date = None
 
@@ -349,6 +372,7 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
     global stats_curr_pri_online_rooms
     global stats_message_id
     global vr_message_id
+    global weekly_message_id
     stats_curr_online_stuff_changed = False
     try:
         ch = SELF_BOT_SERVER.get_channel(ch_list()["STATS"])
@@ -357,6 +381,7 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
         msg1 = await ch.fetch_message(stats_message_id[0])
         msg2 = await ch.fetch_message(stats_message_id[1])
         vrLead = await ch.fetch_message(vr_message_id)
+        weekly = await ch.fetch_message(weekly_message_id)
         if (msg1 is None or msg1.author != SELF_BOT_MEMBER or msg2 is None or msg2.author != SELF_BOT_MEMBER or vrLead is None or vrLead.author != SELF_BOT_MEMBER):
             raise Exception("Stats message invalid state")
         tried_edit_stats_message_times = 0
@@ -367,6 +392,8 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
         completedMissions = genStats["completed_mission"] + genStats["perfect_mission"]
         averageGrade = genStats["grademean_mission"] / genStats["gradecount_mission"]
         totOnlineRaces = genStats["online_races"] + genStats["comm_races"] + genStats["ctww_races"] + genStats["cd_races"] + genStats["online_coin_battles"] + genStats["online_balloon_battles"]
+        totScoreAttackRaces = genStats["score_attack_races"]
+        totWeeklyChallengeAttempts = genStats["weekly_challenge_attempts"]
         mostTracks = ctgp7_server.database.get_most_played_tracks(1, 10)
         uniqueConsoles = ctgp7_server.database.get_unique_console_count()
         uniqueOnlineUsers = ctgp7_server.database.get_unique_console_vr_count()
@@ -398,8 +425,9 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
         embed.add_field(name="Countdown Races", value=str(genStats["cd_races"]), inline=True)
         embed.add_field(name="Coin Battles", value=str(genStats["online_coin_battles"]), inline=True)
         embed.add_field(name="Balloon Battles", value=str(genStats["online_balloon_battles"]), inline=True)
-        
-
+        embed2.add_field(name="Total Score Attack Races", value=str(totScoreAttackRaces), inline=False)
+        embed2.add_field(name="Total Weekly Challenge Attempts", value=str(totWeeklyChallengeAttempts), inline=True)
+        embed2.add_field(name="** **", value="** **", inline=False)
         embed2.add_field(name="Total Logins", value=str(genStats["total_logins"]), inline=True)
         embed2.add_field(name="Unique Logins", value=str(uniqueOnlineUsers), inline=True)
         embed2.add_field(name="Total Online Rooms", value=str(genStats["total_rooms"]), inline=True)
@@ -455,7 +483,32 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
                 embed.add_field(name="** **", value="** **", inline=False)
         vrLead = await vrLead.edit(embed=embed, content=None)
         await asyncio.sleep(1.5)
-        
+        embed=discord.Embed(title="Score Attack: Weekly Challenge", color=0xff0000, timestamp=datetime.datetime.now())
+        weekly_leader = ctgp7_server.database.get_weekly_points_leaderboard(1, 10, 10)
+        weeklyText = "```"
+        weeklyTextScore = "```"
+        currPos = 1
+        for info in weekly_leader[1]:
+            userName = info.name
+            userName = str(OnlineUserName(PlayerNameMode.SHOW.value, userName, ""))
+            position = str(currPos)
+            positionSpaces = " " * max((4 - len(position)), 0)
+            weeklyText += "{}.{}{}{}\n".format(position, positionSpaces, purge_player_name_symbols(userName), " \u2705" if ctgp7_server.database.get_console_is_verified(user[0]) else "")
+            weeklyTextScore += "{}.{}{}{}\n".format(position, positionSpaces, str(info.score), "pts")
+            currPos += 1
+        if (len(weekly_leader[1]) == 0):
+            weeklyText += "(Empty)"
+            weeklyTextScore += "(Empty)"
+        weeklyText += "```"
+        weeklyTextScore += "```"
+        badgelimits = ctgp7_server.pointsHandler.getBadgeLimits()
+        badgetext = "- Gold: Position {} and up.\n- Silver: Position {} and up.\n- Bronze: Position {} and up.".format(badgelimits[0], badgelimits[1], badgelimits[2])
+        embed.add_field(name="Current Challenge", value="```{}```".format(ctgp7_server.pointsHandler.getConfigStr(False)), inline=False)
+        embed.add_field(name="Challenge finish badges", value=badgetext, inline=False)
+        embed.add_field(name="Leaderboard (Top 10)", value=weeklyText, inline=True)
+        embed.add_field(name="** **", value=weeklyTextScore, inline=True)
+        weekly = await weekly.edit(embed=embed, content=None)
+
         await update_graph_message(ctgp7_server)
 
     except Exception:
@@ -469,6 +522,7 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
 async def prepare_server_channels(ctgp7_server: CTGP7ServerHandler):
     global stats_message_id
     global vr_message_id
+    global weekly_message_id
     global graph_launches_message_id
     ctwwChan = SELF_BOT_SERVER.get_channel(ch_list()["CTWW"])
     async for m in ctwwChan.history(limit=200):
@@ -480,7 +534,7 @@ async def prepare_server_channels(ctgp7_server: CTGP7ServerHandler):
     mIds = []
     i = 0
     async for m in statsChan.history(limit=200, oldest_first=True):
-        if (i < 4 and m.author.id == SELF_BOT_MEMBER.id):
+        if (i < 5 and m.author.id == SELF_BOT_MEMBER.id):
             mIds.append(m.id)
             i += 1
         else:
@@ -489,6 +543,7 @@ async def prepare_server_channels(ctgp7_server: CTGP7ServerHandler):
     stats_message_id[1] = mIds[1] if len(mIds) > 1 else (await statsChan.send("Loading...")).id
     graph_launches_message_id = mIds[2] if len(mIds) > 2 else (await statsChan.send("Loading...")).id
     vr_message_id = mIds[3] if len(mIds) > 3 else (await statsChan.send("Loading...")).id
+    weekly_message_id = mIds[4] if len(mIds) > 4 else (await statsChan.send("Loading...")).id
 
 all_prev_room_msg_ids = set()
 all_prev_room_msg_ids_citra = set()
@@ -618,6 +673,27 @@ async def server_on_member_remove(ctgp7_server: CTGP7ServerHandler, member: disc
     except:
         pass
 
+def pointsHandlerOnChallengeEnd(ctgp7_server: CTGP7ServerHandler, isCitra: bool):
+    currDatabase = ctgp7_server.citraDatabase if isCitra else ctgp7_server.database
+    badgelimits = (ctgp7_server.citraPointsHandler if isCitra else ctgp7_server.pointsHandler).getBadgeLimits()
+    rank = currDatabase.get_weekly_points_leaderboard(1, 10000000, 10000000, ignoreName=True)[1]
+    default_badge = CTGP7Requests.badge_ids["WEEKLY"]
+    gold_badge = CTGP7Requests.badge_ids["WEEKLY_GOLD"]
+    silver_badge = CTGP7Requests.badge_ids["WEEKLY_SILVER"]
+    bronze_badge = CTGP7Requests.badge_ids["WEEKLY_BRONZE"]
+    for r in rank:
+        if r.rank <= badgelimits[0]:
+            currDatabase.grant_badge(r.cID, gold_badge)
+        if r.rank <= badgelimits[1]:
+            currDatabase.grant_badge(r.cID, silver_badge)
+        if r.rank <= badgelimits[2]:
+            currDatabase.grant_badge(r.cID, bronze_badge)
+        currDatabase.grant_badge(r.cID, default_badge)
+
+def pointsHandlerOnUpdate():
+    global stats_curr_online_stuff_changed
+    stats_curr_online_stuff_changed = True
+
 server_bot_loop_dbcommit_cnt = 0
 async def server_bot_loop(ctgp7_server: CTGP7ServerHandler):
     firstLoop = True
@@ -627,6 +703,15 @@ async def server_bot_loop(ctgp7_server: CTGP7ServerHandler):
         try:
             if (firstLoop):
                 await prepare_server_channels(ctgp7_server)
+                def pointsHandlerOnFinishConsole():
+                    pointsHandlerOnChallengeEnd(ctgp7_server, False)
+
+                def pointsHandlerOnFinishCitra():
+                    pointsHandlerOnChallengeEnd(ctgp7_server, True)
+
+                ctgp7_server.pointsHandler.onUpdateCallback = pointsHandlerOnUpdate
+                ctgp7_server.pointsHandler.onChallengeEndCallback = pointsHandlerOnFinishConsole
+                ctgp7_server.citraPointsHandler.onChallengeEndCallback = pointsHandlerOnFinishCitra
             await update_online_room_info(ctgp7_server, False)
             await update_online_room_info(ctgp7_server, True)
             if (firstLoop or ctgp7_server.database.get_stats_dirty() or stats_curr_online_stuff_changed):
@@ -1032,7 +1117,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
         if (len(tag) != 3):
             await message.reply( "Invalid syntax, correct usage:\r\n```" + server_help_array()["stats"] + "```")
             return
-        if (tag[2] not in ["ct", "ot", "ba"]):
+        if (tag[2] not in ["ct", "ot", "ba", "scmean"]):
             await message.reply( "Invalid option, correct usage:\r\n```" + server_help_array()["stats"] + "```")
             return
         if (datetime.datetime.utcnow() - stats_command_last_exec < datetime.timedelta(seconds=10)):
@@ -1046,6 +1131,8 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             opt = 1
         elif (tag[2] == "ba"):
             opt = 2
+        elif (tag[2] == "scmean"):
+            opt = 3
         await send_course_usage_list(message, currDatabase, opt)
     elif bot_cmd == "link":
         if (isCitra):
@@ -1258,14 +1345,17 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             allCons = currDatabase.get_all_discord_link()
             total = 0
             curr = 0
+            member_list = []
             for ac in allCons:
                 userID = ac[1]
                 member = get_from_mention(userID)
                 if (member is not None):
-                    queue_player_role_update(member.id)
+                    member_list.append(member.id)
                     curr += 1
                 total += 1
-            await message.reply("Done! Success: {}, Fail: {}".format(curr, total - curr))
+            await message.reply("Members Queued: {}, Fail: {}".format(curr, total - curr))
+            await process_pending_player_role_update_bulk(ctgp7_server, member_list)
+            await message.reply("Role apply operation finished!")
     elif bot_cmd == "purge_console_link":
         if (isCitra):
             await message.reply("Operation not supported with Citra.")
@@ -1325,7 +1415,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["config"] + "```")
                 return
             mode = tag[2]
-            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset", "blockedTrackHistory", "serveraddr", "serveravailable", "vrmultiplier", "allowedCharacters", "allowedTracks", "allowedItems", "finishracebadge", "blueshellshowdown", "specialvrcharacters", "specialvrcharmultiplier", "weeklypointsduration", "specialpartamounts"]:
+            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset", "blockedTrackHistory", "serveraddr", "serveravailable", "vrmultiplier", "allowedCharacters", "allowedTracks", "allowedItems", "finishracebadge", "blueshellshowdown", "specialvrcharacters", "specialvrcharmultiplier", "weeklypointsduration", "weeklyspecialpartamounts", "weeklybadgelimits"]:
                 await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()["config"] + "```")
                 return
             if (len(tag) == 3):
@@ -1362,8 +1452,10 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     amount = currDatabase.get_special_char_vr_multiplier()
                 elif mode == "weeklypointsduration":
                     amount = currDatabase.get_weekly_points_duration_seconds()
-                elif mode == "specialpartamounts":
+                elif mode == "weeklyspecialpartamounts":
                     amount = currDatabase.get_weekly_points_special_part_amounts()
+                elif mode == "weeklybadgelimits":
+                    amount = currDatabase.get_weekly_badge_limits()
                 await message.reply( "Config for \"{}\" is: {}".format(mode, amount))
                 return
             else:
@@ -1374,7 +1466,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                         amount = int(tag[3], 16)
                     elif (mode == "rubberBMult" or mode == "rubberBOffset" or mode == "vrmultiplier" or mode == "specialvrcharmultiplier"):
                         amount = float(tag[3])
-                    elif (mode == "serveraddr" or mode == "specialpartamounts"):
+                    elif (mode == "serveraddr" or mode == "weeklyspecialpartamounts" or mode == "weeklybadgelimits"):
                         amount = str(tag[3])
                         if not ":" in amount:
                             raise ValueError()
@@ -1417,8 +1509,10 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     currDatabase.set_special_char_vr_multiplier(amount)
                 elif mode == "weeklypointsduration":
                     currDatabase.set_weekly_points_duration_seconds(amount)
-                elif mode == "specialpartamounts":
+                elif mode == "weeklyspecialpartamounts":
                     currDatabase.set_weekly_points_special_part_amounts(amount)
+                elif mode == "weeklybadgelimits":
+                    currDatabase.set_weekly_badge_limits(amount)
                 await message.reply("Config for \"{}\" is: {}".format(mode, amount))
                 return
     elif bot_cmd == "otplegality":
@@ -1709,11 +1803,14 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
             mode = tag[2]
-            if mode not in ["get", "end"]:
+            if mode not in ["get", "end", "clear"]:
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
             if mode == "get":
-                await message.reply("Current Points Mode Weekly Challenge Config:\n```{}```".format(currPointsHandler.getConfigStr()))
+                await message.reply("Current Points Mode Weekly Challenge Config:\n```{}```".format(currPointsHandler.getConfigStr(True)))
+            elif mode == "clear":
+                currPointsHandler.resetLeaderboard()
+                await message.reply( "Operation succeeded.")
             elif mode == "end":
                 newTime = int(time.time()) + 10
                 currPointsHandler.updateEndTime(newTime)
