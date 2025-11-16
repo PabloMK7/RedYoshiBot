@@ -54,6 +54,7 @@ class CTGP7Requests:
         "5K_VR": 0x19C31A57E86591E6,
         "10K_VR": 0x48300D897426DCE9,
         "50K_VR": 0x686517CAD6BC107D,
+        "100K_VR": 0x2123C3719489B6FC,
         "BETA_TESTER": 0x4742331927F672C9,
         "THANKS_FOR_PLAYING": 0x3B68C72DCE874AD5,
         "BLUE_SHELL_MASTER": 0x04A7ADBB5729EB57,
@@ -125,7 +126,8 @@ class CTGP7Requests:
             self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["10K_VR"])
         if vr >= 50000:
             self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["50K_VR"])
-
+        if vr >= 100000:
+            self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["100K_VR"])
         
         badges = self.currDatabase.get_console_badges(self.cID)
 

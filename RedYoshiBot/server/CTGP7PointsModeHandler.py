@@ -2,6 +2,7 @@ import asyncio
 import random
 import time
 import threading
+import traceback
 
 from .CTGP7ServerDatabase import CTGP7ServerDatabase
 from ..CTGP7Defines import CTGP7Defines
@@ -171,18 +172,20 @@ class CTGP7PointsModeHandler:
                 self.onUpdateCallback()
 
     def getBadgeLimits(self):
-        return self.currDatabase.get_weekly_badge_limits().split(":")
+        return [int(x) for x in self.currDatabase.get_weekly_badge_limits().split(":")]
 
     async def _check_task(self):
         while self.taskRunning:
-            with self.configLock:
-                endTime = self.config.endTime
-            if endTime == 0 or int(time.time()) >= endTime:
+            try:
                 with self.configLock:
-                    if self.onChallengeEndCallback is not None:
+                    endTime = self.config.endTime
+                if endTime == 0 or int(time.time()) >= endTime and self.onChallengeEndCallback is not None:
+                    with self.configLock:
                         self.onChallengeEndCallback()
-                    self.config = self.WeeklyChallengeConfig(True, self.currDatabase)
-                    self.currDatabase.clear_weekly_points_leaderboard()
-                    if self.onUpdateCallback is not None:
-                        self.onUpdateCallback()
+                        self.config = self.WeeklyChallengeConfig(True, self.currDatabase)
+                        self.currDatabase.clear_weekly_points_leaderboard()
+                        if self.onUpdateCallback is not None:
+                            self.onUpdateCallback()
+            except:
+                traceback.print_exc()
             await asyncio.sleep(5)
