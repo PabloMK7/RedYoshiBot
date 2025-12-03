@@ -55,14 +55,10 @@ class ServerDatabase:
             self.isTerminated = True
             self.conn.commit()
             self.conn.close()
-            print('Addon "{}" unloaded\n'.format(self.__class__.__name__))
-            try: # Python stupid, sometimes it undefines the ctgp7_server name...
-                if (ctgp7_server is not None): 
-                    ctgp7_server.terminate()
-                    del ctgp7_server
-            except NameError:
-                traceback.print_exc()
-                pass
+            if (ctgp7_server is not None): 
+                ctgp7_server.terminate()
+                ctgp7_server = None
+
     async def warn_set(self, memberid, value):
         c = self.conn.cursor()
         if(value == 0):
@@ -936,23 +932,26 @@ async def isfact_dynamic(s1):
 async def muted_task():
     global db_mng
     global current_time_min
-    while True:
-        await asyncio.sleep(60)
-        rows = await db_mng.mute_get()
-        for row in rows:
-            timeleft = (row[1] + row[2]) - current_time_min()
-            if(timeleft <= 0):
-                await unmute_user(row[0])
-        tobedeleted = []
-        rows = await db_mng.schedule_get()
-        for row in rows:
-            timeleft = (row[2] + row[3]) - current_time_min()
-            if(timeleft <= 0):
-                tobedeleted.append(row[0])
-                staffchan = client.get_channel(ch_list()["STAFF"])
-                await sayfunc(str(row[1]), row[4], staffchan)
-        for delitm in tobedeleted:
-            await db_mng.schedule_del(delitm)
+    try:
+        while True:
+            await asyncio.sleep(60)
+            rows = await db_mng.mute_get()
+            for row in rows:
+                timeleft = (row[1] + row[2]) - current_time_min()
+                if(timeleft <= 0):
+                    await unmute_user(row[0])
+            tobedeleted = []
+            rows = await db_mng.schedule_get()
+            for row in rows:
+                timeleft = (row[2] + row[3]) - current_time_min()
+                if(timeleft <= 0):
+                    tobedeleted.append(row[0])
+                    staffchan = client.get_channel(ch_list()["STAFF"])
+                    await sayfunc(str(row[1]), row[4], staffchan)
+            for delitm in tobedeleted:
+                await db_mng.schedule_del(delitm)
+    except asyncio.CancelledError:
+        return
 
 
 async def perform_game_change():
@@ -962,30 +961,38 @@ async def perform_game_change():
     return name
 
 async def change_game():
-    while True:
-        await perform_game_change()
-        await asyncio.sleep(600)
+    try:
+        while True:
+            await perform_game_change()
+            await asyncio.sleep(600)
+    except asyncio.CancelledError:
+        return
 
 async def check_version_list():
     global db_mng
     keepChecking = True
     await asyncio.sleep(60 * 10)
-    while True:
-        if keepChecking:
-            try:
-                vList = HomeMenuVersionList()
-                japV = vList.get_version_for_title(0x0004000E00030600)
-                eurV = vList.get_version_for_title(0x0004000E00030700)
-                usaV = vList.get_version_for_title(0x0004000E00030800)
-                maxver = max(japV, eurV, usaV)
-                if (maxver > 3152):
-                    staffchan = client.get_channel(ch_list()["STAFF"])
-                    msg = await staffchan.send("@everyone\nAn update for Mario Kart 7 has been detected! (Version: {})\nSending update message in #announcements in 10 minutes... (use the messageID from this message to cancel with @RedYoshiBot cancel_schedule)".format(maxver))
-                    await db_mng.schedule_add(msg.id, ch_list()["ANN"], 10, "@everyone\nAn update for Mario Kart 7 has been detected!\n\n**DO NOT UPDATE MARIO KART 7 IF YOU WANT TO KEEP PLAYING CTGP-7.**\n\nPlease wait while we investigate this update.")
-                    keepChecking = False
-            except:
-                pass
-        await asyncio.sleep(60 * 5)
+    try:
+        while True:
+            if keepChecking:
+                try:
+                    vList = HomeMenuVersionList()
+                    japV = vList.get_version_for_title(0x0004000E00030600)
+                    eurV = vList.get_version_for_title(0x0004000E00030700)
+                    usaV = vList.get_version_for_title(0x0004000E00030800)
+                    maxver = max(japV, eurV, usaV)
+                    if (maxver > 3152):
+                        staffchan = client.get_channel(ch_list()["STAFF"])
+                        msg = await staffchan.send("@everyone\nAn update for Mario Kart 7 has been detected! (Version: {})\nSending update message in #announcements in 10 minutes... (use the messageID from this message to cancel with @RedYoshiBot cancel_schedule)".format(maxver))
+                        await db_mng.schedule_add(msg.id, ch_list()["ANN"], 10, "@everyone\nAn update for Mario Kart 7 has been detected!\n\n**DO NOT UPDATE MARIO KART 7 IF YOU WANT TO KEEP PLAYING CTGP-7.**\n\nPlease wait while we investigate this update.")
+                        keepChecking = False
+                except asyncio.CancelledError:
+                    raise
+                except:
+                    pass
+            await asyncio.sleep(60 * 5)
+    except asyncio.CancelledError:
+        return
 
 G_LAST_PUNISH_TIME = datetime.datetime(year=2000, month=1, day=1)
 G_LAST_PUNISH_AMOUNT = 0
@@ -2285,28 +2292,18 @@ async def on_message(message):
         traceback.print_exc()
         pass
 
-def exit_handler():
-    print("Unexpected exit at {}, rebooting in 10 seconds.".format(str(datetime.datetime.now())))
-    try:
-        time.sleep(10)
-    except KeyboardInterrupt:
-        print("Exiting...")
-        os._exit(0)
-    os.execv(sys.executable, ['python3'] + sys.argv)
 
 def perform_exit():
+    global db_mng
     try:
         db_mng.terminate()
+        db_mng = None
     except:
         print("Got exception on exit:")
         traceback.print_exc()
     print("Bot exiting, see ya!")
     os._exit(0)
 
-try:
-    atexit.register(exit_handler)
-    random.seed()
-    client.run(sys.argv[1], log_level=logging.ERROR)
-except:
-    perform_exit()
-    pass
+random.seed()
+client.run(sys.argv[1], log_level=logging.ERROR)
+perform_exit()

@@ -8,6 +8,7 @@ from ..CTGP7Defines import CTGP7Defines
 from .CTGP7ServerDatabase import CTGP7ServerDatabase, ConsoleMessageType
 from .CTGP7CtwwHandler import CTGP7CtwwHandler, CTWWLoginStatus
 from .CTGP7PointsModeHandler import CTGP7PointsModeHandler
+from .CTGP7SaveBackupHandler import CTGP7SaveBackupHandler
 
 class CTGP7Requests:
 
@@ -72,13 +73,14 @@ class CTGP7Requests:
 
     pendingDiscordLinks = {}
 
-    def __init__(self, database: CTGP7ServerDatabase, ctwwHandler: CTGP7CtwwHandler, pointsModeHandler: CTGP7PointsModeHandler, request: dict, debug: bool, consoleID: int, isCitra: bool):
+    def __init__(self, database: CTGP7ServerDatabase, ctwwHandler: CTGP7CtwwHandler, pointsModeHandler: CTGP7PointsModeHandler, saveBackupHandler: CTGP7SaveBackupHandler, request: dict, debug: bool, consoleID: int, isCitra: bool):
         self.req = request
         self.info = ""
         self.debug = debug
         self.currDatabase = database
         self.currCtwwHandler = ctwwHandler
         self.currPointsModeHandler = pointsModeHandler
+        self.currSaveBackupHandler = saveBackupHandler
         self.cID = consoleID
         self.isCitra = isCitra
 
@@ -170,7 +172,7 @@ class CTGP7Requests:
         if (not "seqID" in input):
             return (-1, 0)
         msgSeqID = input["seqID"]
-        isFirstReport = input.get("firstReport", False)
+        isFirstReport = input.get("firstReport", False) # TODO: Remove this at some point
         self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["PLAYER"])
         if (len(input) == 1):
             if (msgSeqID == 0): # Request sequence ID
@@ -187,6 +189,8 @@ class CTGP7Requests:
                     self.currDatabase.increment_today_launches()
                 for k in input:
                     if (k in CTGP7Requests.statsList):
+                        if k == "launches" and not isFirstReport:
+                            self.currDatabase.increment_today_launches()
                         self.currDatabase.increment_general_stats(k.split("#", 1)[0], input[k])
                     elif (k == "played_tracks"):
                         for t in input[k]:
@@ -353,6 +357,12 @@ class CTGP7Requests:
     def server_get_points_weekly_leaderboard(self, input):
         return (0, self.currPointsModeHandler.getLeaderboardBson(self.cID))
     
+    def server_get_savebackup(self, input):
+        return self.currSaveBackupHandler.handle_get(input, self.cID, self.isCitra)
+
+    def server_put_savebackup(self, input):
+        return self.currSaveBackupHandler.handle_put(input, self.cID, self.isCitra)
+    
     def server_put_points_weekly_score(self, input):
         retDict = {}
         consoleMsg = self.currCtwwHandler.get_console_message(self.cID)
@@ -400,6 +410,7 @@ class CTGP7Requests:
         "badges": server_get_badges,
         "ptsweekcfg": server_get_points_weekly_config,
         "ptsweekbrd": server_get_points_weekly_leaderboard,
+        "savebackup": server_get_savebackup,
     }
 
     put_functions = {
@@ -414,15 +425,18 @@ class CTGP7Requests:
         "miiicon": server_put_mii_icon,
         "ultrashortcut": server_put_ultra_shortcut,
         "ptsweekscore": server_put_points_weekly_score,
+        "savebackup": server_put_savebackup,
     }
 
     hide_logs_input = [
         "miiicon",
+        "savebackup",
     ]
 
     hide_logs_output = [
         "onlinetoken",
         "badges",
+        "savebackup",
     ]
 
     def solve(self):

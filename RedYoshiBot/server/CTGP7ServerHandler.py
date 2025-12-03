@@ -21,6 +21,7 @@ from .CTGP7CtwwHandler import CTGP7CtwwHandler
 from .CTGP7NEXHTTPHandler import CTGP7NEXHTTPHandler
 from .CTGP7PointsModeHandler import CTGP7PointsModeHandler
 from .CTGP7ServerCritical import do_critical_operations_in, do_critical_operations_out
+from .CTGP7SaveBackupHandler import CTGP7SaveBackupHandler
 
 class CTGP7ServerHandler:
     
@@ -124,6 +125,7 @@ class CTGP7ServerHandler:
                     CTGP7ServerHandler.myself.citraDatabase if isCitra else CTGP7ServerHandler.myself.database, 
                     CTGP7ServerHandler.myself.citraCtwwHandler if isCitra else CTGP7ServerHandler.myself.ctwwHandler,
                     CTGP7ServerHandler.myself.citraPointsHandler if isCitra else CTGP7ServerHandler.myself.pointsHandler,
+                    CTGP7ServerHandler.myself.saveBackupHandler,
                     inputData, CTGP7ServerHandler.debug_mode, reqConsoleID, isCitra)
                 outputData.update(solver.solve())
                 logStr += solver.info
@@ -194,22 +196,26 @@ class CTGP7ServerHandler:
         self.citraCtwwHandler = CTGP7CtwwHandler(self.citraDatabase, self.nexhttp)
         self.pointsHandler = CTGP7PointsModeHandler(self.database)
         self.citraPointsHandler = CTGP7PointsModeHandler(self.citraDatabase)
+        self.saveBackupHandler = CTGP7SaveBackupHandler()
 
         server_thread = threading.Thread(target=self.server_start)
         server_thread.daemon = True
         server_thread.start()
-        nexhttp_thread = threading.Thread(target=self.nexhttp.fetch_http_stats)
-        nexhttp_thread.daemon = True
-        nexhttp_thread.start()
+        self.nexhttp_thread = threading.Thread(target=self.nexhttp.fetch_http_stats)
+        self.nexhttp_thread.daemon = True
+        self.nexhttp_thread.start()
 
         #self.nex = None
 
     def terminate(self):
         #self.nex.terminate()
         #self.nex = None
+        self.server.shutdown()
         self.nexhttp.terminate()
+        self.nexhttp_thread.join()
         self.database.disconnect()
         self.citraDatabase.disconnect()
+        self.saveBackupHandler.disconnect()
         self.database = None
         self.citraDatabase = None
         self.ctwwHandler = None
@@ -218,6 +224,7 @@ class CTGP7ServerHandler:
         self.pointsHandler = None
         self.citraPointsHandler.stop()
         self.citraPointsHandler = None
+        self.saveBackupHandler = None
         CTGP7ServerHandler.myself = None
         print("CTGP-7 server terminated.")
     

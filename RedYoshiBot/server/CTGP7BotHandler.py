@@ -450,9 +450,7 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
         mostPlayedStr += "```"
         embed2.add_field(name="Most Played Tracks", value=mostPlayedStr, inline=False)
         msg1 = await msg1.edit(embed=embed, content=None)
-        await asyncio.sleep(1.5)
         msg2 = await msg2.edit(embed=embed2, content=None)
-        await asyncio.sleep(1.5)
         tried_edit_stats_message_times = 0
 
         vrRankCtww = ctgp7_server.database.get_most_users_vr(0, 20)
@@ -482,7 +480,6 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
             if (i < 2):
                 embed.add_field(name="** **", value="** **", inline=False)
         vrLead = await vrLead.edit(embed=embed, content=None)
-        await asyncio.sleep(1.5)
         embed=discord.Embed(title="Score Attack: Weekly Challenge", color=0xff0000, timestamp=datetime.datetime.now())
         weekly_leader = ctgp7_server.database.get_weekly_points_leaderboard(1, 10, 10)
         weeklyText = "```"
@@ -511,6 +508,8 @@ async def update_stats_message(ctgp7_server: CTGP7ServerHandler):
 
         await update_graph_message(ctgp7_server)
 
+    except asyncio.CancelledError:
+        raise
     except Exception:
         traceback.print_exc()
         tried_edit_stats_message_times += 1
@@ -590,6 +589,8 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isCitra: boo
                         msg = await ctwwPrivChan.fetch_message(msgID)
                     else:
                         msg = await ctwwChan.fetch_message(msgID)
+            except asyncio.CancelledError:
+                raise
             except:
                 msgID = 0
             if msgID == 0:
@@ -648,6 +649,8 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isCitra: boo
             else:
                 msg = await ctwwChan.fetch_message(mID)
             await msg.delete()
+        except asyncio.CancelledError:
+            raise
         except:
             # Message failed to delete, try to delete again in next iteration
             currMsgIds.add((hidden,mID))
@@ -699,37 +702,42 @@ async def server_bot_loop(ctgp7_server: CTGP7ServerHandler):
     firstLoop = True
     global stats_curr_online_stuff_changed
     global server_bot_loop_dbcommit_cnt
-    while (True):
-        try:
-            if (firstLoop):
-                await prepare_server_channels(ctgp7_server)
-                def pointsHandlerOnFinishConsole():
-                    pointsHandlerOnChallengeEnd(ctgp7_server, False)
+    try:
+        while (True):
+            try:
+                if (firstLoop):
+                    await prepare_server_channels(ctgp7_server)
+                    def pointsHandlerOnFinishConsole():
+                        pointsHandlerOnChallengeEnd(ctgp7_server, False)
 
-                def pointsHandlerOnFinishCitra():
-                    pointsHandlerOnChallengeEnd(ctgp7_server, True)
+                    def pointsHandlerOnFinishCitra():
+                        pointsHandlerOnChallengeEnd(ctgp7_server, True)
 
-                ctgp7_server.pointsHandler.onUpdateCallback = pointsHandlerOnUpdate
-                ctgp7_server.pointsHandler.onChallengeEndCallback = pointsHandlerOnFinishConsole
-                ctgp7_server.citraPointsHandler.onChallengeEndCallback = pointsHandlerOnFinishCitra
-            await update_online_room_info(ctgp7_server, False)
-            await update_online_room_info(ctgp7_server, True)
-            if (firstLoop or ctgp7_server.database.get_stats_dirty() or stats_curr_online_stuff_changed):
-                await update_stats_message(ctgp7_server)
-                ctgp7_server.database.set_stats_dirty(False)
-            await kick_message_logger()
-            await server_message_logger()
-            await process_pending_player_role_update(ctgp7_server)
-            server_bot_loop_dbcommit_cnt += 1
-            if (server_bot_loop_dbcommit_cnt >= (60 * 5) // 7): # Commit every 5 minutes
-                ctgp7_server.database.commit()
-                ctgp7_server.citraDatabase.commit()
-                server_bot_loop_dbcommit_cnt = 0
-            firstLoop = False
-        except:
-            traceback.print_exc()
-            pass
-        await asyncio.sleep(7)
+                    ctgp7_server.pointsHandler.onUpdateCallback = pointsHandlerOnUpdate
+                    ctgp7_server.pointsHandler.onChallengeEndCallback = pointsHandlerOnFinishConsole
+                    ctgp7_server.citraPointsHandler.onChallengeEndCallback = pointsHandlerOnFinishCitra
+                await update_online_room_info(ctgp7_server, False)
+                await update_online_room_info(ctgp7_server, True)
+                if (firstLoop or ctgp7_server.database.get_stats_dirty() or stats_curr_online_stuff_changed):
+                    await update_stats_message(ctgp7_server)
+                    ctgp7_server.database.set_stats_dirty(False)
+                await kick_message_logger()
+                await server_message_logger()
+                await process_pending_player_role_update(ctgp7_server)
+                server_bot_loop_dbcommit_cnt += 1
+                if (server_bot_loop_dbcommit_cnt >= (60 * 5) // 7): # Commit every 5 minutes
+                    ctgp7_server.database.commit()
+                    ctgp7_server.citraDatabase.commit()
+                    server_bot_loop_dbcommit_cnt = 0
+                firstLoop = False
+            except asyncio.CancelledError:
+                raise
+            except:
+                traceback.print_exc()
+                pass
+            await asyncio.sleep(7)
+    except asyncio.CancelledError:
+        return
 
 def get_user_info(userID):
     member = get_from_mention(userID)

@@ -88,13 +88,15 @@ class CTGP7NEXHTTPHandler:
         
     def terminate(self):
         self.terminated = True
-        self.httpsession.close()
+        with self.httpsessionlock:
+            self.httpsession.close()
         
     def fetch_http_stats(self):
         while (True):
-            if self.terminated:
-                return
-            time.sleep(3)
+            for i in range(12):
+                if self.terminated:
+                    return
+                time.sleep(0.25)
             try:
                 with self.httpsessionlock:
                     resp = self.httpsession.get(self.httpaddr + "/stats", timeout=10)
