@@ -65,6 +65,7 @@ class CTGP7Requests:
         "WEEKLY_GOLD": 0x4BD339E5316CF6E0,
         "WEEKLY_SILVER": 0x52FAF3B0161EDF33,
         "WEEKLY_BRONZE": 0x334A9494246CC0CA,
+        "MIKU_LEEK": 0x1035B675CD6132C5,
     }
 
     get_user_info = None
@@ -119,6 +120,8 @@ class CTGP7Requests:
             self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["THANKS_FOR_PLAYING"])
         if input.get("dodgedblue", False):
             self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["BLUE_SHELL_MASTER"])
+        if input.get("mikusing", False):
+            self.currDatabase.grant_badge(self.cID, CTGP7Requests.badge_ids["MIKU_LEEK"])
         
         vrData = self.currDatabase.get_console_vr(self.cID, False)
         vr = max(vrData.ctVR, vrData.cdVR)
@@ -358,10 +361,10 @@ class CTGP7Requests:
         return (0, self.currPointsModeHandler.getLeaderboardBson(self.cID))
     
     def server_get_savebackup(self, input):
-        return self.currSaveBackupHandler.handle_get(input, self.cID, self.isCitra)
+        return self.currSaveBackupHandler.handle_get(input, self.cID, self.isCitra, self.currDatabase)
 
     def server_put_savebackup(self, input):
-        return self.currSaveBackupHandler.handle_put(input, self.cID, self.isCitra)
+        return self.currSaveBackupHandler.handle_put(input, self.cID, self.isCitra, self.currDatabase)
     
     def server_put_points_weekly_score(self, input):
         retDict = {}

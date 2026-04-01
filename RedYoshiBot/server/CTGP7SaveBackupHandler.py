@@ -3,6 +3,7 @@ import sqlite3
 import time
 import string
 import random
+from .CTGP7ServerDatabase import CTGP7ServerDatabase
 
 class CTGP7SaveBackupHandler:
     class DatabaseHandler:
@@ -99,7 +100,13 @@ class CTGP7SaveBackupHandler:
     def disconnect(self):
         self.database.disconnect()
 
-    def handle_put(self, input: dict, cID: int, isCitra: bool):
+    def handle_put(self, input: dict, cID: int, isCitra: bool, mainDB: CTGP7ServerDatabase):
+
+        manage_cID = input.get("manage_cID", None)
+        if manage_cID is not None and mainDB.get_console_is_admin(cID):
+            cID = manage_cID
+            isCitra = input.get("manage_isCitra", True)
+
         with self.putLock:
             op = input.get("op", None)
             if op == "start":
@@ -172,7 +179,13 @@ class CTGP7SaveBackupHandler:
             else:
                 return (-1, {})
 
-    def handle_get(self, input: dict, cID: int, isCitra: bool):
+    def handle_get(self, input: dict, cID: int, isCitra: bool, mainDB: CTGP7ServerDatabase):
+
+        manage_cID = input.get("manage_cID", None)
+        if manage_cID is not None and mainDB.get_console_is_admin(cID):
+            cID = manage_cID
+            isCitra = input.get("manage_isCitra", True)
+
         op = input.get("op", None)
         if op == "info":
             info = self.database.get_backup_info(cID, isCitra)
