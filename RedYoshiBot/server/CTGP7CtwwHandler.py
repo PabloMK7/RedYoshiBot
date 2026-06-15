@@ -354,7 +354,7 @@ class OnlineRoom:
         for _ in range(100):
             weights = [100 - total] + probs
             newMode = random.choices(range(len(weights)), weights=weights, k=1)[0]
-            if self.itemMode != newMode or total == 0:
+            if self.itemMode != newMode or newMode == 0:
                 break
         
         self.itemMode = newMode

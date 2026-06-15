@@ -419,6 +419,7 @@ def help_array():
         "parseqr": ">@RedYoshiBot parseqr [url]\nParses the CTGP-7 QR crash data from the image url. You can either specify the image url or attach the image to the message.",
         "funcname": ">@RedYoshiBot funcname (address) (region) (version)\nFinds the Mario Kart 7 function name for a given address, region and version combination.\n- address: Address to find in hex.\n- region: Region of the game (1 - EUR, 2 - USA, 3 - JAP).\n- version: Version of the game (1 - rev0 v1.1, 2 - rev1, 3 - rev2).",
         "listcmd": ">@RedYoshiBot listcmd\nLists alls custom exclamantion commands",
+        "privacypolicy": ">@RedYoshiBot privacypolicy\nLinks to the RedYoshiBot and CTGP-7 Network privacy policy.",
 
         "server": ">@RedYoshiBot server/citraserver/bothserver (command) (options)\nRuns a server related command.\nUse \'@RedYoshiBot server help\' to get all the available server commands."
     }
@@ -2079,6 +2080,8 @@ async def on_message(message):
                         cmdlist_str += "`" + cmd + "`, "
                     cmdlist_str = cmdlist_str[:-2]
                     await message.reply(cmdlist_str)
+                elif bot_cmd == "privacypolicy":
+                    await message.reply("You can find the RedYoshiBot and CTGP-7 Network privacy policy here:\nhttps://github.com/PabloMK7/RedYoshiBot/blob/master/privacy_policy.md")
                 elif bot_cmd == "addcmd":
                     if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split(None, 3)
