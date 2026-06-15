@@ -197,11 +197,13 @@ class CTGP7ServerDatabase:
     def set_event_grant_badge(self, bID: int):
         self.set_database_config("eventGrantBadge", int(bID))
 
-    def set_blue_shell_showdown(self, isShowdown):
-        self.set_database_config("blueshellshowdown", 1 if bool(isShowdown) else 0)
+    def set_item_mode_probs(self, itemprobs: List[float]):
+        s = ":".join([str(x) for x in itemprobs])
+        self.set_database_config("itemprobs", s)
 
-    def get_blue_shell_showdown(self):
-        return int(self.get_database_config("blueshellshowdown")) != 0
+    def get_item_mode_probs(self) -> List[float]:
+        s: str = self.get_database_config("itemprobs")
+        return [float(x) for x in s.split(":")]
     
     def get_special_char_vr_multiplier(self) -> float:
         return float(self.get_database_config("specialvrcharmultiplier"))

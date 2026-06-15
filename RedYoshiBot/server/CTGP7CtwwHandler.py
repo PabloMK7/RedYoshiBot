@@ -204,6 +204,7 @@ class OnlineRoom:
         self.cpuRandomSeed = random.getrandbits(31)
         self.trackHistory = deque()
         self.lobby = 0
+        self.itemMode = 0
 
     def joinPlayer(self, user: OnlineUser):
         self.players.add(user.cID)
@@ -337,6 +338,29 @@ class OnlineRoom:
     
     def getTrackHistory(self):
         return "::".join(self.trackHistory)
+    
+    def decideItemMode(self, database: CTGP7ServerDatabase):
+        # Only allow custom modes in CTs
+        if self.gamemode != 0:
+            return 0
+
+        probs = database.get_item_mode_probs()
+
+        total = sum(probs)
+        if total > 100:
+            raise ValueError("Probabilities exceed 100%")
+        
+        newMode = 0
+        for _ in range(100):
+            weights = [100 - total] + probs
+            newMode = random.choices(range(len(weights)), weights=weights, k=1)[0]
+            if self.itemMode != newMode or total == 0:
+                break
+        
+        self.itemMode = newMode
+
+    def getItemMode(self):
+        return self.itemMode
 
 class CTGP7CtwwHandler:
     
@@ -647,6 +671,7 @@ class CTGP7CtwwHandler:
             if (room is None): # Create room if it doesn't exist
                 room = OnlineRoom(gID, gMode)
                 room.enableLog()
+                room.decideItemMode(self.database)
                 room.lobby = user.lobby
                 self.activeRooms[gID] = room
                 self.newRooms += 1
@@ -676,8 +701,7 @@ class CTGP7CtwwHandler:
             specialVRChars = self.database.get_special_vr_characters()
             if (specialVRChars != ""):
                 retDict["specialCharVRMultiplier"] = int(self.database.get_special_char_vr_multiplier() * 1000)
-            if self.database.get_blue_shell_showdown():
-                retDict["blueShellShowdown"] = True
+            retDict["itemMode"] = room.getItemMode()
             user.setVRIncr(None)
 
             user.isAlive()
@@ -747,6 +771,7 @@ class CTGP7CtwwHandler:
             retDict["vrMean"] = room.getVRMean(self.database)
             retDict["rubberBMult"] = self.database.get_room_rubberbanding_config(False) if room.getMode() <= 1 else 1.0
             retDict["rubberBOffset"] = self.database.get_room_rubberbanding_config(True) if room.getMode() <= 1 else 0.0
+            retDict["itemMode"] = room.getItemMode()
 
             user.isAlive()
             
@@ -826,6 +851,7 @@ class CTGP7CtwwHandler:
                 self.database.set_stats_dirty(True)
                 room.setState(RoomState.FINISHED.value)
                 room.updateCPURandomSeed()
+                room.decideItemMode(self.database)
                 self.resetRoomPlayerIDs(room)
             
             if room.getMode() <= 1:
