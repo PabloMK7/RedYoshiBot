@@ -8,5 +8,8 @@ Also included is the CTGP-7 Plugin server communications C++ code.
 - Python 3.9
 - [Discord.py](https://github.com/Rapptz/discord.py)
 
+## Privacy Policy
+You may find the privacy policy for RedYoshiBot and CTGP-7 Network [here](privacy_policy.md).
+
 ## Credits
 - Friend code system based on [Kurisu Bot](https://github.com/ihaveamac/Kurisu).
