@@ -1,6 +1,7 @@
 from operator import contains
 from RedYoshiBot.server.CTGP7Requests import CTGP7Requests
 import discord
+from discord.ext import commands, tasks
 import datetime
 import random
 import os
@@ -17,6 +18,7 @@ from .server.CTGP7ServerHandler import CTGP7ServerHandler
 from .HomeMenuVersionList import HomeMenuVersionList
 from .chpack.ChpackKeys import chpack_get_available_keys_as_str_list
 from .chpack.ChpackCrypto import chpack_crypt
+from .PhotoContest import on_photo_channel_message, on_photo_submission_delete, process_messages_with_votes, JUMP_URL_RE, PairwiseVoting, StartVoteView, rank_photo_contest
 import hashlib
 import sqlite3
 import struct
@@ -35,11 +37,12 @@ ctgp7_server = None
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
-client = discord.Client(intents=intents)
+client = commands.Bot(command_prefix=commands.when_mentioned, intents=intents)
 debug_mode = False
 current_talk_id = ''
 miku_last_message_time = datetime.datetime.utcnow()
 cached_member_count = None
+photo_contest_config = (0,0)
 
 class ServerDatabase:
     global debug_mode
@@ -244,7 +247,44 @@ class ServerDatabase:
         c = self.conn.cursor()
         c.execute('DELETE FROM commands WHERE command = ?', (command,))
         return
+    async def get_photo_contest_config(self):
+        c = self.conn.cursor()
+        rows = c.execute("SELECT * FROM config WHERE field = 'photo_channel'")
+        channel = None
+        result = None
+        for row in rows:
+            channel = int(row[1])
+        if channel is None:
+            return (0, 0)
+        rows = c.execute("SELECT * FROM config WHERE field = 'photo_result'")
+        for row in rows:
+            result = int(row[1])
+        if result is None:
+            return (0, 0)
+        return (channel, result)
+    
+    async def set_photo_contest_config(self, channel, result):
+        c = self.conn.cursor()
+        c.execute("UPDATE config SET value = ? WHERE field = 'photo_channel'", (str(channel),))
+        c.execute("UPDATE config SET value = ? WHERE field = 'photo_result'", (str(result),))
 
+    async def vote_photo_contest(self, winner_message_id, loser_message_id, voter_id):
+        c = self.conn.cursor()
+        c.execute(
+               "INSERT INTO pairwise_votes (winner_id, loser_id, voter_id) VALUES (?, ?, ?)",
+               (winner_message_id, loser_message_id, voter_id)
+           )
+
+    async def get_votes_photo_contest(self):
+        c = self.conn.cursor()
+        rows = c.execute(
+            "SELECT rowid, winner_id, loser_id, voter_id "
+            "FROM pairwise_votes ORDER BY rowid"
+        )
+        ret = []
+        for row in rows:
+            ret.append((row[1], row[2], row[3]))
+        return ret
 
 class FakeMember:
     def __init__(self, memberID):
@@ -457,6 +497,8 @@ def staff_help_array():
         "massban": ">@RedYoshiBot massban (user IDs)\nBans all the specified user IDs",
         "addcmd": ">@RedYoshiBot addcmd (command) (text)\nAdds custom exclamation command",
         "delcmd": ">@RedYoshiBot delcmd (command)\nDeletes custom exclamation command",
+        "photoconfig": ">@RedYoshiBot photoconfig [channel] [result]\nGets the current photo contest config or sets it. Set to 0 to disable.",
+        "photoaction": ">@RedYoshiBot photoaction (reward/purge/result) (votecount/top) [badgeid/channelid]\nFor reward, gives the badge specified if votes are bigger than specified. For purge, removes all messages with votes lower than specified. For result, returns the top results and sends them in channelID.",
     }
     
 def staff_command_level():
@@ -492,6 +534,8 @@ def staff_command_level():
         "massban": -1,
         "addcmd": 0,
         "delcmd": 0,
+        "photoconfig": -1,
+        "photoaction": -1,
     }
     
 def game_help_array():
@@ -534,6 +578,7 @@ def ch_list():
         "CONSOLE_ACTIONS": 1336735937090289674,
         "CITRA_ACTIONS": 1336737024446693488,
         "SPAM_HONEYPOT": 1407294172548825248,
+        "PHOTO_VOTE": 1525107179747672074,
     }
 
 def NUMBER_EMOJI():
@@ -1233,6 +1278,10 @@ async def checkNitroScam(message: discord.Message, orig_content):
 
 from .server.CTGP7BotHandler import queue_player_role_update, get_user_info, unlink_console, handle_server_command, handler_server_init_loop, handler_server_update_globals, kick_message_callback, server_message_logger_callback, server_on_member_remove, handle_action_message
 
+@client.event
+async def setup_hook():
+    await client.tree.sync()
+
 on_ready_completed = False
 @client.event
 async def on_ready():
@@ -1244,6 +1293,7 @@ async def on_ready():
     global debug_mode
     global on_ready_completed
     global cached_member_count
+    global photo_contest_config
     if (on_ready_completed):
         print("Skipping on_ready...")
         print('------\n')
@@ -1251,11 +1301,10 @@ async def on_ready():
     if(os.path.isfile("debug.flag")):
         print("Debug mode enabled.")
         debug_mode = True
-        atexit.unregister(exit_handler)
-    SELF_BOT_SERVER = client.get_guild(SERVER_ID())
-    SELF_BOT_MEMBER = SELF_BOT_SERVER.get_member(client.user.id)
     db_mng = ServerDatabase()
     atexit.register(db_mng.terminate)
+    SELF_BOT_SERVER = client.get_guild(SERVER_ID())
+    SELF_BOT_MEMBER = SELF_BOT_SERVER.get_member(client.user.id)
     ctgp7_server = CTGP7ServerHandler(debug_mode)
     ctgp7_server.database.setKickLogCallback(kick_message_callback)
     ctgp7_server.citraDatabase.setKickLogCallback(kick_message_callback)
@@ -1274,6 +1323,18 @@ async def on_ready():
     set_retry_times(0)
     on_ready_completed = True
     cached_member_count = SELF_BOT_SERVER.member_count
+    photo_contest_config = await db_mng.get_photo_contest_config()
+    if photo_contest_config[0] != 0:
+        voteChan = SELF_BOT_SERVER.get_channel(ch_list()["PHOTO_VOTE"])
+        async for m in voteChan.history(limit=200):
+            await m.delete()
+        async def on_pairwise_vote(winner_message_id: int, loser_message_id: int, voter_id: int) -> None:
+            print("User {} winner {} loser {}".format(voter_id, winner_message_id, loser_message_id))
+            await db_mng.vote_photo_contest(winner_message_id, loser_message_id, voter_id)
+        await voteChan.send(
+            "# Photo Contest Vote\nClick the button below to start voting, you can vote as many times as you want.\n** **",
+            view=StartVoteView(PairwiseVoting(client, photo_contest_config[1], on_pairwise_vote, vote_command_channel_id=ch_list()["PHOTO_VOTE"]))
+        )
 
 @client.event
 async def wait_until_login():
@@ -1312,7 +1373,12 @@ async def on_member_remove(member):
     await door_chan.send("See ya **{}**. We are now {} members.".format(member.name, cached_member_count))
     
 @client.event
-async def on_message_delete(message):
+async def on_message_delete(message: discord.Message):
+    global photo_contest_config
+    if (photo_contest_config[0] != 0 and message.channel.id == photo_contest_config[1]):
+        await on_photo_submission_delete(message, SELF_BOT_SERVER)
+        return
+
     staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["DELETEEDITLOGS"])
     if (message.channel != staff_chan and not message.author.bot):
         parsedcontent = escapeFormatting(message.content)
@@ -1327,7 +1393,7 @@ async def on_message_delete(message):
         await staff_chan.send("Message by {} ({}) was deleted in {}\n\n------------------------\n{}\n------------------------".format(usermention, message.author.id, chanment, parsedcontent))
 
 @client.event
-async def on_message_edit(before, after):
+async def on_message_edit(before: discord.Message, after: discord.Message):
     if not before.author.bot:
         staff_chan = SELF_BOT_SERVER.get_channel(ch_list()["DELETEEDITLOGS"])
         if (before.channel != staff_chan):
@@ -1343,7 +1409,7 @@ async def on_message_edit(before, after):
             await staff_chan.send("Message by {} ({}) was edited in {} at:\n`{} {}`\n\n------------------------\n{}\n------------------------".format(usermention, before.author.id, chanment, str(datetime.datetime.now()), time.tzname[time.localtime().tm_isdst], parsedcontent))
 
 @client.event
-async def on_message(message):
+async def on_message(message: discord.message):
     global db_mng
     global ctgp7_server
     global SELF_BOT_SERVER
@@ -1353,6 +1419,7 @@ async def on_message(message):
     global debug_mode
     global current_time_min
     global current_talk_id
+    global photo_contest_config
     if (client.user == None) or (SELF_BOT_SERVER == None) or (SELF_BOT_MEMBER == None):
         print("Error, some variable is None")
         return None
@@ -1369,6 +1436,10 @@ async def on_message(message):
         elif is_channel(message, ch_list()["CITRA_ACTIONS"]):
             await handle_action_message(ctgp7_server, message, True)
             return
+        elif is_channel(message, photo_contest_config[0]):
+            handled = await on_photo_channel_message(message, SELF_BOT_SERVER.get_channel(photo_contest_config[1]))
+            if handled:
+                return 
 
         msg_split = message.content.split(None, 2)
 
@@ -2249,6 +2320,113 @@ async def on_message(message):
                     else:
                         await handle_server_command(ctgp7_server, message, bot_cmd == "citraserver")
                     return
+                elif bot_cmd == "photoconfig":
+                    if await staff_can_execute(message, bot_cmd):
+                        tag = message.content.split()
+                        if (len(tag) != 2 and len(tag) != 4):
+                            await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()["photoconfig"] + "```")
+                            return
+                        if (len(tag) == 2):
+                            config = await db_mng.get_photo_contest_config()
+                            if config is None:
+                                config = (0, 0)
+                            await message.reply("Config for photo mode is " + str(config))
+                            return
+                        else:
+                            try:
+                                channel = int(tag[2])
+                                result = int(tag[3])
+                            except:
+                                await message.reply("Invalid format")
+                                return
+                            await db_mng.set_photo_contest_config(channel, result)
+                            photo_contest_config = (channel, result)
+                            await message.reply("Config for photo mode is " + str((channel, result)))
+                            return
+                elif bot_cmd == "photoaction":
+                    tag = message.content.split()
+                    if (len(tag) < 3 or (tag[2] != "reward" and tag[2] != "purge" and tag[2] != "result")):
+                        await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()["photoaction"] + "```")
+                        return
+                    if tag[2] == "reward":
+                        if (len(tag) != 5):
+                            await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()["photoaction"] + "```")
+                            return
+                        photo_result_channel = SELF_BOT_SERVER.get_channel(photo_contest_config[1])
+                        vote_count = int(tag[3])
+                        badge_id = int(tag[4], 16)
+                        total_gives = 0
+                        async def reward_action(message: discord.Message, votes: int):
+                            nonlocal total_gives
+                            if not message.embeds:
+                                print("Error, no embeds")
+                                return
+
+                            embed = message.embeds[0]
+
+                            match = JUMP_URL_RE.fullmatch(embed.description)
+                            if not match:
+                                print("Error, missing description")
+                                return
+
+                            _, channel_id, message_id = map(int, match.groups())
+
+                            channel = SELF_BOT_SERVER.get_channel(channel_id)
+
+                            try:
+                                original = await channel.fetch_message(message_id)
+                            except discord.NotFound:
+                                print("Error, couldn't get message")
+                                return
+
+                            print("Attempting to reward {}".format(original.author.name))
+                            cID = ctgp7_server.database.get_discord_link_user(original.author.id)
+                            if cID is None:
+                                print("User has no linked console")
+                                return
+                            ctgp7_server.database.grant_badge(cID, badge_id)
+                            print("Given badge 0x{:08X} to console 0x{:08X}".format(badge_id, cID))
+                            total_gives += 1
+                        await process_messages_with_votes(photo_result_channel, vote_count, reward_action, False)
+                        await message.reply("Rewarded {} badges".format(total_gives))
+                        return
+                    if tag[2] == "purge":    
+                        if (len(tag) != 4):
+                            await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()["photoaction"] + "```")
+                            return
+                        photo_result_channel = SELF_BOT_SERVER.get_channel(photo_contest_config[1])
+                        vote_count = int(tag[3])
+                        to_delete = []
+                        async def delete_action(message: discord.Message, votes: int):
+                            nonlocal to_delete
+                            to_delete.append(message)
+                        await process_messages_with_votes(photo_result_channel, vote_count, delete_action, True)
+                        for m in to_delete:
+                            print("Deleting message {}".format(m.id))
+                            await m.delete()
+                        await message.reply("Deleted {} submissions".format(len(to_delete)))
+                        return
+                    if tag[2] == "result":
+                        if (len(tag) != 5):
+                            await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()["photoaction"] + "```")
+                            return
+                        photo_result_channel = client.get_channel(int(photo_contest_config[1]))
+                        if photo_result_channel is None:
+                            await message.reply("Cannot get photo result channel " + str(int(photo_contest_config[1])))
+                            return
+                        top_amount = int(tag[3])
+                        send_message_channel = client.get_channel(int(tag[4]))
+                        if send_message_channel is None:
+                            await message.reply("Cannot get send message channel")
+                            return
+                        await message.reply("Starting rank calculation, this may take a while.")
+                        result = await rank_photo_contest(client, db_mng, photo_result_channel, top_amount)
+                        entries = []
+                        entries.append("# Photo Contest Results\n")
+                        for rank, (entry, _) in enumerate(result, start=1):
+                            entries.append("{}. {}: {}\n".format(rank, entry.image_title, entry.bot_jump_url))
+                        await sendMultiMessage(send_message_channel, entries, "", "")
+                        await message.reply( "Operation succeeded.")
                 else:
                     await message.reply( 'Unknown command: `{}`\nTo get the list of all the available commands use `@RedYoshiBot help`'.format(bot_cmd))    
             except:

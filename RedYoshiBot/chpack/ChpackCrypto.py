@@ -39,6 +39,7 @@ def chpack_crypt(srcSarcUrl: str, dstSarc: BytesIO, key_kind: str, decrypt: bool
         ("rankrace.bclim", True),
         ("driver.bcmdl", False),
         ("driver_menu.bcmdl", False),
+        ("driver_es.bcmdl", False),
         ("driver_lod.bcmdl", True),
         ("body_(body).bcmdl", False),
         ("body_(body)_lod.bcmdl", True),

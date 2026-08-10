@@ -1567,6 +1567,12 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 if len(info) == 0:
                     info = " "
                 await sendMultiMessage(message.channel, info, "```\n---------------\n", "---------------\n```\n")
+                log_data = currDatabase.get_bad_legality_list()
+                info = ""
+                for e in log_data: info += "0x{:016X}-0x{:016X}-0x{:016X}-{}\n".format(e[0], e[1], e[2], datetime.datetime.fromtimestamp(e[3], datetime.UTC).isoformat())
+                if len(info) == 0:
+                    info = " "
+                await sendMultiMessage(message.channel, info, "```\n---------------\n", "---------------\n```\n")
             if (mode == "set"):
                 currDatabase.set_console_legality(consoleID)
                 await message.reply( "Operation succeeded.")

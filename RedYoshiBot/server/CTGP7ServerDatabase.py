@@ -235,15 +235,34 @@ class CTGP7ServerDatabase:
     def set_weekly_badge_limits(self, amounts: str):
         self.set_database_config("weeklybadgelimits", str(amounts))
 
+    # Do not call externally
+    def _report_bad_legality(self, cID, cSH1, cSH2):
+        c = self.conn.cursor()
+        rows = c.execute("SELECT * FROM bad_legality WHERE cID = ? AND cSH1 = ? AND cSH2 = ?", (int(cID), int(cSH1), int(cSH2)))
+        for _ in rows:
+            return
+        c.execute("INSERT INTO bad_legality VALUES (?,?,?,?)", (int(cID), int(cSH1), int(cSH2), int(datetime.datetime.utcnow().timestamp())))
+
+    def get_bad_legality_list(self):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT * FROM bad_legality WHERE 1=1")
+            ret = []
+            for r in rows:
+                ret.append((r[0], r[1], r[2], r[3]))
+            return ret
+
     def verify_console_legality(self, cID, cSH1, cSH2):
         with self.lock:
             c = self.conn.cursor()
             rows = c.execute("SELECT cID FROM console_secure WHERE cSH1 = ? AND cSH2 = ?", (int(cSH1), int(cSH2)))
             for row in rows:
                 if row[0] == 0:
+                    self._report_bad_legality(cID, cSH1, cSH2)
                     return False
                 if row[0] != int(cID):
                     c.execute("UPDATE console_secure SET cID = ? WHERE cSH1 = ? AND cSH2 = ?", (0, int(cSH1), int(cSH2)))
+                    self._report_bad_legality(cID, cSH1, cSH2)
                     return False
                 return True
             c.execute("INSERT INTO console_secure VALUES (?,?,?,?)", (int(cSH1), int(cSH2), int(cID), int(cID)))

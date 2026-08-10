@@ -66,6 +66,7 @@ class CTGP7Requests:
         "WEEKLY_SILVER": 0x52FAF3B0161EDF33,
         "WEEKLY_BRONZE": 0x334A9494246CC0CA,
         "MIKU_LEEK": 0x1035B675CD6132C5,
+        "PHOTO_CONTEST": 0x5C1CD08CE740B174,
     }
 
     get_user_info = None
