@@ -43,6 +43,7 @@ current_talk_id = ''
 miku_last_message_time = datetime.datetime.utcnow()
 cached_member_count = None
 photo_contest_config = (0,0)
+bot_owner_id = None
 
 class ServerDatabase:
     global debug_mode
@@ -291,12 +292,21 @@ class FakeMember:
         self.id = int(memberID)
         self.name = "(ID: {})".format(self.id)
         self.mention = self.name
-    def send(self, message):
+    async def send(self, message):
         pass
+
+    async def ban(self, *args):
+        await SELF_BOT_SERVER.ban(discord.Object(id=self.id))
+
+    async def kick(self, *args):
+        member = await SELF_BOT_SERVER.fetch_member(self.id)  # API call, no intent needed
+        await member.kick()
 
 def CreateFakeMember(memberID):
     ret = None
     try:
+        if (type(memberID) is str):
+            memberID = re.findall(r'\d+', memberID)[0]
         ret = FakeMember(int(memberID))
     except:
         pass
@@ -329,10 +339,11 @@ def get_role(roleid):
         if(rol.id == roleid):
             return rol
     return None
-def get_from_mention(mention):
+
+async def get_from_mention(mention):
     global SELF_BOT_SERVER
     global SELF_BOT_MEMBER
-    
+
     mID = 0
     if (type(mention) is str):
         memberID = re.sub("\D", "", mention)
@@ -342,11 +353,19 @@ def get_from_mention(mention):
             return None
     elif (type(mention) is int):
         mID = mention
-    try:
-        ret : discord.Member
-        ret = client.get_guild(SERVER_ID()).get_member(mID)
+
+    guild = client.get_guild(SERVER_ID())
+
+    # Try the cache first — no API call, instant
+    ret = guild.get_member(mID)
+    if ret is not None:
         return ret
-    except:
+
+    # Fall back to the API if not cached
+    try:
+        ret = await guild.fetch_member(mID)
+        return ret
+    except (discord.NotFound, discord.HTTPException):
         return None
 
 def itercount(iterable, count):
@@ -609,6 +628,9 @@ def role_list():
 def SERVER_ID():
     return 163070769067327488
 
+def OWNER_ID():
+    return 183210046212145152
+
 def EMERGENCY_SPECIAL_ROLES():
     return [
         608313379668623411, # Nitro boost
@@ -755,7 +777,7 @@ def is_staff(user):
     moderatorRole = get_role(role_list()["MODERATOR"])
     adminRole = get_role(role_list()["ADMIN"])
     hasMod = moderatorRole in user.roles
-    hasAdmin = (adminRole in user.roles) or user.id == SELF_BOT_SERVER.owner.id
+    hasAdmin = (adminRole in user.roles) or user.id == bot_owner_id
     return hasMod or hasAdmin
 
 async def staff_can_execute(message, command, silent=False):
@@ -764,8 +786,8 @@ async def staff_can_execute(message, command, silent=False):
         moderatorRole = get_role(role_list()["MODERATOR"])
         adminRole = get_role(role_list()["ADMIN"])
         hasMod = moderatorRole in message.author.roles
-        hasAdmin = (adminRole in message.author.roles) or message.author.id == SELF_BOT_SERVER.owner.id
-        privilegeLevel = -1 if message.author.id == SELF_BOT_SERVER.owner.id else (0 if hasAdmin else (1 if hasMod else 2))
+        hasAdmin = (adminRole in message.author.roles) or message.author.id == bot_owner_id
+        privilegeLevel = -1 if message.author.id == bot_owner_id else (0 if hasAdmin else (1 if hasMod else 2))
         try:
             retVal = staff_command_level()[command] >= privilegeLevel
         except:
@@ -783,8 +805,7 @@ async def punish(member, amount, onRejoin=False):
             except:
                 pass
             try:
-                if (type(member) is not FakeMember):
-                    await member.ban(delete_message_days=7)
+                await member.ban(delete_message_days=7)
             except:
                 pass
     else:
@@ -801,8 +822,7 @@ async def punish(member, amount, onRejoin=False):
                 pass
             await mute_user(member.id, 7*24*60)
             try:
-                if (type(member) is not FakeMember):
-                    await member.kick()
+                await member.kick()
             except:
                 pass
         elif(amount >= 4):
@@ -811,14 +831,13 @@ async def punish(member, amount, onRejoin=False):
             except:
                 pass
             try:
-                if (type(member) is not FakeMember):
-                    await member.ban(delete_message_days=7)
+                await member.ban(delete_message_days=7)
             except:
                 pass
 
 async def applyRole(memberID, roleID, atomic = False):
     try:
-        user = get_from_mention(memberID)
+        user = await get_from_mention(memberID)
         if (user is not None):
             role = get_role(roleID)
             await user.add_roles(role, atomic=atomic)
@@ -827,7 +846,7 @@ async def applyRole(memberID, roleID, atomic = False):
 
 async def applyRoles(memberID, roles, atomic = False):
     try:
-        user = get_from_mention(memberID)
+        user = await get_from_mention(memberID)
         if (user is not None):
             await user.add_roles(*roles, atomic=atomic)
     except:
@@ -835,7 +854,7 @@ async def applyRoles(memberID, roles, atomic = False):
 
 async def removeRole(memberID, roleID, atomic = False):
     try:
-        user = get_from_mention(memberID)
+        user = await get_from_mention(memberID)
         if (user is not None):
             role = get_role(roleID)
             await user.remove_roles(role, atomic=atomic)
@@ -844,7 +863,7 @@ async def removeRole(memberID, roleID, atomic = False):
 
 async def removeRoles(memberID, roles, atomic = False):
     try:
-        user = get_from_mention(memberID)
+        user = await get_from_mention(memberID)
         if (user is not None):
             await user.remove_roles(*roles, atomic=atomic)
     except:
@@ -863,20 +882,20 @@ async def unmute_user(memberid):
     global SELF_BOT_SERVER
     await db_mng.mute_remove(memberid)
     await removeRole(memberid, role_list()["MUTE"])
-    muted_user = get_from_mention(memberid)
+    muted_user = await get_from_mention(memberid)
     if (muted_user is not None):
         try:
             await muted_user.send("**CTGP-7 server:** You have been unmuted.")
         except:
             pass
 
-def checkdestvalid(dest_id):
+async def checkdestvalid(dest_id):
     channel_id = int(re.sub("\D", "", dest_id))
     channel_obj = client.get_channel(channel_id)
     if (channel_obj != None):
         return channel_obj
     else:
-        return get_from_mention(dest_id)
+        return await get_from_mention(dest_id)
 
 async def sayfunc(dest_id, text, chanOrMsg):
     sendFunc = None
@@ -895,7 +914,7 @@ async def sayfunc(dest_id, text, chanOrMsg):
         await channel_obj.send(text)
         await sendFunc("Message successfully sent in {}.".format(channel_obj.name))
     else:
-        member_obj = get_from_mention(dest_id)
+        member_obj = await get_from_mention(dest_id)
         if (member_obj != None):
             try:
                 async with member_obj.typing():
@@ -1077,7 +1096,9 @@ async def enableEmergency():
 
     targetroles = [SELF_BOT_SERVER.default_role]
     for rID in EMERGENCY_SPECIAL_ROLES():
-        targetroles.append(SELF_BOT_SERVER.get_role(rID))
+        new_role = SELF_BOT_SERVER.get_role(rID)
+        if new_role is not None:
+            targetroles.append(new_role)
     for role in targetroles:
         roleperm = role.permissions
         roleperm.read_messages = False
@@ -1090,7 +1111,9 @@ async def disableEmergency():
     
     targetroles = [SELF_BOT_SERVER.default_role]
     for rID in EMERGENCY_SPECIAL_ROLES():
-        targetroles.append(SELF_BOT_SERVER.get_role(rID))
+        new_role = SELF_BOT_SERVER.get_role(rID)
+        if new_role is not None:
+            targetroles.append(new_role)
     for role in targetroles:
         roleperm = role.permissions
         roleperm.read_messages = True
@@ -1107,8 +1130,9 @@ async def disableEmergency():
     staffchn = client.get_channel(ch_list()["STAFF"])
     await staffchn.send("Emergency mode has been disabled.")
 
-async def handleExclamantion(message):
-    first_word = message.content.split()[0]
+async def handleExclamantion(message, first_word):
+    if first_word is None:
+        first_word = message.content.split()[0]
     if  ((first_word == "!emergency" or  first_word == "!emergency_off") and await staff_can_execute(message, "emergency", silent=True) and (message.author != client.user)):
         if (first_word == "!emergency"):
             await enableEmergency()
@@ -1294,6 +1318,7 @@ async def on_ready():
     global on_ready_completed
     global cached_member_count
     global photo_contest_config
+    global bot_owner_id
     if (on_ready_completed):
         print("Skipping on_ready...")
         print('------\n')
@@ -1335,6 +1360,11 @@ async def on_ready():
             "# Photo Contest Vote\nClick the button below to start voting, you can vote as many times as you want.\n** **",
             view=StartVoteView(PairwiseVoting(client, photo_contest_config[1], on_pairwise_vote, vote_command_channel_id=ch_list()["PHOTO_VOTE"]))
         )
+    if SELF_BOT_SERVER.owner is not None:
+        bot_owner_id = SELF_BOT_SERVER.owner.id
+    if bot_owner_id == None:
+        # Fallback to hardcoded ID
+        bot_owner_id = OWNER_ID()
 
 @client.event
 async def wait_until_login():
@@ -1446,7 +1476,7 @@ async def on_message(message: discord.message):
         bot_mtn = "" if len(msg_split) == 0 else msg_split[0]
         bot_cmd = "" if len(msg_split) <= 1 else msg_split[1]
         
-        if (((not is_channel_private(message.channel)) or bot_cmd in private_channel_allowed_cmd()) and get_from_mention(bot_mtn) == client.user): #@RedYoshiBot
+        if (((not is_channel_private(message.channel)) or bot_cmd in private_channel_allowed_cmd()) and (await get_from_mention(bot_mtn)) == client.user): #@RedYoshiBot
             if bot_cmd == "":
                 await message.reply( 'Hi! :3\nTo get the list of all the available commands use `@RedYoshiBot help`')
                 return
@@ -1457,7 +1487,7 @@ async def on_message(message: discord.message):
                         if (len(tag) != 4):
                             await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()["mute"] + "```")
                             return
-                        muted_member = get_from_mention(tag[2])
+                        muted_member = await get_from_mention(tag[2])
                         if (muted_member is None):
                             muted_member = CreateFakeMember(tag[2])
                         if(muted_member != None):
@@ -1475,13 +1505,17 @@ async def on_message(message: discord.message):
                         else:
                             await message.reply( "Invalid member.")
                             return
+                elif bot_cmd == 'emergency':
+                    await handleExclamantion(message, "!emergency")
+                elif bot_cmd == 'emergency_off':
+                    await handleExclamantion(message, "!emergency_off")
                 elif bot_cmd == 'unmute':
                     if await staff_can_execute(message, bot_cmd):
                         tag = message.content.split()
                         if (len(tag) != 3):
                             await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()["unmute"] + "```")
                             return
-                        muted_member = get_from_mention(tag[2])
+                        muted_member = await get_from_mention(tag[2])
                         if (muted_member is None):
                             muted_member = CreateFakeMember(tag[2])
                         if(muted_member != None):
@@ -1498,7 +1532,7 @@ async def on_message(message: discord.message):
                         rows = await db_mng.mute_get()
                         nameList = []
                         for row in rows:
-                            member = get_from_mention(str(row[0]))
+                            member = await get_from_mention(str(row[0]))
                             if (member is None):
                                 member = CreateFakeMember(row[0])
                             membname = member.name
@@ -1545,7 +1579,7 @@ async def on_message(message: discord.message):
                     if mode not in ("encrypt", "decrypt"):
                         await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["chpackcrypt"] + "```")
                         return
-                    canencrypt = get_role(role_list()["CONTRIBUTOR"]) in get_from_mention(message.author.id).roles
+                    canencrypt = get_role(role_list()["CONTRIBUTOR"]) in (await get_from_mention(message.author.id)).roles
                     candecrypt = message.author.id == SELF_BOT_SERVER.owner.id
                     if mode == "encrypt" and not canencrypt:
                         await message.reply("You don't have permissions to do that!")
@@ -1591,7 +1625,7 @@ async def on_message(message: discord.message):
                             current_talk_id = ''
                             await message.reply( "Cleared chat destination.")
                         else:
-                            if (checkdestvalid(tag[2]) != None):
+                            if (await checkdestvalid(tag[2]) != None):
                                 current_talk_id = re.sub("\D", "", tag[2])
                                 await message.reply( "Set chat destination to: {}".format(current_talk_id))
                             else:
@@ -1613,7 +1647,7 @@ async def on_message(message: discord.message):
                         bug_closed = SELF_BOT_SERVER.get_channel(ch_list()["BUG_CLOSE"])
                         bugs = SELF_BOT_SERVER.get_channel(ch_list()["BUGS"])
                         bot_msg = await bug_reports.fetch_message(tag[2])
-                        member = get_from_mention(str(bug_entry[0]))
+                        member = await get_from_mention(str(bug_entry[0]))
                         if (member is None):
                             member = FakeMember(str(bug_entry[0]))
                         if (len(tag) == 4):
@@ -1658,7 +1692,7 @@ async def on_message(message: discord.message):
                         if (len(tag) < 3):
                             await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()["warn"] + "```")
                             return
-                        warn_member = get_from_mention(tag[2])
+                        warn_member = await get_from_mention(tag[2])
                         if (warn_member is None):
                             warn_member = CreateFakeMember(tag[2])
                         warnreason = ""
@@ -1692,7 +1726,7 @@ async def on_message(message: discord.message):
                             if (len(tag) < 3):
                                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()[bot_cmd] + "```")
                                 return
-                        warn_member = get_from_mention(tag[2])
+                        warn_member = await get_from_mention(tag[2])
                         if (warn_member is None):
                             warn_member = CreateFakeMember(tag[2])
                         warnreason = ""
@@ -1736,7 +1770,7 @@ async def on_message(message: discord.message):
                         if (len(tag) < 3):
                             await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_help_array()["scam"] + "```")
                             return
-                        warn_member = get_from_mention(tag[2])
+                        warn_member = await get_from_mention(tag[2])
                         if (warn_member is None):
                             await message.reply("Member not found, please do manual action.")
                             return
@@ -1752,14 +1786,14 @@ async def on_message(message: discord.message):
                             rows = await db_mng.warn_get_all()
                             nameList = []
                             for row in rows:
-                                member = get_from_mention(str(row[0]))
+                                member = await get_from_mention(str(row[0]))
                                 if (member is None):
                                     member = CreateFakeMember(str(row[0]))
                                 membname = member.name
                                 nameList.append("{}: {}\n".format(membname, row[1]))
                             await sendMultiMessage(message.channel, nameList, "```", "```")
                         else:
-                            warn_member = get_from_mention(tag[2])
+                            warn_member = await get_from_mention(tag[2])
                             if (warn_member is None):
                                 warn_member = CreateFakeMember(tag[2])
                             if (warn_member is not None):
@@ -1821,7 +1855,7 @@ async def on_message(message: discord.message):
                         if (timeamount[0] == -1):
                             await message.reply( "Invalid time specified.")
                             return
-                        messagedest = checkdestvalid(tag[2]) 
+                        messagedest = await checkdestvalid(tag[2]) 
                         if (messagedest == None):
                             await message.reply( "Invalid user or channel specified.")
                             return
@@ -1936,7 +1970,7 @@ async def on_message(message: discord.message):
                     if await staff_can_execute(message, bot_cmd, silent=True):
                         sendToStaff = True
                         for row in fact_text:
-                            member = get_from_mention(str(row[1]))
+                            member = await get_from_mention(str(row[1]))
                             if (member is None):
                                 member = CreateFakeMember(str(row[1]))
                             membname = member.name
@@ -2135,7 +2169,7 @@ async def on_message(message: discord.message):
                         failures = []
                         for user in tobebanned:
                             try:
-                                u = get_from_mention(user)
+                                u = await get_from_mention(user)
                                 await u.ban(delete_message_seconds=7*24*60*60)
                             except:
                                 failures += [user]
@@ -2255,7 +2289,7 @@ async def on_message(message: discord.message):
                                 if (len(tag) != 4):
                                     await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_game_help_array()["showcookie"] + "```")
                                     return
-                                cookie_member = get_from_mention(tag[3])
+                                cookie_member = await get_from_mention(tag[3])
                                 if (cookie_member is None):
                                     cookie_member = CreateFakeMember(tag[3])
                                 if (cookie_member != None):
@@ -2278,7 +2312,7 @@ async def on_message(message: discord.message):
                             rows = await db_mng.top_ten_cookie()
                             retstr = "Users with most <:yoshicookie:416533826869657600> .\n\n---------------------------------\n"
                             for row in rows:
-                                cookie_member = get_from_mention(str(row[0]))
+                                cookie_member = await get_from_mention(str(row[0]))
                                 if cookie_member != None:
                                     retstr += "**{}** = **{}** <:yoshicookie:416533826869657600>\n---------------------------------\n".format(cookie_member.name, row[1])
                                 else:
@@ -2289,7 +2323,7 @@ async def on_message(message: discord.message):
                                 if (len(tag) != 5):
                                     await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_game_help_array()["setcookie"] + "```")
                                     return
-                                cookie_member = get_from_mention(tag[3])
+                                cookie_member = await get_from_mention(tag[3])
                                 if (cookie_member is None):
                                     cookie_member = CreateFakeMember(tag[3])
                                 try:
@@ -2449,7 +2483,7 @@ async def on_message(message: discord.message):
             else:
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + help_array()["report"] + "```")
         elif (len(bot_mtn) > 1 and bot_mtn[0] == "!"):
-            await handleExclamantion(message)
+            await handleExclamantion(message, None)
         elif (await staff_can_execute(message, "talk", silent=True) and orig_content[0] == '+' and len(orig_content) > 2):
             if (orig_content[1] == '+'):
                 subsindex = 2

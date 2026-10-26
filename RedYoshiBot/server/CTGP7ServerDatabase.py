@@ -180,6 +180,12 @@ class CTGP7ServerDatabase:
     def set_allowed_items(self, l: str):
         self.set_database_config("allowedItems", str(l))
 
+    def get_race_style(self) -> int:
+            return int(self.get_database_config("raceStyle"))
+        
+    def set_race_style(self, style: int):
+        self.set_database_config("raceStyle", str(style))
+
     def fetch_unique_PID(self):
         pid = int(self.get_database_config("currUniquePID"))
         self.set_database_config("currUniquePID", pid + 1)

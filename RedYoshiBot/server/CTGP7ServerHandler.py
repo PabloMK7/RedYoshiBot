@@ -127,12 +127,15 @@ class CTGP7ServerHandler:
                     CTGP7ServerHandler.myself.citraPointsHandler if isCitra else CTGP7ServerHandler.myself.pointsHandler,
                     CTGP7ServerHandler.myself.saveBackupHandler,
                     inputData, CTGP7ServerHandler.debug_mode, reqConsoleID, isCitra)
-                outputData.update(solver.solve())
-                logStr += solver.info
+                
+                # outputData.update(solver.solve())
+                
+                # logStr += solver.info
 
                 outputData["_CID"] = reqConsoleID
                 outputData["_seed"] = inputData["_seed"]
-                outputData["res"] = 0
+                # outputData["res"] = 0
+                outputData["res"] = -1
           
                 if (not do_critical_operations_out(CTGP7ServerHandler.myself, self, outputData)):
                     return

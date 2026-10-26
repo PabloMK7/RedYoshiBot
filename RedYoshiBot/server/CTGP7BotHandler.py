@@ -3,7 +3,7 @@ from RedYoshiBot.server.CTGP7Requests import CTGP7Requests
 from .CTGP7ServerHandler import CTGP7ServerHandler
 from .CTGP7ServerDatabase import ConsoleMessageType, CTGP7ServerDatabase
 from .CTGP7CtwwHandler import OnlineUserName, PlayerNameMode
-from ..RedYoshiBot import FakeMember, ch_list, is_channel, is_channel_private, get_role, parsetime, sendMultiMessage, escapeFormatting, role_list, get_from_mention, CreateFakeMember, applyRole, removeRole, removeRoles, applyRoles
+from ..RedYoshiBot import FakeMember, ch_list, is_channel, is_channel_private, get_role, parsetime, sendMultiMessage, escapeFormatting, role_list, get_from_mention, CreateFakeMember, applyRole, removeRole, removeRoles, applyRoles, bot_owner_id, client
 from ..CTGP7Defines import CTGP7Defines
 from ..QRCrashDecode import QRCrashDecode
 import discord
@@ -57,7 +57,7 @@ def staff_server_help_array():
         "purge_console_link": ">@RedYoshiBot server purge_console_link\nRemoved console links from users that are no longer in the server.",
         "get_mii_icon": ">@RedYoshiBot server get_mii_icon (consoleID)\nGets the mii icon of the specified user.",
         "name_history": ">@RedYoshiBot server name_history (consoleID)\nGets the name history of the specified user.",
-        "config": (">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable/vrmultiplier/allowedCharacters/allowedTracks/allowedItems/finishracebadge/itemmodeprob/specialvrcharacters/specialvrcharmultiplier/weeklypointsduration/weeklyspecialpartamounts/weeklybadgelimits) [newValue]\nGets or sets the config parameters for online mode.\n\n"
+        "config": (">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable/vrmultiplier/allowedCharacters/allowedTracks/allowedItems/finishracebadge/itemmodeprob/specialvrcharacters/specialvrcharmultiplier/weeklypointsduration/weeklyspecialpartamounts/weeklybadgelimits/raceStyle) [newValue]\nGets or sets the config parameters for online mode.\n\n"
                    "itemmodeprob -> Probability of special item modes (100 percent based) -> \"(blueshellprob):(colorrainprob):(boxrainprob):(tripleitemprob):(itemchaosprob):(periodicitemprob)\""),
         "otplegality": ">@RedYoshiBot server otplegality (get/getall/set/clear) (consoleID)\nGets, sets or clear the otp legality of a specified console.",
         "consoleserver": ">@RedYoshiBot server consoleserver (get/set/clear)\nSets a NEX server address to the specified console.",
@@ -114,8 +114,8 @@ async def staff_server_can_execute(message, command, silent=False):
         moderatorRole = get_role(role_list()["MODERATOR"])
         adminRole = get_role(role_list()["ADMIN"])
         hasMod = moderatorRole in message.author.roles
-        hasAdmin = (adminRole in message.author.roles) or message.author.id == SELF_BOT_SERVER.owner.id
-        privilegeLevel = -1 if message.author.id == SELF_BOT_SERVER.owner.id else (0 if hasAdmin else (1 if hasMod else 2))
+        hasAdmin = (adminRole in message.author.roles) or message.author.id == bot_owner_id
+        privilegeLevel = -1 if message.author.id == bot_owner_id else (0 if hasAdmin else (1 if hasMod else 2))
         try:
             retVal = staff_server_command_level()[command] >= privilegeLevel
         except:
@@ -741,7 +741,8 @@ async def server_bot_loop(ctgp7_server: CTGP7ServerHandler):
         return
 
 def get_user_info(userID):
-    member = get_from_mention(userID)
+    future = asyncio.run_coroutine_threadsafe(get_from_mention(userID), client.loop)
+    member = future.result()
     if (member is None):
         return (None, None)
     ret = {}
@@ -1194,7 +1195,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 discordID = currDatabase.get_discord_link_console(consoleID)
             else:
                 try:
-                    discordID = get_from_mention(checkid).id
+                    discordID = (await get_from_mention(checkid)).id
                 except:
                     await message.reply("Invalid discord ID provided.")
                     return
@@ -1204,7 +1205,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply("Specified ID has no link established.")
                 return
 
-            member = get_from_mention(discordID)
+            member = await get_from_mention(discordID)
             if (member is None):
                 member = CreateFakeMember(discordID)
             
@@ -1230,7 +1231,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 discordID = currDatabase.get_discord_link_console(consoleID)
             else:
                 try:
-                    discordID = get_from_mention(checkid).id
+                    discordID = (await get_from_mention(checkid)).id
                 except:
                     await message.reply("Invalid discord ID provided.")
                     return
@@ -1357,7 +1358,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             member_list = []
             for ac in allCons:
                 userID = ac[1]
-                member = get_from_mention(userID)
+                member = await get_from_mention(userID)
                 if (member is not None):
                     member_list.append(member.id)
                     curr += 1
@@ -1376,7 +1377,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
             for ac in allCons:
                 userID = ac[1]
                 cID = ac[0]
-                member = get_from_mention(userID)
+                member = await get_from_mention(userID)
                 if (member is None):
                     currDatabase.delete_discord_link_user(userID)
                     currDatabase.ungrant_badge(cID, CTGP7Requests.badge_ids["DISCORD_LINK"])
@@ -1424,7 +1425,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()["config"] + "```")
                 return
             mode = tag[2]
-            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset", "blockedTrackHistory", "serveraddr", "serveravailable", "vrmultiplier", "allowedCharacters", "allowedTracks", "allowedItems", "finishracebadge", "itemmodeprob", "specialvrcharacters", "specialvrcharmultiplier", "weeklypointsduration", "weeklyspecialpartamounts", "weeklybadgelimits"]:
+            if mode not in ["ctCPUAmount", "cdCPUAmount", "rubberBMult", "rubberBOffset", "blockedTrackHistory", "serveraddr", "serveravailable", "vrmultiplier", "allowedCharacters", "allowedTracks", "allowedItems", "finishracebadge", "itemmodeprob", "specialvrcharacters", "specialvrcharmultiplier", "weeklypointsduration", "weeklyspecialpartamounts", "weeklybadgelimits", "raceStyle"]:
                 await message.reply( "Invalid option `{}`, correct usage:\r\n```".format( mode) + staff_server_help_array()["config"] + "```")
                 return
             if (len(tag) == 3):
@@ -1465,11 +1466,13 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     amount = currDatabase.get_weekly_points_special_part_amounts()
                 elif mode == "weeklybadgelimits":
                     amount = currDatabase.get_weekly_badge_limits()
+                elif mode == "raceStyle":
+                    amount = currDatabase.get_race_style()
                 await message.reply( "Config for \"{}\" is: {}".format(mode, amount))
                 return
             else:
                 try:
-                    if (mode == "ctCPUAmount" or mode == "cdCPUAmount" or mode == "blockedTrackHistory" or mode == "serveravailable" or mode == "weeklypointsduration"):
+                    if (mode == "ctCPUAmount" or mode == "cdCPUAmount" or mode == "blockedTrackHistory" or mode == "serveravailable" or mode == "weeklypointsduration" or mode == "raceStyle"):
                         amount = int(tag[3])
                     elif (mode == "finishracebadge"):
                         amount = int(tag[3], 16)
@@ -1526,6 +1529,8 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     currDatabase.set_weekly_points_special_part_amounts(amount)
                 elif mode == "weeklybadgelimits":
                     currDatabase.set_weekly_badge_limits(amount)
+                elif mode == "raceStyle":
+                    currDatabase.set_race_style(amount)
                 await message.reply("Config for \"{}\" is: {}".format(mode, amount))
                 return
     elif bot_cmd == "otplegality":

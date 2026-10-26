@@ -698,6 +698,7 @@ class CTGP7CtwwHandler:
             allowedItems = self.database.get_allowed_items()
             if (allowedItems != ""):
                 retDict["allowedItems"] = allowedItems
+            retDict["raceStyle"] = self.database.get_race_style()
             specialVRChars = self.database.get_special_vr_characters()
             if (specialVRChars != ""):
                 retDict["specialCharVRMultiplier"] = int(self.database.get_special_char_vr_multiplier() * 1000)
