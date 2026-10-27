@@ -3,7 +3,7 @@ import sqlite3
 import time
 import string
 import random
-from .CTGP7ServerDatabase import CTGP7ServerDatabase
+from .CTGP7ServerDatabase import CTGP7ServerDatabase, cid_to_db
 
 class CTGP7SaveBackupHandler:
     class DatabaseHandler:
@@ -34,7 +34,7 @@ class CTGP7SaveBackupHandler:
         def get_backup_info(self, cID: int, isCitra: bool):
             with self.lock:
                 c = self.conn.cursor()
-                rows = c.execute("SELECT name, timestamp, sID0, sID1 FROM save_backups WHERE cID = ? AND isCitra = ?", (int(cID), int(isCitra)))
+                rows = c.execute("SELECT name, timestamp, sID0, sID1 FROM save_backups WHERE cID = ? AND isCitra = ?", (cid_to_db(cID), int(isCitra)))
                 timestamp = 0
                 sID0 = 0
                 sID1 = 0
@@ -52,7 +52,7 @@ class CTGP7SaveBackupHandler:
         def get_backup_item(self, cID: int, isCitra: bool, sID0: int, sID1: int, name: str):
             with self.lock:
                 c = self.conn.cursor()
-                rows = c.execute("SELECT value FROM save_backups WHERE cID = ? AND isCitra = ? AND sID0 = ? AND sID1 = ? AND name = ?", (int(cID), int(isCitra), int(sID0), int(sID1), str(name)))
+                rows = c.execute("SELECT value FROM save_backups WHERE cID = ? AND isCitra = ? AND sID0 = ? AND sID1 = ? AND name = ?", (cid_to_db(cID), int(isCitra), int(sID0), int(sID1), str(name)))
                 for row in rows:
                     return bytes(row[0])
             return None
@@ -61,7 +61,7 @@ class CTGP7SaveBackupHandler:
             with self.lock:
                 try:
                     c = self.conn.cursor()
-                    c.execute("DELETE FROM save_backups WHERE cID = ? AND isCitra = ?", (int(cID), int(isCitra)))
+                    c.execute("DELETE FROM save_backups WHERE cID = ? AND isCitra = ?", (cid_to_db(cID), int(isCitra)))
                 except:
                     return False
             return True
@@ -72,10 +72,10 @@ class CTGP7SaveBackupHandler:
                 try:
                     with self.conn:
                         c = self.conn.cursor()
-                        c.execute("DELETE FROM save_backups WHERE cID = ? AND isCitra = ?", (int(cID), int(isCitra)))
+                        c.execute("DELETE FROM save_backups WHERE cID = ? AND isCitra = ?", (cid_to_db(cID), int(isCitra)))
 
                         rows = [
-                            (int(cID), int(isCitra), int(sID0), int(sID1), str(name), int(now), bytes(value))
+                            (cid_to_db(cID), int(isCitra), int(sID0), int(sID1), str(name), int(now), bytes(value))
                             for name, value in data.items()
                         ]
 
@@ -104,7 +104,7 @@ class CTGP7SaveBackupHandler:
 
         manage_cID = input.get("manage_cID", None)
         if manage_cID is not None and mainDB.get_console_is_admin(cID):
-            cID = manage_cID
+            cID = int(str(manage_cID), 16)
             isCitra = input.get("manage_isCitra", True)
 
         with self.putLock:
@@ -183,7 +183,7 @@ class CTGP7SaveBackupHandler:
 
         manage_cID = input.get("manage_cID", None)
         if manage_cID is not None and mainDB.get_console_is_admin(cID):
-            cID = manage_cID
+            cID = int(str(manage_cID), 16)
             isCitra = input.get("manage_isCitra", True)
 
         op = input.get("op", None)

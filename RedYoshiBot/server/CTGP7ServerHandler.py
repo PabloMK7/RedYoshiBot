@@ -22,6 +22,7 @@ from .CTGP7NEXHTTPHandler import CTGP7NEXHTTPHandler
 from .CTGP7PointsModeHandler import CTGP7PointsModeHandler
 from .CTGP7ServerCritical import do_critical_operations_in, do_critical_operations_out
 from .CTGP7SaveBackupHandler import CTGP7SaveBackupHandler
+from .CTGP7ConsoleAuth import CTGP7ConsoleAuth
 
 class CTGP7ServerHandler:
     
@@ -39,6 +40,9 @@ class CTGP7ServerHandler:
         else:
             if (CTGP7ServerHandler.loggerCallback is not None):
                 CTGP7ServerHandler.loggerCallback(message)
+
+    class AuthReply(Exception):
+        pass
 
     class PostGetHandler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -109,17 +113,33 @@ class CTGP7ServerHandler:
                     raise Exception("Couldn't decrypt message: {}".format(process.returncode))
 
                 inputData = bson.loads(connData)
-                if not "_CID" in inputData or not "_seed" in inputData or not "_CSH1" in inputData or not "_CSH2" in inputData:
+                if "_CID" in inputData:
                     skipExceptionPrint = True
-                    raise Exception("Input is missing: cID: {}, seed: {}".format(not "_CID" in inputData, not "_seed" in inputData))
+                    raise Exception("Old request format detected, skipping")
+                if not "_seed" in inputData or not "_CSH1" in inputData or not "_CSH2" in inputData:
+                    skipExceptionPrint = True
+                    raise Exception("Input is missing: CSH: {}, seed: {}".format(not ("_CSH1" in inputData and "_CSH2" in inputData), not "_seed" in inputData))
                 
-                reqConsoleID = inputData["_CID"]
-                logStr += "Console ID: 0x{:016X}\n".format(reqConsoleID)
-
-                isLegal = CTGP7ServerHandler.myself.database.verify_console_legality(reqConsoleID, inputData["_CSH1"], inputData["_CSH2"])
-                if not isLegal:
+                csh1 = int(inputData["_CSH1"])
+                csh2 = int(inputData["_CSH2"])
+                if csh1 < 0 or csh1 >> 64 or csh2 < 0 or csh2 >> 64 or (csh1 == 0 and csh2 == 0):
                     skipExceptionPrint = True
-                    raise Exception("Illegal console detected")
+                    raise Exception("Invalid console ID")
+                reqConsoleID = (csh1 << 64) | csh2
+                logStr += "Console ID: {:032X}\n".format(reqConsoleID)
+
+                outputData["_CSH1"] = csh1
+                outputData["_CSH2"] = csh2
+                outputData["_seed"] = inputData["_seed"]
+
+                if not isCitra:
+                    authLog = []
+                    if not CTGP7ServerHandler.myself.consoleAuth.authenticate(CTGP7ServerHandler.myself.database, inputData, reqConsoleID, outputData, authLog.append):
+                        # The plugin handles the "_authres" value and retries the request if needed
+                        for l in authLog: logStr += l + "\n"
+                        logStr += "Auth result: {}\n".format(outputData["_authres"])
+                        outputData["res"] = 0
+                        raise CTGP7ServerHandler.AuthReply()
 
                 solver = CTGP7Requests(
                     CTGP7ServerHandler.myself.citraDatabase if isCitra else CTGP7ServerHandler.myself.database, 
@@ -128,18 +148,16 @@ class CTGP7ServerHandler:
                     CTGP7ServerHandler.myself.saveBackupHandler,
                     inputData, CTGP7ServerHandler.debug_mode, reqConsoleID, isCitra)
                 
-                # outputData.update(solver.solve())
-                
-                # logStr += solver.info
+                outputData.update(solver.solve())
+                logStr += solver.info
 
-                outputData["_CID"] = reqConsoleID
-                outputData["_seed"] = inputData["_seed"]
-                # outputData["res"] = 0
-                outputData["res"] = -1
+                outputData["res"] = 0
           
                 if (not do_critical_operations_out(CTGP7ServerHandler.myself, self, outputData)):
                     return
 
+            except CTGP7ServerHandler.AuthReply:
+                pass
             except Exception:
                 outputData["res"] = -1
                 if not skipExceptionPrint: traceback.print_exc()
@@ -193,6 +211,8 @@ class CTGP7ServerHandler:
         self.database.connect()
         self.citraDatabase = CTGP7ServerDatabase('RedYoshiBot/server/data/data_citra.sqlite', True)
         self.citraDatabase.connect()
+
+        self.consoleAuth = CTGP7ConsoleAuth()
 
         self.nexhttp = CTGP7NEXHTTPHandler(self.database)
         self.ctwwHandler = CTGP7CtwwHandler(self.database, self.nexhttp)

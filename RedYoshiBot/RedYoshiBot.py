@@ -2419,7 +2419,7 @@ async def on_message(message: discord.message):
                                 print("User has no linked console")
                                 return
                             ctgp7_server.database.grant_badge(cID, badge_id)
-                            print("Given badge 0x{:08X} to console 0x{:08X}".format(badge_id, cID))
+                            print("Given badge 0x{:08X} to console {:032X}".format(badge_id, cID))
                             total_gives += 1
                         await process_messages_with_votes(photo_result_channel, vote_count, reward_action, False)
                         await message.reply("Rewarded {} badges".format(total_gives))

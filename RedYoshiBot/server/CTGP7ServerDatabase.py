@@ -11,6 +11,12 @@ from ..CTGP7Defines import CTGP7Defines
 
 current_time_min = lambda: int(round(time.time() / 60))
 
+def cid_to_db(cID) -> str:
+    return "{:032X}".format(int(cID))
+
+def cid_from_db(value) -> int:
+    return int(value, 16)
+
 
 
 class ConsoleMessageType(Enum):
@@ -242,65 +248,79 @@ class CTGP7ServerDatabase:
         self.set_database_config("weeklybadgelimits", str(amounts))
 
     # Do not call externally
-    def _report_bad_legality(self, cID, cSH1, cSH2):
-        c = self.conn.cursor()
-        rows = c.execute("SELECT * FROM bad_legality WHERE cID = ? AND cSH1 = ? AND cSH2 = ?", (int(cID), int(cSH1), int(cSH2)))
-        for _ in rows:
-            return
-        c.execute("INSERT INTO bad_legality VALUES (?,?,?,?)", (int(cID), int(cSH1), int(cSH2), int(datetime.datetime.utcnow().timestamp())))
+    def _block_ctcert(self, c, cID, ctcertKey, deviceID):
+        rows = c.execute("SELECT cID FROM console_auth WHERE ctcertKey = ?", (str(ctcertKey),))
+        boundCID = None
+        for row in rows:
+            boundCID = row[0]
+        c.execute("INSERT OR IGNORE INTO console_auth_blocked VALUES (?,?,?,?,?)",
+            (str(ctcertKey), int(deviceID), cid_to_db(cID), boundCID, int(datetime.datetime.utcnow().timestamp())))
 
-    def get_bad_legality_list(self):
+    def bind_console_auth(self, cID, ctcertKey, deviceID):
+        # Links the console ID to the CTCert key the first time either is seen.
+        # Returns False if the CTCert is blocked, or if the console ID or the CTCert is already linked to something
+        # else (which blocks the CTCert).
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM bad_legality WHERE 1=1")
-            ret = []
-            for r in rows:
-                ret.append((r[0], r[1], r[2], r[3]))
-            return ret
-
-    def verify_console_legality(self, cID, cSH1, cSH2):
-        with self.lock:
-            c = self.conn.cursor()
-            rows = c.execute("SELECT cID FROM console_secure WHERE cSH1 = ? AND cSH2 = ?", (int(cSH1), int(cSH2)))
+            for _ in c.execute("SELECT ctcertKey FROM console_auth_blocked WHERE ctcertKey = ?", (str(ctcertKey),)):
+                return False
+            now = int(datetime.datetime.utcnow().timestamp())
+            rows = c.execute("SELECT cID, ctcertKey FROM console_auth WHERE cID = ? OR ctcertKey = ?", (cid_to_db(cID), str(ctcertKey))).fetchall()
+            found = False
             for row in rows:
-                if row[0] == 0:
-                    self._report_bad_legality(cID, cSH1, cSH2)
+                if row[0] != cid_to_db(cID) or row[1] != str(ctcertKey):
+                    self._block_ctcert(c, cID, ctcertKey, deviceID)
                     return False
-                if row[0] != int(cID):
-                    c.execute("UPDATE console_secure SET cID = ? WHERE cSH1 = ? AND cSH2 = ?", (0, int(cSH1), int(cSH2)))
-                    self._report_bad_legality(cID, cSH1, cSH2)
-                    return False
-                return True
-            c.execute("INSERT INTO console_secure VALUES (?,?,?,?)", (int(cSH1), int(cSH2), int(cID), int(cID)))
+                found = True
+            if found:
+                c.execute("UPDATE console_auth SET lastSeen = ? WHERE cID = ?", (now, cid_to_db(cID)))
+            else:
+                c.execute("INSERT INTO console_auth VALUES (?,?,?,?,?)", (cid_to_db(cID), str(ctcertKey), int(deviceID), now, now))
             return True
-    
-    def get_console_legality(self, cID):
-        with self.lock:
-            c = self.conn.cursor()
-            rows = c.execute("SELECT cID FROM console_secure WHERE first_cID = ?", (int(cID),))
-            for row in rows:
-                if row[0] == 0:
-                    return False
-        return True
 
-    def getall_console_legality(self):
-        ret = []
+    def get_console_auth(self, cID):
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT first_cID FROM console_secure WHERE cID = 0")
+            rows = c.execute("SELECT ctcertKey, deviceID, firstSeen, lastSeen FROM console_auth WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
-                ret.append(row[0])
-        return ret
+                return (row[0], row[1], row[2], row[3])
+        return None
 
-    def clear_console_legality(self, cID):
+    def get_console_auth_by_ctcert(self, ctcertKey):
         with self.lock:
             c = self.conn.cursor()
-            c.execute("UPDATE console_secure SET cID = ? WHERE first_cID = ?", (int(cID), int(cID)))
-    
-    def set_console_legality(self, cID):
+            for row in c.execute("SELECT cID FROM console_auth WHERE ctcertKey = ?", (str(ctcertKey),)):
+                return cid_from_db(row[0])
+        return None
+
+    def get_console_auth_blocked_list(self):
         with self.lock:
             c = self.conn.cursor()
-            c.execute("UPDATE console_secure SET cID = ? WHERE first_cID = ?", (0, int(cID)))
+            rows = c.execute("SELECT deviceID, cID, boundCID, timestamp, ctcertKey FROM console_auth_blocked ORDER BY timestamp")
+            return [(r[0], cid_from_db(r[1]), None if r[2] is None else cid_from_db(r[2]), r[3], r[4]) for r in rows]
+
+    def get_console_auth_blocked(self, cID):
+        return [b for b in self.get_console_auth_blocked_list() if b[1] == cID or b[2] == cID]
+
+    def block_console_auth(self, cID):
+        with self.lock:
+            c = self.conn.cursor()
+            rows = c.execute("SELECT ctcertKey, deviceID FROM console_auth WHERE cID = ?", (cid_to_db(cID),)).fetchall()
+            for row in rows:
+                self._block_ctcert(c, cID, row[0], row[1])
+                return True
+            return False
+
+    def unblock_console_auth(self, cID):
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute("DELETE FROM console_auth_blocked WHERE cID = ? OR boundCID = ?", (cid_to_db(cID), cid_to_db(cID)))
+            return c.rowcount
+
+    def clear_console_auth(self, cID):
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute("DELETE FROM console_auth WHERE cID = ?", (cid_to_db(cID),))
 
     def get_most_played_tracks(self, course_type, amount):
         splitenabled = self.get_track_freq_split_enabled()
@@ -411,18 +431,18 @@ class CTGP7ServerDatabase:
     def fetch_stats_seqid(self, cID):
          with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM stats_seqid WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT * FROM stats_seqid WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
                 newSeqID = row[1] + 1
-                c.execute("UPDATE stats_seqid SET seqID = ? WHERE cID = ?", (int(newSeqID), int(cID)))
+                c.execute("UPDATE stats_seqid SET seqID = ? WHERE cID = ?", (int(newSeqID), cid_to_db(cID)))
                 return newSeqID
-            c.execute('INSERT INTO stats_seqid VALUES (?,?)', (int(cID), int(1)))
+            c.execute('INSERT INTO stats_seqid VALUES (?,?)', (cid_to_db(cID), int(1)))
             return 1
 
     def get_stats_seqid(self, cID):
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM stats_seqid WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT * FROM stats_seqid WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
                 return row[1]
             return 0
@@ -438,14 +458,14 @@ class CTGP7ServerDatabase:
     def delete_console_message(self, cID):
         with self.lock:
             c = self.conn.cursor()
-            c.execute("DELETE FROM console_message WHERE cID = ?", (int(cID),))
+            c.execute("DELETE FROM console_message WHERE cID = ?", (cid_to_db(cID),))
 
     def set_console_message(self, cID, messageType, message, amountMin=None, isSilent=False):
         currTime = current_time_min() if amountMin is not None else None
         with self.lock:
             c = self.conn.cursor()
-            c.execute("DELETE FROM console_message WHERE cID = ?", (int(cID),))
-            c.execute('INSERT INTO console_message VALUES (?,?,?,?,?)', (int(cID), str(message), int(messageType), currTime, amountMin))
+            c.execute("DELETE FROM console_message WHERE cID = ?", (cid_to_db(cID),))
+            c.execute('INSERT INTO console_message VALUES (?,?,?,?,?)', (cid_to_db(cID), str(message), int(messageType), currTime, amountMin))
         if (self.kickCallback):
             self.kickCallback(cID, messageType, message, amountMin, isSilent, self.isCitra)
 
@@ -455,7 +475,7 @@ class CTGP7ServerDatabase:
         amountTime = None
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM console_message WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT * FROM console_message WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
                 messageText = row[1]
                 messageType = row[2]
@@ -485,15 +505,15 @@ class CTGP7ServerDatabase:
         with self.lock:
             c = self.conn.cursor()
             if (isVerified):
-                c.execute('INSERT INTO verified_consoles VALUES (?)', (int(cID),))
+                c.execute('INSERT INTO verified_consoles VALUES (?)', (cid_to_db(cID),))
             else:
-                c.execute("DELETE FROM verified_consoles WHERE cID = ?", (int(cID),))
+                c.execute("DELETE FROM verified_consoles WHERE cID = ?", (cid_to_db(cID),))
 
 
     def get_console_is_verified(self, cID):
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM verified_consoles WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT * FROM verified_consoles WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
                 return True
             return False
@@ -505,15 +525,15 @@ class CTGP7ServerDatabase:
         with self.lock:
             c = self.conn.cursor()
             if (isAdmin):
-                c.execute('INSERT INTO admin_consoles VALUES (?)', (int(cID),))
+                c.execute('INSERT INTO admin_consoles VALUES (?)', (cid_to_db(cID),))
             else:
-                c.execute("DELETE FROM admin_consoles WHERE cID = ?", (int(cID),))
+                c.execute("DELETE FROM admin_consoles WHERE cID = ?", (cid_to_db(cID),))
 
 
     def get_console_is_admin(self, cID):
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM admin_consoles WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT * FROM admin_consoles WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
                 return True
             return False
@@ -522,23 +542,23 @@ class CTGP7ServerDatabase:
         now = int(datetime.datetime.utcnow().timestamp())
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM console_name WHERE cID = ? ORDER BY timestamp DESC", (int(cID),))
+            rows = c.execute("SELECT * FROM console_name WHERE cID = ? ORDER BY timestamp DESC", (cid_to_db(cID),))
             counter = 0
             insert = True
             for row in rows:
                 if counter == 0 and str(row[1]) == lastName:
                     insert = False
                 if (counter >= 19):
-                    c.execute("DELETE FROM console_name WHERE cID = ? AND timestamp = ?", (int(cID), int(row[2])))
+                    c.execute("DELETE FROM console_name WHERE cID = ? AND timestamp = ?", (cid_to_db(cID), int(row[2])))
                 counter += 1
             if insert:
-                c.execute('INSERT INTO console_name VALUES (?,?,?)', (int(cID), str(lastName), int(now)))
+                c.execute('INSERT INTO console_name VALUES (?,?,?)', (cid_to_db(cID), str(lastName), int(now)))
 
 
     def get_console_last_name(self, cID, default="(Unknown)"):
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM console_name WHERE cID = ? ORDER BY timestamp DESC", (int(cID),))
+            rows = c.execute("SELECT * FROM console_name WHERE cID = ? ORDER BY timestamp DESC", (cid_to_db(cID),))
             for row in rows:
                 return str(row[1])
             return default
@@ -546,7 +566,7 @@ class CTGP7ServerDatabase:
     def get_console_name_history(self, cID):
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM console_name WHERE cID = ? ORDER BY timestamp DESC", (int(cID),))
+            rows = c.execute("SELECT * FROM console_name WHERE cID = ? ORDER BY timestamp DESC", (cid_to_db(cID),))
             ret = []
             for row in rows:
                 ret.append([str(row[1]), int(row[2])])
@@ -555,17 +575,17 @@ class CTGP7ServerDatabase:
     def set_console_vr(self, cID, vr):
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM console_vr WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT * FROM console_vr WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
-                c.execute("UPDATE console_vr SET ctvr = ?, cdvr = ? WHERE cID = ?", (int(vr[0]), int(vr[1]), int(cID)))
+                c.execute("UPDATE console_vr SET ctvr = ?, cdvr = ? WHERE cID = ?", (int(vr[0]), int(vr[1]), cid_to_db(cID)))
                 return
-            c.execute('INSERT INTO console_vr VALUES (?,?,?,?)', (int(cID), int(vr[0]), int(vr[1]), 0))
+            c.execute('INSERT INTO console_vr VALUES (?,?,?,?)', (cid_to_db(cID), int(vr[0]), int(vr[1]), 0))
 
     def get_console_vr(self, cID, withPos: bool) -> VRInfos:
         with self.lock:
             vrData = CTGP7ServerDatabase.VRInfos(withPos)
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM console_vr WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT * FROM console_vr WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
                 vrData.ctVR = row[1]
                 vrData.cdVR = row[2]
@@ -582,26 +602,26 @@ class CTGP7ServerDatabase:
     def set_console_points(self, cID, points):
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM console_vr WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT * FROM console_vr WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
-                c.execute("UPDATE console_vr SET points = ? WHERE cID = ?", (int(points), int(cID)))
+                c.execute("UPDATE console_vr SET points = ? WHERE cID = ?", (int(points), cid_to_db(cID)))
                 return
-            c.execute('INSERT INTO console_vr VALUES (?,?,?,?)', (int(cID), 1000, 1000, int(points)))
+            c.execute('INSERT INTO console_vr VALUES (?,?,?,?)', (cid_to_db(cID), 1000, 1000, int(points)))
 
     def add_console_points(self, cID, points):
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM console_vr WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT * FROM console_vr WHERE cID = ?", (cid_to_db(cID),))
             skipInsert = False
             prevPoints = 0
             pointsPos = 0
             for row in rows:
                 skipInsert = True
                 prevPoints = row[3]
-                c.execute("UPDATE console_vr SET points = ? WHERE cID = ?", (int(points + prevPoints), int(cID)))
+                c.execute("UPDATE console_vr SET points = ? WHERE cID = ?", (int(points + prevPoints), cid_to_db(cID)))
                 break
             if (not skipInsert):
-                c.execute('INSERT INTO console_vr VALUES (?,?,?,?)', (int(cID), 1000, 1000, int(points)))
+                c.execute('INSERT INTO console_vr VALUES (?,?,?,?)', (cid_to_db(cID), 1000, 1000, int(points)))
             rows = c.execute("SELECT COUNT(*) from console_vr WHERE points > ?", (int(points + prevPoints),))
             for row in rows:
                 pointsPos = row[0] + 1
@@ -612,7 +632,7 @@ class CTGP7ServerDatabase:
             points = 0
             pointsPos = 0
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM console_vr WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT * FROM console_vr WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
                 points = row[3]
                 break
@@ -637,7 +657,7 @@ class CTGP7ServerDatabase:
             ret = []
             for row in rows:
                 if (i >= amount): break
-                ret.append([row[0], row[mode + 1]])
+                ret.append([cid_from_db(row[0]), row[mode + 1]])
                 i += 1
             return ret
     
@@ -682,16 +702,16 @@ class CTGP7ServerDatabase:
     def set_discord_link_console(self, discordID, cID):
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM discord_link WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT * FROM discord_link WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
-                c.execute("UPDATE discord_link SET discordID = ? WHERE cID = ?", (int(discordID), int(cID)))
+                c.execute("UPDATE discord_link SET discordID = ? WHERE cID = ?", (int(discordID), cid_to_db(cID)))
                 return
-            c.execute('INSERT INTO discord_link VALUES (?,?)', (int(cID), int(discordID)))
+            c.execute('INSERT INTO discord_link VALUES (?,?)', (cid_to_db(cID), int(discordID)))
 
     def get_discord_link_console(self, cID):
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM discord_link WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT * FROM discord_link WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
                 return row[1]
             return None
@@ -701,7 +721,7 @@ class CTGP7ServerDatabase:
             c = self.conn.cursor()
             rows = c.execute("SELECT * FROM discord_link WHERE discordID = ?", (int(discordID),))
             for row in rows:
-                return row[0]
+                return cid_from_db(row[0])
             return None
     
     def get_all_discord_link(self):
@@ -710,13 +730,13 @@ class CTGP7ServerDatabase:
             c = self.conn.cursor()
             rows = c.execute("SELECT * FROM discord_link")
             for row in rows:
-                ret.append((row[0], row[1]))
+                ret.append((cid_from_db(row[0]), row[1]))
             return ret
 
     def delete_discord_link_console(self, cID):
         with self.lock:
             c = self.conn.cursor()
-            c.execute("DELETE FROM discord_link WHERE cID = ?", (int(cID),))
+            c.execute("DELETE FROM discord_link WHERE cID = ?", (cid_to_db(cID),))
 
     def delete_discord_link_user(self, discordID):
         with self.lock:
@@ -726,7 +746,7 @@ class CTGP7ServerDatabase:
     def get_mii_icon(self, cID) -> bytes:
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT data FROM mii_icon WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT data FROM mii_icon WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
                 return bytes(row[0])
             return None
@@ -734,7 +754,7 @@ class CTGP7ServerDatabase:
     def get_mii_icon_checksum(self, cID) -> int:
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT checksum FROM mii_icon WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT checksum FROM mii_icon WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
                 return row[0]
             return None
@@ -742,23 +762,23 @@ class CTGP7ServerDatabase:
     def set_mii_icon(self, cID, data: bytes, checksum: int):
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT cID FROM mii_icon WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT cID FROM mii_icon WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
-                c.execute("UPDATE mii_icon SET data = ?, checksum = ? WHERE cID = ?", (sqlite3.Binary(data), int(checksum), int(cID)))
+                c.execute("UPDATE mii_icon SET data = ?, checksum = ? WHERE cID = ?", (sqlite3.Binary(data), int(checksum), cid_to_db(cID)))
                 return
-            c.execute('INSERT INTO mii_icon VALUES (?,?,?)', (int(cID), sqlite3.Binary(data), int(checksum)))
+            c.execute('INSERT INTO mii_icon VALUES (?,?,?)', (cid_to_db(cID), sqlite3.Binary(data), int(checksum)))
 
     def delete_mii_icon(self, cID):
         with self.lock:
             c = self.conn.cursor()
-            c.execute("DELETE FROM mii_icon WHERE cID = ?", (int(cID),))
+            c.execute("DELETE FROM mii_icon WHERE cID = ?", (cid_to_db(cID),))
 
     def get_console_status(self, cID, status):
         if (not status in CTGP7ServerDatabase.allowed_console_status):
             return None
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT {} FROM console_status WHERE cID = ?".format(str(status)), (int(cID),))
+            rows = c.execute("SELECT {} FROM console_status WHERE cID = ?".format(str(status)), (cid_to_db(cID),))
             for row in rows:
                 return row[0]
             return None
@@ -768,30 +788,30 @@ class CTGP7ServerDatabase:
             return None
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT cID FROM console_status WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT cID FROM console_status WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
-                c.execute("UPDATE console_status SET {} = ? WHERE cID = ?".format(str(status)), (int(value), int(cID)))
+                c.execute("UPDATE console_status SET {} = ? WHERE cID = ?".format(str(status)), (int(value), cid_to_db(cID)))
                 return
             # Create entry
-            c.execute('INSERT INTO console_status VALUES (?,?,?,?,?,?,?)', (int(cID), int(0), int(0), int(0), int(0), int(0), int(0),))
+            c.execute('INSERT INTO console_status VALUES (?,?,?,?,?,?,?)', (cid_to_db(cID), int(0), int(0), int(0), int(0), int(0), int(0),))
             # Update entry
-            c.execute("UPDATE console_status SET {} = ? WHERE cID = ?".format(str(status)), (int(value), int(cID)))
+            c.execute("UPDATE console_status SET {} = ? WHERE cID = ?".format(str(status)), (int(value), cid_to_db(cID)))
 
     def clear_console_status(self, cID):
         with self.lock:
             c = self.conn.cursor()
-            c.execute("DELETE FROM console_status WHERE cID = ?", (int(cID),))
+            c.execute("DELETE FROM console_status WHERE cID = ?", (cid_to_db(cID),))
 
     def transfer_console_status(self, oldcID, newcID):
         with self.lock:
             c = self.conn.cursor()
-            c.execute("DELETE FROM console_status WHERE cID = ?", (int(newcID),))
-            c.execute("UPDATE console_status SET cID = ? WHERE cID = ?", (int(newcID), int(oldcID)))
+            c.execute("DELETE FROM console_status WHERE cID = ?", (cid_to_db(newcID),))
+            c.execute("UPDATE console_status SET cID = ? WHERE cID = ?", (cid_to_db(newcID), cid_to_db(oldcID)))
 
     def get_console_unique_server_address(self, cID):
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT serveraddr FROM server_address WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT serveraddr FROM server_address WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
                 return row[0]
         return None
@@ -799,17 +819,17 @@ class CTGP7ServerDatabase:
     def clear_console_unique_server_address(self, cID):
         with self.lock:
             c = self.conn.cursor()
-            c.execute("DELETE FROM server_address WHERE cID = ?", (int(cID),))
+            c.execute("DELETE FROM server_address WHERE cID = ?", (cid_to_db(cID),))
     
     def set_console_unique_server_address(self, cID, value: str):
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT cID FROM server_address WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT cID FROM server_address WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
-                c.execute("UPDATE server_address SET serveraddr = ? WHERE cID = ?", (str(value), int(cID)))
+                c.execute("UPDATE server_address SET serveraddr = ? WHERE cID = ?", (str(value), cid_to_db(cID)))
                 return
             # Create entry
-            c.execute('INSERT INTO server_address VALUES (?,?)', (int(cID), str(value)))
+            c.execute('INSERT INTO server_address VALUES (?,?)', (cid_to_db(cID), str(value)))
 
     def set_track_banned_ultrasc(self, szsname, from_min, from_max, to_min, to_max, trigger):
         with self.lock:
@@ -878,7 +898,7 @@ class CTGP7ServerDatabase:
     def get_console_badges(self, cID: int) -> List[Tuple[int, int]]:
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM console_badges WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT * FROM console_badges WHERE cID = ?", (cid_to_db(cID),))
             ret = []
             for row in rows:
                 ret.append((row[1], row[2]))
@@ -897,23 +917,23 @@ class CTGP7ServerDatabase:
             return
         with self.lock:
             c = self.conn.cursor()
-            c.execute("INSERT INTO console_badges VALUES (?,?,?)", (int(cID), int(bID), int(time.time())))
+            c.execute("INSERT INTO console_badges VALUES (?,?,?)", (cid_to_db(cID), int(bID), int(time.time())))
 
     def ungrant_badge(self, cID: int, bID: int):
         with self.lock:
             c = self.conn.cursor()
-            c.execute("DELETE FROM console_badges WHERE cID = ? AND bID = ?", (int(cID), int(bID)))
+            c.execute("DELETE FROM console_badges WHERE cID = ? AND bID = ?", (cid_to_db(cID), int(bID)))
     
     def ungrant_all_badges(self, cID: int):
         with self.lock:
             c = self.conn.cursor()
-            c.execute("DELETE FROM console_badges WHERE cID = ?", (int(cID),))
+            c.execute("DELETE FROM console_badges WHERE cID = ?", (cid_to_db(cID),))
 
     def transfer_badges(self, oldcID: int, newcID: int):
         with self.lock:
             c = self.conn.cursor()
-            c.execute("DELETE FROM console_badges WHERE cID = ?", (int(newcID),))
-            c.execute("UPDATE console_badges SET cID = ? WHERE cID = ?", (int(newcID), int(oldcID)))
+            c.execute("DELETE FROM console_badges WHERE cID = ?", (cid_to_db(newcID),))
+            c.execute("UPDATE console_badges SET cID = ? WHERE cID = ?", (cid_to_db(newcID), cid_to_db(oldcID)))
 
     def set_weekly_points_config(self, field, value):
         with self.lock:
@@ -958,7 +978,7 @@ class CTGP7ServerDatabase:
             for row in rows:
                 rank = CTGP7ServerDatabase.RankInfo()
                 rank.rank = row[2]
-                rank.cID = row[0]
+                rank.cID = cid_from_db(row[0])
                 rank.score = row[1]
                 ret.append(rank)
             i=0
@@ -966,9 +986,9 @@ class CTGP7ServerDatabase:
             if not ignoreName:
                 for r in ret:
                     c2 = self.conn.cursor()
-                    if cID == int(r.cID):
+                    if cID == r.cID:
                         self_index = i
-                    rows = c2.execute("SELECT * FROM console_name WHERE cID = ? ORDER BY timestamp DESC", (int(r.cID),))
+                    rows = c2.execute("SELECT * FROM console_name WHERE cID = ? ORDER BY timestamp DESC", (cid_to_db(r.cID),))
                     name = "Player"
                     for row in rows:
                         name = str(row[1])
@@ -1002,21 +1022,21 @@ class CTGP7ServerDatabase:
         """.format(amount, amount)
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute(query, (int(cID), ))
+            rows = c.execute(query, (cid_to_db(cID), ))
             ret: List[CTGP7ServerDatabase.RankInfo] = []
             for row in rows:
                 rank = CTGP7ServerDatabase.RankInfo()
                 rank.rank = row[2]
-                rank.cID = row[0]
+                rank.cID = cid_from_db(row[0])
                 rank.score = row[1]
                 ret.append(rank)
             i = 0
             self_index = -1
             for r in ret:
                 c2 = self.conn.cursor()
-                if cID == int(r.cID):
+                if cID == r.cID:
                     self_index = i
-                rows = c2.execute("SELECT * FROM console_name WHERE cID = ? ORDER BY timestamp DESC", (int(r.cID),))
+                rows = c2.execute("SELECT * FROM console_name WHERE cID = ? ORDER BY timestamp DESC", (cid_to_db(r.cID),))
                 name = "Player"
                 for row in rows:
                     name = str(row[1])
@@ -1033,7 +1053,7 @@ class CTGP7ServerDatabase:
             score = excluded.score;"""
         with self.lock:
             c = self.conn.cursor()
-            c.execute(query, (int(cID), int(score)))
+            c.execute(query, (cid_to_db(cID), int(score)))
         
     def clear_weekly_points_leaderboard(self):
         with self.lock:
@@ -1079,7 +1099,7 @@ class CTGP7ServerDatabase:
         penalize = False
         with self.lock:
             c = self.conn.cursor()
-            rows = c.execute("SELECT * FROM player_penalize WHERE cID = ?", (int(cID),))
+            rows = c.execute("SELECT * FROM player_penalize WHERE cID = ?", (cid_to_db(cID),))
             for row in rows:
                 penalize = (currTime > row[1]) and ((currTime - row[1]) < 30) 
 
@@ -1090,6 +1110,6 @@ class CTGP7ServerDatabase:
                 lasttime = excluded.lasttime;"""
         with self.lock:
             c = self.conn.cursor()
-            c.execute(query, (int(cID), int(currTime)))
+            c.execute(query, (cid_to_db(cID), int(currTime)))
 
         return penalize

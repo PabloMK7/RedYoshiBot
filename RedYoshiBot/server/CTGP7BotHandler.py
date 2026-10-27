@@ -59,7 +59,7 @@ def staff_server_help_array():
         "name_history": ">@RedYoshiBot server name_history (consoleID)\nGets the name history of the specified user.",
         "config": (">@RedYoshiBot server config (ctCPUAmount/cdCPUAmount/rubberBMult/rubberBOffset/blockedTrackHistory/serveraddr/serveravailable/vrmultiplier/allowedCharacters/allowedTracks/allowedItems/finishracebadge/itemmodeprob/specialvrcharacters/specialvrcharmultiplier/weeklypointsduration/weeklyspecialpartamounts/weeklybadgelimits/raceStyle) [newValue]\nGets or sets the config parameters for online mode.\n\n"
                    "itemmodeprob -> Probability of special item modes (100 percent based) -> \"(blueshellprob):(colorrainprob):(boxrainprob):(tripleitemprob):(itemchaosprob):(periodicitemprob)\""),
-        "otplegality": ">@RedYoshiBot server otplegality (get/getall/set/clear) (consoleID)\nGets, sets or clear the otp legality of a specified console.",
+        "ctcert": ">@RedYoshiBot server ctcert (get/getall/block/unblock/clear) (consoleID)\nManage CTCert linked to a console. get: the CTCert linked to a console and the blocked CTCerts related to it. getall: every blocked CTCert. block: blocks the CTCert linked to a console. unblock: unblocks the CTCerts that claimed or are linked to a console. clear: removes the link of a console.",
         "consoleserver": ">@RedYoshiBot server consoleserver (get/set/clear)\nSets a NEX server address to the specified console.",
         "banned_ultra_shortcut": ">@RedYoshiBot server banned_ultra_shortcut (get/set/clear) (szsName) [from_min] [from_max] [to_min] [to_max] [trigger]\nManages the banned ultra shortcuts for the specified track.",
         "add_badge": ">@RedYoshiBot server add_badge (badge_name) | (badge_description)\nCreates a new badge from the provided name, description and attached bclim file.",
@@ -96,7 +96,7 @@ def staff_server_command_level():
         "get_mii_icon": 1,
         "name_history": 1,
         "config": 0,
-        "otplegality": 0,
+        "ctcert": 0,
         "consoleserver": 0,
         "banned_ultra_shortcut": 0,
         "add_badge": 0,
@@ -250,7 +250,7 @@ async def kick_message_logger():
         isCitra = m[5]
         if (isSilent or (messageType != ConsoleMessageType.SINGLE_KICKMESSAGE.value and messageType != ConsoleMessageType.TIMED_KICKMESSAGE.value) or cID == 0):
             continue
-        embedPrivate=discord.Embed(title="{}Kick Report".format("Azahar " if isCitra else ""), description="Console ID: 0x{:016X}".format(cID), color=0xff0000, timestamp=datetime.datetime.now())
+        embedPrivate=discord.Embed(title="{}Kick Report".format("Azahar " if isCitra else ""), description="Console ID: {:032X}".format(cID), color=0xff0000, timestamp=datetime.datetime.now())
         embedPrivate.add_field(name="Reason", value=message, inline=False)
         if (messageType == ConsoleMessageType.TIMED_KICKMESSAGE.value):
             time = ""
@@ -632,7 +632,7 @@ async def update_online_room_info(ctgp7_server: CTGP7ServerHandler, isCitra: boo
             if (room["log"]):
                 playerString = "```\n"
                 for player in room["players"]:
-                    playerString += "- 0x{:016X} ({})\n".format(player["cID"], player["miiName"])
+                    playerString += "- {:032X} ({})\n".format(player["cID"], player["miiName"])
                 playerString += "```"
                 if (playerString == "```\n```"):
                     playerString = "```\n- (None)\n```"
@@ -826,7 +826,9 @@ async def parse_console_ID(message: discord.Message, candidateID: str, silent: b
         if (candidateID.startswith("0x")):
             candidateID = candidateID[2:]
         try:
-            candidateID = int(candidateID, 16)
+            candidateID = int(candidateID.replace("-", ""), 16)
+            if candidateID >> 128:
+                raise ValueError()
         except:
             raise Exception("Invalid console ID.")
         return candidateID
@@ -966,13 +968,13 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     await message.reply( "Invalid console ID or display name.")
                     return
                 elif len(users) == 1:
-                    await message.reply( "Found user {} with ID 0x{:016X}".format(names[0], users[0]))
+                    await message.reply( "Found user {} with ID {:032X}".format(names[0], users[0]))
                     consoleID = users[0]
                 elif len(users) >= 2:
                     userlist = "```"
                     i = 0
                     for u in names:
-                        userlist += "{} (0x{:016X})\n".format(u, users[i])
+                        userlist += "{} ({:032X})\n".format(u, users[i])
                         i += 1
                     userlist += "```\n"
                     await message.reply("Error, name matches with multiple users:\n{}".format(userlist))
@@ -1210,7 +1212,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                 member = CreateFakeMember(discordID)
             
             lastName = currDatabase.get_console_last_name(consoleID)
-            await message.reply("`{:016X} {}` -> {}".format(consoleID, escapeFormatting(lastName), member.mention))
+            await message.reply("`{:032X} {}` -> {}".format(consoleID, escapeFormatting(lastName), member.mention))
     elif bot_cmd == "unlink":
         if await staff_server_can_execute(message, bot_cmd, True):
             tag = get_server_bot_args(message)
@@ -1533,56 +1535,59 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     currDatabase.set_race_style(amount)
                 await message.reply("Config for \"{}\" is: {}".format(mode, amount))
                 return
-    elif bot_cmd == "otplegality":
+    elif bot_cmd == "ctcert":
         if await staff_server_can_execute(message, bot_cmd):
             tag = get_server_bot_args(message)
             if (len(tag) != 4 and len(tag) != 3):
                 await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
+            if isCitra:
+                await message.reply("Azahar consoles have no CTCert.")
+                return
             mode = tag[2]
+            if mode not in ["getall", "get", "block", "unblock", "clear"]:
+                await message.reply( "Invalid option `{}`, correct usage:\r\n```".format(mode) + staff_server_help_array()[bot_cmd] + "```")
+                return
             consoleID = None
             if mode != "getall":
                 if (len(tag) != 4):
                     await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                     return
-                consoleID = tag[3]
-                if (consoleID.startswith("0x")):
-                    consoleID = consoleID[2:]
-                try:
-                    consoleID = int(consoleID, 16)
-                    if (consoleID == 0):
-                        raise ValueError()
-                except ValueError:
-                    await message.reply("Invalid console ID.")
+                consoleID = await parse_console_ID(message, tag[3])
+                if consoleID is None:
                     return
-            else:
-                if (len(tag) != 3):
-                    await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
-                    return
-            if mode not in ["getall", "get", "set", "clear"]:
-                await message.reply( "Invalid option `{}`, correct usage:\r\n```".format(mode) + staff_server_help_array()[bot_cmd] + "```")
+            elif (len(tag) != 3):
+                await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
                 return
+            fmtTime = lambda t: datetime.datetime.fromtimestamp(t, datetime.UTC).isoformat()
+            fmtBlocked = lambda b: "Device 0x{:08X} claimed {:032X}, linked to {} ({})\n".format(b[0], b[1], "(none)" if b[2] is None else "{:032X}".format(b[2]), fmtTime(b[3]))
             if (mode == "get"):
-                islegal = currDatabase.get_console_legality(consoleID)
-                await message.reply("Console is legal." if islegal else "Console is NOT legal.")
+                auth = currDatabase.get_console_auth(consoleID)
+                info = "```\n"
+                if auth is None:
+                    info += "No CTCert linked to this console.\n"
+                else:
+                    info += "Device ID: 0x{:08X}\nCTCert key: {}\nFirst seen: {}\nLast seen: {}\n".format(auth[1], auth[0], fmtTime(auth[2]), fmtTime(auth[3]))
+                blocked = currDatabase.get_console_auth_blocked(consoleID)
+                info += "Blocked CTCerts:\n" + ("".join(fmtBlocked(b) for b in blocked) if blocked else "(none)\n")
+                await message.reply(info + "```")
             if (mode == "getall"):
-                allilegal = currDatabase.getall_console_legality()
-                info = ""
-                for e in allilegal: info += "0x{:016X}\n".format(e)
+                info = "".join(fmtBlocked(b) for b in currDatabase.get_console_auth_blocked_list())
                 if len(info) == 0:
                     info = " "
                 await sendMultiMessage(message.channel, info, "```\n---------------\n", "---------------\n```\n")
-                log_data = currDatabase.get_bad_legality_list()
-                info = ""
-                for e in log_data: info += "0x{:016X}-0x{:016X}-0x{:016X}-{}\n".format(e[0], e[1], e[2], datetime.datetime.fromtimestamp(e[3], datetime.UTC).isoformat())
-                if len(info) == 0:
-                    info = " "
-                await sendMultiMessage(message.channel, info, "```\n---------------\n", "---------------\n```\n")
-            if (mode == "set"):
-                currDatabase.set_console_legality(consoleID)
-                await message.reply( "Operation succeeded.")
+            if (mode == "block"):
+                if currDatabase.block_console_auth(consoleID):
+                    ctgp7_server.consoleAuth.drop_console(consoleID)
+                    await message.reply( "Operation succeeded.")
+                else:
+                    await message.reply("No CTCert linked to this console.")
+            if (mode == "unblock"):
+                count = currDatabase.unblock_console_auth(consoleID)
+                await message.reply("Unblocked {} CTCert(s).".format(count))
             if (mode == "clear"):
-                currDatabase.clear_console_legality(consoleID)
+                currDatabase.clear_console_auth(consoleID)
+                ctgp7_server.consoleAuth.drop_console(consoleID)
                 await message.reply( "Operation succeeded.")
     elif bot_cmd == "consoleserver":
         if await staff_server_can_execute(message, bot_cmd):
@@ -1787,7 +1792,7 @@ async def handle_server_command(ctgp7_server: CTGP7ServerHandler, message: disco
                     dt = datetime.datetime.fromtimestamp(float(b[1]))
                     msg.append("- `{}` (0x{:016X}) ({}): `{}`\n".format(badge_info[1], badge_info[0], str(dt), badge_info[2].replace("\n", " ")))
                 
-                await sendMultiMessage(message.channel, msg, "Badge list for 0x{:016X}:\n".format(cID), "")
+                await sendMultiMessage(message.channel, msg, "Badge list for {:032X}:\n".format(cID), "")
             else:
                 if (len(tag) != 5):
                     await message.reply( "Invalid syntax, correct usage:\r\n```" + staff_server_help_array()[bot_cmd] + "```")
